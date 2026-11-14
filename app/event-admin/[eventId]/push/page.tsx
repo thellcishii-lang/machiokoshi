@@ -227,7 +227,7 @@ export default function EventPushAdminPage() {
     if (user) void loadCampaigns();
   }, [user, loadCampaigns]);
 
-  // サイドバーにエリア名を出すためだけの取得（失敗しても画面は止めない）。
+  // サイドバーにプロジェクト名を出すためだけの取得（失敗しても画面は止めない）。
   const loadEventName = useCallback(async () => {
     if (!user) return;
     try {

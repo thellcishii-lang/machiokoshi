@@ -2,7 +2,7 @@
 
 // app/event-admin/[eventId]/coupons/page.tsx
 // Push-taro EVENT 主催者向けのクーポン管理画面（管理画面③）。
-// 出店者（会社）の登録と、クーポンの登録・一覧を行う。クーポンはエリア全体で上限あり。
+// 出店者（会社）の登録と、クーポンの登録・一覧を行う。クーポンはプロジェクト全体で上限あり。
 // 案内PDFの管理は設定画面（④）に移した（2026-11-11）。
 // 画面の固定文は4言語辞書（lib/ui-text.ts の ADMIN_TEXT）。
 // 見た目は承認済みモック準拠。ログイン後は共通シェル（components/AdminShell）
@@ -59,7 +59,7 @@ interface Coupon {
 
 const VIOLET = '#6D28D9';
 
-/** クーポンオプションで増やせるエリア単位の上限（LP 記載）。 */
+/** クーポンオプションで増やせるプロジェクト単位の上限（LP 記載）。 */
 const COUPON_OPTION_MAX_CAP = 500;
 /** 出店者一覧で既定表示する件数（残りはアコーディオンに畳む）。 */
 const EXHIBITOR_PREVIEW_COUNT = 2;

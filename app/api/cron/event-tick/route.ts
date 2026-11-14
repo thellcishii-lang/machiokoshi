@@ -2,10 +2,10 @@
 // Push-taro 町おこし の15分間隔スケジューラ。
 // 外部のスケジューラ（Cloud Scheduler 等）から15分ごとに叩く前提。
 //
-// 町おこしのエリアは常設のため、EVENT にあった終了処理（データ消去）と
+// 町おこしのプロジェクトは常設のため、EVENT にあった終了処理（データ消去）と
 // 日次リセットは行わない。tick の役割は予約配信の実行だけ:
-// 到期した campaign を開催中エリアごとに処理する。
-// エリアごとに try/catch し、1エリアの失敗が他エリアの処理を止めない。
+// 到期した campaign を開催中プロジェクトごとに処理する。
+// プロジェクトごとに try/catch し、1プロジェクトの失敗が他プロジェクトの処理を止めない。
 import { NextResponse } from 'next/server';
 import { isValidCronRequest } from '@/lib/cron-auth';
 import { listLiveEvents } from '@/lib/event-store';

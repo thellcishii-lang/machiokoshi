@@ -2,15 +2,15 @@
 
 // app/e/[eventId]/page.tsx
 // Push-taro EVENT の来場者登録画面（QRコードの着地先）。
-// 流れ: エリア情報の確認 → 電話番号のSMS認証 → 通知許可とFCMトークン取得 → 登録API。
+// 流れ: プロジェクト情報の確認 → 電話番号のSMS認証 → 通知許可とFCMトークン取得 → 登録API。
 // 電話番号認証の作法は本家の登録画面（app/subscribe）に合わせている。
 // 画面の固定文は4言語辞書（lib/ui-text.ts）で切り替える。初期表示は
-// エリアのデフォルト言語、本人が切り替えたらその選択が優先される。
+// プロジェクトのデフォルト言語、本人が切り替えたらその選択が優先される。
 // クーポン表示: 取得済みを上部に固定し、全カタログは出店者ごとの
 // アコーディオンにする（100件あっても縦に伸びないように）。
 // 取得状態は画面を開いている間15秒ごと＋タブ復帰時に再取得し、
 // 消込が手動リロードなしで「使用済み」に切り替わるようにしている。
-// 見た目は承認済みモック（来場者 v2）準拠: ブランド行＋薄紫のエリア
+// 見た目は承認済みモック（来場者 v2）準拠: ブランド行＋薄紫のプロジェクト
 // カード（言語はピル選択）、取得済みカードはQR常時表示、登録フェーズでは
 // 画面下に固定したプッシュ有効化バナーが登録ボタンになる。
 // 結果・エラーの文は、操作した場所のすぐ近くに出す（ページ末尾には出さない）。
@@ -235,7 +235,7 @@ export default function EventVisitorPage() {
   const [openGroups, setOpenGroups] = useState<ReadonlySet<string>>(new Set());
 
   // iPhone で「ホーム画面に追加」したときに Web アプリとして開かれるよう、
-  // このエリア専用の manifest（start_url = このページ）を差し込む。
+  // このプロジェクト専用の manifest（start_url = このページ）を差し込む。
   // manifest が無いと新しい iOS では Safari のブックマーク扱いになり、
   // スタンドアローン判定が false のまま通知登録が止まってしまう。
   useEffect(() => {
@@ -261,7 +261,7 @@ export default function EventVisitorPage() {
         if (cancelled) return;
         const ev = data.event as PublicEvent;
         setEvent(ev);
-        // 本人の保存済み選択 > エリアのデフォルト > 日本語
+        // 本人の保存済み選択 > プロジェクトのデフォルト > 日本語
         let stored: string | null = null;
         try {
           stored = window.localStorage.getItem(`event-locale:${eventId}`);
@@ -458,7 +458,7 @@ export default function EventVisitorPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, eventId, locale]);
 
-  // 入場用QRの保存状態は、機能がオンのエリアでだけ取得する
+  // 入場用QRの保存状態は、機能がオンのプロジェクトでだけ取得する
   const loadAdmissionQr = async (currentUser: User) => {
     try {
       const idToken = await currentUser.getIdToken();

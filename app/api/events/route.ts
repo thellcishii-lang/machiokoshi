@@ -44,7 +44,7 @@ export async function POST(request: Request) {
   const existingEvents = await listEventsByOwner(uid);
   if (!canCreateAnotherEvent(existingEvents)) {
     return NextResponse.json(
-      { error: '同時に仕込めるエリアは3つまでです' },
+      { error: '同時に仕込めるプロジェクトは3つまでです' },
       { status: 400 },
     );
   }
@@ -58,9 +58,9 @@ export async function POST(request: Request) {
 
   const name = typeof body.name === 'string' ? body.name.trim() : '';
   if (!name) {
-    return NextResponse.json({ error: 'エリア名が必要です' }, { status: 400 });
+    return NextResponse.json({ error: 'プロジェクト名が必要です' }, { status: 400 });
   }
-  // 町おこし: エリアは常設で期間を持たない。開始日は作成日、終了日は番兵値で補完する
+  // 町おこし: プロジェクトは常設で期間を持たない。開始日は作成日、終了日は番兵値で補完する
   // （指定があれば形式だけ検証して受け付ける）。
   const startDate =
     typeof body.startDate === 'string' && DATE_PATTERN.test(body.startDate)

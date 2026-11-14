@@ -2,7 +2,7 @@
 
 // app/e/[eventId]/redeem/page.tsx
 // Push-taro EVENT の出店者用 消込専用画面。
-// メール+パスワード（エリア専用アクセスコード）でログインし、自社の
+// メール+パスワード（プロジェクト専用アクセスコード）でログインし、自社の
 // クーポンだけを消し込む。ログインはサーバー照合（exhibitor-login API）が
 // 発行するカスタムトークンでセッション化する。出店者は Firebase Auth の
 // アカウントを持たない（Auth は主催者だけ）。
@@ -381,7 +381,7 @@ export default function ExhibitorRedeemPage() {
     setResult(null);
     try {
       // メール+パスワード（コード）をサーバーで照合し、返ってきた
-      // カスタムトークンでこのエリア専用のセッションを作る。
+      // カスタムトークンでこのプロジェクト専用のセッションを作る。
       const res = await fetch(`/api/events/${eventId}/exhibitor-login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
