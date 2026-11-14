@@ -187,6 +187,7 @@ export default function SystemAdminOrganizerDetailPage() {
 
       <section style={{ marginTop: 16, fontSize: 14, lineHeight: 1.9 }}>
         <div>メールアドレス（ログインID）：{organizer.email}</div>
+        <div>世界観の名前：{organizer.worldName || '—'}</div>
         <div>住所：{organizer.address || '—'}</div>
         <div>電話：{organizer.phone || '—'}</div>
         <div>使用開始日：{organizer.startDate}</div>

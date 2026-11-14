@@ -1,5 +1,7 @@
 // ログイン中ユーザーの契約者情報（本人用）。
 // 管理画面が初回パスワード変更ゲートの要否を判断するために使う。
+// あわせて世界観の名前（worldName）を返し、プロジェクト作成フォームの
+// プロジェクト名の初期値に使う。
 // 契約者レコードが無いユーザー（運営アカウント等）は mustChangePassword: false。
 // このエンドポイント自体はパスワード変更ゲートの対象にしない
 // （ゲートを解除するために必要なので）。
@@ -18,5 +20,6 @@ export async function GET(request: Request) {
   return NextResponse.json({
     hasOrganizerRecord: organizer !== null,
     mustChangePassword: shouldBlockForPasswordChange(organizer),
+    worldName: organizer?.worldName ?? '',
   });
 }

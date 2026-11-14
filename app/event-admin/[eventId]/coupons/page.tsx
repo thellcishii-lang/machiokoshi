@@ -63,8 +63,8 @@ const VIOLET = '#6D28D9';
 const COUPON_OPTION_MAX_CAP = 500;
 /** 出店者一覧で既定表示する件数（残りはアコーディオンに畳む）。 */
 const EXHIBITOR_PREVIEW_COUNT = 2;
-/** クーポンオプションの購入先（本家の決済ページ）。 */
-const HONKE_COUPON_OPTION_URL = 'https://push-taro.com/event-option';
+/** クーポンオプションの購入先（本家の町おこし用決済ページ）。 */
+const HONKE_COUPON_OPTION_URL = 'https://push-taro.com/machiokoshi-option';
 
 const containerStyle: React.CSSProperties = {
   padding: '20px 16px 48px',

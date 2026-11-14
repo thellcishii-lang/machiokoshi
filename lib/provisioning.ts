@@ -43,6 +43,18 @@ export interface ProvisionOrganizerInput {
   /** 一時上げの期限後に戻る購読者枠。任意項目（意味は上と同じ）。 */
   restoredSubscriberCap?: number | null;
   agencyCode?: string | null;
+  /**
+   * 店舗課金オプションの ON/OFF。任意項目:
+   * boolean が送られた場合だけ反映し、送られなければ既存値を変えない。
+   * boolean 以外は無視する。
+   */
+  billingOptionEnabled?: boolean;
+  /**
+   * 世界観の名前（申込時の希望名、例: 飯能カレー）。任意項目:
+   * 送られなければ既存値を変えない。空文字・上限超は無視する
+   * （無害化は sanitizeWorldName）。
+   */
+  worldName?: string;
 }
 
 export type ProvisionOrganizerResult =
@@ -91,6 +103,24 @@ function sanitizeRestoredSubscriberCap(
   return value;
 }
 
+/** 世界観の名前の文字数上限。 */
+export const MAX_WORLD_NAME_LENGTH = 100;
+
+/**
+ * 世界観の名前の無害化（純粋関数）。任意項目なので、変な値で
+ * リクエスト全体を落とさず「無かったこと」に倒す:
+ * - undefined（未送信）・文字列以外 → undefined（既存値を変えない）
+ * - 前後の空白を除いて空 → undefined（空文字では上書きしない）
+ * - 上限（MAX_WORLD_NAME_LENGTH）を超える → undefined（無視）
+ * - それ以外 → 空白を除いた文字列
+ */
+function sanitizeWorldName(value: string | undefined): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > MAX_WORLD_NAME_LENGTH) return undefined;
+  return trimmed;
+}
+
 /**
  * 更新で反映する項目の抽出（純粋関数）。
  * 送られた項目だけを patch に含める。email / startDate / agencyCode と
@@ -107,6 +137,8 @@ export function buildProvisioningUpdate(
     | 'couponCap'
     | 'tempSubscriberCapUntil'
     | 'restoredSubscriberCap'
+    | 'billingOptionEnabled'
+    | 'worldName'
   >,
 ): ProvisioningProfilePatch {
   const patch: ProvisioningProfilePatch = {};
@@ -125,6 +157,12 @@ export function buildProvisioningUpdate(
   if (tempUntil !== undefined) patch.tempSubscriberCapUntil = tempUntil;
   const restoredCap = sanitizeRestoredSubscriberCap(input.restoredSubscriberCap);
   if (restoredCap !== undefined) patch.restoredSubscriberCap = restoredCap;
+  // 店舗課金オプションは boolean が送られた場合だけ反映する。
+  if (typeof input.billingOptionEnabled === 'boolean') {
+    patch.billingOptionEnabled = input.billingOptionEnabled;
+  }
+  const worldName = sanitizeWorldName(input.worldName);
+  if (worldName !== undefined) patch.worldName = worldName;
   return patch;
 }
 
@@ -248,6 +286,10 @@ export async function provisionOrganizer(
     restoredSubscriberCap:
       sanitizeRestoredSubscriberCap(input.restoredSubscriberCap) ?? null,
     agencyCode: input.agencyCode ?? null,
+    // 店舗課金オプションは boolean のときだけ有効として保存（それ以外は無効）。
+    billingOptionEnabled: input.billingOptionEnabled === true,
+    // 世界観の名前は無害化した値だけを保持する。
+    worldName: sanitizeWorldName(input.worldName) ?? '',
     // 初期パスワードは初回ログインで必ず変更させる。
     mustChangePassword: true,
   };
