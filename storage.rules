@@ -30,6 +30,13 @@ service firebase.storage {
             && request.resource.contentType.matches('image/.*'))
         );
     }
+    // レビュー写真（events/{eventId}/review-photos/{memberId}/...）:
+    // アップロードは API 経由で Admin SDK が行うため、クライアントからの
+    // 書き込みは許可しない。特設サイトや店舗ページで表示するため、
+    // 読み取りは公開する。
+    match /events/{eventId}/review-photos/{memberId}/{fileName} {
+      allow read: if true;
+    }
     // 移行前の旧パス（events/{eventId}/...）: 登録済みファイルの表示用に
     // 読み取りだけ残し、書き込みは許可しない。
     match /events/{eventId}/info-pdfs/{fileName} {

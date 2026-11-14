@@ -108,6 +108,30 @@ interface MemberStampCard {
   freeCoupons: MemberFreeCoupon[];
 }
 
+interface MemberReview {
+  id: string;
+  exhibitorId: string;
+  exhibitorName: string;
+  stars: number;
+  categories: {
+    taste: number;
+    service: number;
+    atmosphere: number;
+    presentation: number;
+  };
+  text: string;
+  nickname: string;
+  photoUrls: string[];
+  visible: boolean;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+interface ReviewableShop {
+  exhibitorId: string;
+  exhibitorName: string;
+}
+
 interface InfoPdf {
   id: string;
   title: string;
@@ -228,6 +252,509 @@ function PinLogo() {
   );
 }
 
+interface ReviewCategoriesState {
+  taste: number;
+  service: number;
+  atmosphere: number;
+  presentation: number;
+}
+
+function ReviewStarInput({
+  value,
+  onChange,
+  fontSize = 26,
+}: {
+  value: number;
+  onChange: (value: number) => void;
+  fontSize?: number;
+}) {
+  return (
+    <div style={{ display: 'flex', gap: 2 }}>
+      {[1, 2, 3, 4, 5].map((v) => (
+        <button
+          key={v}
+          type="button"
+          onClick={() => onChange(v)}
+          aria-label={`${v} / 5`}
+          style={{
+            border: 'none',
+            background: 'none',
+            padding: 2,
+            fontSize,
+            lineHeight: 1,
+            cursor: 'pointer',
+            color: v <= value ? '#f59e0b' : '#cbd5e1',
+          }}
+        >
+          ★
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// スタンプをもらった店1件分の「書き込み欄」。
+// 未投稿なら「書き込む」、投稿済みなら自分のレビューと「編集する」を出す。
+// 投稿が成功したら、その場にシェア導線（Threads＋共有シート）を出す。
+function ReviewShopCard({
+  eventId,
+  locale,
+  shop,
+  review,
+  user,
+  onSaved,
+}: {
+  eventId: string;
+  locale: Locale;
+  shop: ReviewableShop;
+  review: MemberReview | null;
+  user: User;
+  onSaved: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [stars, setStars] = useState(5);
+  const [categories, setCategories] = useState<ReviewCategoriesState>({
+    taste: 5,
+    service: 5,
+    atmosphere: 5,
+    presentation: 5,
+  });
+  const [text, setText] = useState('');
+  const [nickname, setNickname] = useState('');
+  const [photoUrls, setPhotoUrls] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [feedback, setFeedback] = useState<{ text: string; error: boolean } | null>(null);
+  const [shareInfo, setShareInfo] = useState<{ stars: number; text: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const startEdit = () => {
+    setStars(review?.stars ?? 5);
+    setCategories(
+      review?.categories ?? { taste: 5, service: 5, atmosphere: 5, presentation: 5 },
+    );
+    setText(review?.text ?? '');
+    setNickname(review?.nickname ?? '');
+    setPhotoUrls(review?.photoUrls ?? []);
+    setFeedback(null);
+    setShareInfo(null);
+    setEditing(true);
+  };
+
+  const handlePhotoFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const targets = Array.from(files).slice(0, Math.max(3 - photoUrls.length, 0));
+    if (targets.length === 0) return;
+    setUploading(true);
+    setFeedback(null);
+    try {
+      const idToken = await user.getIdToken();
+      const uploaded: string[] = [];
+      for (const file of targets) {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch(`/api/events/${eventId}/reviews/photo`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${idToken}` },
+          body: formData,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || typeof data.url !== 'string') {
+          throw new Error(typeof data.error === 'string' ? data.error : '');
+        }
+        uploaded.push(data.url);
+      }
+      setPhotoUrls((current) => [...current, ...uploaded].slice(0, 3));
+    } catch (e) {
+      setFeedback({
+        text:
+          e instanceof Error && e.message
+            ? e.message
+            : uiText(locale, 'reviewPhotoFailed'),
+        error: true,
+      });
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    setFeedback(null);
+    try {
+      const idToken = await user.getIdToken();
+      const res = await fetch(`/api/events/${eventId}/reviews`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          exhibitorId: shop.exhibitorId,
+          stars,
+          categories,
+          text,
+          nickname,
+          photoUrls,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setFeedback({
+          text: data.error ?? uiText(locale, 'reviewPostFailed'),
+          error: true,
+        });
+        return;
+      }
+      setShareInfo({ stars, text });
+      setEditing(false);
+      setFeedback({
+        text: uiText(locale, data.created ? 'reviewPosted' : 'reviewUpdated'),
+        error: false,
+      });
+      onSaved();
+    } catch {
+      setFeedback({ text: uiText(locale, 'reviewPostFailed'), error: true });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const shareText = shareInfo
+    ? [`「${shop.exhibitorName}」 ${'★'.repeat(shareInfo.stars)}`, shareInfo.text]
+        .filter((line) => line.trim().length > 0)
+        .join('\n')
+    : '';
+  const threadsUrl = shareInfo
+    ? `https://www.threads.net/intent/post?text=${encodeURIComponent(shareText)}`
+    : '';
+  const canNativeShare =
+    typeof navigator !== 'undefined' && typeof navigator.share === 'function';
+
+  const categoryRows: Array<{
+    key: keyof ReviewCategoriesState;
+    labelKey: 'reviewCategoryTaste' | 'reviewCategoryService' | 'reviewCategoryAtmosphere' | 'reviewCategoryPresentation';
+  }> = [
+    { key: 'taste', labelKey: 'reviewCategoryTaste' },
+    { key: 'service', labelKey: 'reviewCategoryService' },
+    { key: 'atmosphere', labelKey: 'reviewCategoryAtmosphere' },
+    { key: 'presentation', labelKey: 'reviewCategoryPresentation' },
+  ];
+
+  return (
+    <article style={{ ...cardStyle, padding: 16, marginTop: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <span style={{ fontWeight: 800, fontSize: 15.5, flex: 1 }}>
+          {shop.exhibitorName}
+        </span>
+        {review && (
+          <span
+            style={{
+              backgroundColor: VIOLET,
+              color: '#ffffff',
+              borderRadius: 6,
+              padding: '3px 10px',
+              fontWeight: 700,
+              fontSize: 12,
+            }}
+          >
+            {uiText(locale, 'reviewYourReviewBadge')}
+          </span>
+        )}
+      </div>
+
+      {review && !editing && (
+        <>
+          <div style={{ marginTop: 8, color: '#f59e0b', fontSize: 17 }}>
+            {'★'.repeat(review.stars)}
+            {'☆'.repeat(Math.max(5 - review.stars, 0))}
+            <span style={{ color: '#0f172a', fontSize: 13.5, fontWeight: 700, marginLeft: 6 }}>
+              {review.stars}.0
+            </span>
+          </div>
+          <p style={{ fontSize: 12.5, color: '#64748b', margin: '4px 0 0' }}>
+            {categoryRows
+              .map(
+                (row) =>
+                  `${uiText(locale, row.labelKey)} ${review.categories[row.key]}`,
+              )
+              .join(' ／ ')}
+            {review.nickname ? ` ／ ${review.nickname}` : ''}
+          </p>
+          {review.text && (
+            <p style={{ fontSize: 14, margin: '8px 0 0', whiteSpace: 'pre-wrap' }}>
+              {review.text}
+            </p>
+          )}
+          {review.photoUrls.length > 0 && (
+            <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+              {review.photoUrls.map((url) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  key={url}
+                  src={url}
+                  alt={shop.exhibitorName}
+                  style={{
+                    width: 84,
+                    height: 84,
+                    objectFit: 'cover',
+                    borderRadius: 10,
+                    border: '1px solid #e2e8f0',
+                    display: 'block',
+                  }}
+                />
+              ))}
+            </div>
+          )}
+          {!review.visible && (
+            <p style={{ fontSize: 12.5, color: '#b91c1c', margin: '8px 0 0' }}>
+              {uiText(locale, 'reviewHiddenNote')}
+            </p>
+          )}
+          <button
+            onClick={startEdit}
+            style={{
+              marginTop: 12,
+              padding: '9px 18px',
+              fontWeight: 700,
+              fontSize: 14,
+              backgroundColor: '#ffffff',
+              color: VIOLET,
+              border: `1px solid ${VIOLET}`,
+              borderRadius: 10,
+              cursor: 'pointer',
+            }}
+          >
+            {uiText(locale, 'reviewEditButton')}
+          </button>
+        </>
+      )}
+
+      {!review && !editing && (
+        <button
+          onClick={startEdit}
+          style={{
+            marginTop: 12,
+            padding: '10px 18px',
+            fontWeight: 700,
+            fontSize: 14,
+            backgroundColor: VIOLET,
+            color: '#ffffff',
+            border: 'none',
+            borderRadius: 10,
+            cursor: 'pointer',
+          }}
+        >
+          {uiText(locale, 'reviewWriteButton')}
+        </button>
+      )}
+
+      {editing && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ fontSize: 13, fontWeight: 700 }}>
+            {uiText(locale, 'reviewOverallLabel')}
+          </div>
+          <ReviewStarInput value={stars} onChange={setStars} />
+          {categoryRows.map((row) => (
+            <div
+              key={row.key}
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginTop: 6,
+              }}
+            >
+              <span style={{ fontSize: 13.5, fontWeight: 600 }}>
+                {uiText(locale, row.labelKey)}
+              </span>
+              <ReviewStarInput
+                fontSize={20}
+                value={categories[row.key]}
+                onChange={(v) =>
+                  setCategories((current) => ({ ...current, [row.key]: v }))
+                }
+              />
+            </div>
+          ))}
+          <label style={{ display: 'block', marginTop: 12 }}>
+            <span style={{ fontSize: 13, fontWeight: 700 }}>
+              {uiText(locale, 'reviewTextLabel')}
+            </span>
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder={uiText(locale, 'reviewTextPlaceholder')}
+              rows={3}
+              style={{ ...inputStyle, resize: 'vertical' }}
+            />
+          </label>
+          <label style={{ display: 'block', marginTop: 10 }}>
+            <span style={{ fontSize: 13, fontWeight: 700 }}>
+              {uiText(locale, 'reviewNicknameLabel')}
+            </span>
+            <input
+              value={nickname}
+              onChange={(e) => setNickname(e.target.value)}
+              style={inputStyle}
+            />
+          </label>
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 700 }}>
+              {uiText(locale, 'reviewPhotosLabel')}
+            </div>
+            {photoUrls.length > 0 && (
+              <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                {photoUrls.map((url) => (
+                  <span key={url} style={{ position: 'relative', display: 'inline-block' }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={url}
+                      alt=""
+                      style={{
+                        width: 72,
+                        height: 72,
+                        objectFit: 'cover',
+                        borderRadius: 10,
+                        border: '1px solid #e2e8f0',
+                        display: 'block',
+                      }}
+                    />
+                    <button
+                      type="button"
+                      aria-label="remove"
+                      onClick={() =>
+                        setPhotoUrls((current) => current.filter((u) => u !== url))
+                      }
+                      style={{
+                        position: 'absolute',
+                        top: -6,
+                        right: -6,
+                        width: 22,
+                        height: 22,
+                        borderRadius: '50%',
+                        border: 'none',
+                        backgroundColor: '#0f172a',
+                        color: '#ffffff',
+                        fontSize: 13,
+                        lineHeight: 1,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            {photoUrls.length < 3 && (
+              <div style={{ marginTop: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  style={{
+                    padding: '8px 14px',
+                    fontWeight: 700,
+                    fontSize: 13,
+                    backgroundColor: '#ffffff',
+                    color: VIOLET,
+                    border: '1px solid #ddd6fe',
+                    borderRadius: 10,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {uploading ? '…' : uiText(locale, 'reviewPhotoAdd')}
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  multiple
+                  hidden
+                  onChange={(e) => void handlePhotoFiles(e.target.files)}
+                />
+              </div>
+            )}
+          </div>
+          <button
+            onClick={() => void handleSubmit()}
+            disabled={submitting || uploading}
+            style={{
+              marginTop: 14,
+              padding: '11px 20px',
+              fontWeight: 700,
+              fontSize: 14.5,
+              backgroundColor: VIOLET,
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: 10,
+              cursor: 'pointer',
+              width: '100%',
+            }}
+          >
+            {review ? uiText(locale, 'reviewUpdate') : uiText(locale, 'reviewSubmit')}
+          </button>
+        </div>
+      )}
+
+      {feedback && (
+        <p
+          style={{
+            fontSize: 13.5,
+            fontWeight: 700,
+            margin: '12px 0 0',
+            color: feedback.error ? '#b91c1c' : '#15803d',
+          }}
+        >
+          {feedback.text}
+        </p>
+      )}
+
+      {shareInfo && !editing && (
+        <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+          <a
+            href={threadsUrl}
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              padding: '9px 16px',
+              fontWeight: 700,
+              fontSize: 13.5,
+              backgroundColor: '#0f172a',
+              color: '#ffffff',
+              borderRadius: 10,
+              textDecoration: 'none',
+            }}
+          >
+            {uiText(locale, 'reviewShareThreads')}
+          </a>
+          {canNativeShare && (
+            <button
+              onClick={() => {
+                void navigator.share({ text: shareText }).catch(() => {});
+              }}
+              style={{
+                padding: '9px 16px',
+                fontWeight: 700,
+                fontSize: 13.5,
+                backgroundColor: '#ffffff',
+                color: VIOLET,
+                border: `1px solid ${VIOLET}`,
+                borderRadius: 10,
+                cursor: 'pointer',
+              }}
+            >
+              {uiText(locale, 'reviewShare')}
+            </button>
+          )}
+        </div>
+      )}
+    </article>
+  );
+}
+
 export default function EventVisitorPage() {
   const params = useParams<{ eventId: string }>();
   const eventId = params.eventId;
@@ -244,6 +771,8 @@ export default function EventVisitorPage() {
   const [coupons, setCoupons] = useState<PublicCoupon[]>([]);
   const [myClaims, setMyClaims] = useState<MemberClaim[]>([]);
   const [stampCard, setStampCard] = useState<MemberStampCard | null>(null);
+  const [myReviews, setMyReviews] = useState<MemberReview[]>([]);
+  const [reviewableShops, setReviewableShops] = useState<ReviewableShop[]>([]);
   const [notices, setNotices] = useState<EventNotice[]>([]);
   const [couponMessage, setCouponMessage] = useState('');
   const [infoPdfs, setInfoPdfs] = useState<InfoPdf[]>([]);
@@ -491,12 +1020,30 @@ export default function EventVisitorPage() {
     }
   };
 
+  // レビューは、スタンプをもらった店についてだけ書ける（資格判定はAPI側）
+  const loadMyReviews = async (currentUser: User) => {
+    try {
+      const idToken = await currentUser.getIdToken();
+      const res = await fetch(`/api/events/${eventId}/my-reviews`, {
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setMyReviews((data.reviews as MemberReview[]) ?? []);
+        setReviewableShops((data.eligibleShops as ReviewableShop[]) ?? []);
+      }
+    } catch {
+      // 同上
+    }
+  };
+
   useEffect(() => {
     if (!user) return;
     void loadCoupons(locale);
     void loadMyClaims(user, locale);
     void loadNotices(user, locale);
     void loadMyStamps(user);
+    void loadMyReviews(user);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, eventId, locale]);
 
@@ -645,6 +1192,7 @@ export default function EventVisitorPage() {
         void loadMyClaims(user, locale);
         void loadNotices(user, locale);
         void loadMyStamps(user);
+        void loadMyReviews(user);
       }
     };
     const timer = window.setInterval(refresh, 15000);
@@ -1623,6 +2171,38 @@ export default function EventVisitorPage() {
                   </article>
                 ),
               )}
+            </section>
+          )}
+
+          {user && reviewableShops.length > 0 && (
+            <section style={{ marginTop: 28 }}>
+              <h2
+                style={{
+                  fontSize: 17,
+                  fontWeight: 800,
+                  margin: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                <span aria-hidden="true">✍️</span>
+                <span style={{ flex: 1 }}>{uiText(locale, 'reviewSectionTitle')}</span>
+              </h2>
+              {reviewableShops.map((shop) => (
+                <ReviewShopCard
+                  key={shop.exhibitorId}
+                  eventId={eventId}
+                  locale={locale}
+                  shop={shop}
+                  review={
+                    myReviews.find((r) => r.exhibitorId === shop.exhibitorId) ??
+                    null
+                  }
+                  user={user}
+                  onSaved={() => void loadMyReviews(user)}
+                />
+              ))}
             </section>
           )}
 
