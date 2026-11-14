@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  MAX_WORLD_NAME_LENGTH,
   buildProvisioningUpdate,
   decideProvisioning,
   validateCreateInput,
@@ -96,6 +97,60 @@ describe('buildProvisioningUpdate', () => {
       expect(buildProvisioningUpdate({ companyName: '', restoredSubscriberCap: -1 })).toEqual(
         {},
       );
+    });
+  });
+
+  describe('町おこし固有の任意項目', () => {
+    it('billingOptionEnabled は boolean が送られた場合だけ含める', () => {
+      expect(buildProvisioningUpdate({ companyName: '', billingOptionEnabled: true })).toEqual({
+        billingOptionEnabled: true,
+      });
+      expect(buildProvisioningUpdate({ companyName: '', billingOptionEnabled: false })).toEqual({
+        billingOptionEnabled: false,
+      });
+    });
+    it('billingOptionEnabled が boolean でなければ無視する', () => {
+      expect(
+        buildProvisioningUpdate({
+          companyName: '',
+          billingOptionEnabled: 'true' as unknown as boolean,
+        }),
+      ).toEqual({});
+      expect(
+        buildProvisioningUpdate({
+          companyName: '',
+          billingOptionEnabled: 1 as unknown as boolean,
+        }),
+      ).toEqual({});
+    });
+    it('billingOptionEnabled が送られなければ含めない（既存値を変えない）', () => {
+      expect(buildProvisioningUpdate({ companyName: '' })).toEqual({});
+    });
+    it('worldName は前後の空白を除いて含める', () => {
+      expect(buildProvisioningUpdate({ companyName: '', worldName: ' 飯能カレー ' })).toEqual({
+        worldName: '飯能カレー',
+      });
+    });
+    it('worldName が空文字・空白だけなら含めない（誤って消さない）', () => {
+      expect(buildProvisioningUpdate({ companyName: '', worldName: '' })).toEqual({});
+      expect(buildProvisioningUpdate({ companyName: '', worldName: '   ' })).toEqual({});
+    });
+    it('worldName が上限を超えたら無視する（リクエスト全体は落とさない）', () => {
+      expect(
+        buildProvisioningUpdate({
+          companyName: '',
+          worldName: 'あ'.repeat(MAX_WORLD_NAME_LENGTH + 1),
+        }),
+      ).toEqual({});
+      expect(
+        buildProvisioningUpdate({
+          companyName: '',
+          worldName: 'あ'.repeat(MAX_WORLD_NAME_LENGTH),
+        }),
+      ).toEqual({ worldName: 'あ'.repeat(MAX_WORLD_NAME_LENGTH) });
+    });
+    it('worldName が送られなければ含めない（既存値を変えない）', () => {
+      expect(buildProvisioningUpdate({ companyName: '', worldName: undefined })).toEqual({});
     });
   });
 });

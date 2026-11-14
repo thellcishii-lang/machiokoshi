@@ -95,9 +95,9 @@ function toForm(event: EventConfig): EventForm {
 
 const VIOLET = '#6D28D9';
 
-// 契約まわりの手続きは本家の EVENT 専用契約ページ（push-taro.com/event-account）。
-const HONKE_SHOP_URL = 'https://push-taro.com/event-account';
-const HONKE_COUPON_OPTION_URL = 'https://push-taro.com/event-account';
+// 契約まわりの手続きは本家の町おこし専用契約ページ（push-taro.com/machiokoshi-account）。
+const HONKE_SHOP_URL = 'https://push-taro.com/machiokoshi-account';
+const HONKE_COUPON_OPTION_URL = 'https://push-taro.com/machiokoshi-account';
 const COUPON_OPTION_MAX_CAP = 500;
 
 const containerStyle: React.CSSProperties = {
@@ -281,6 +281,8 @@ export default function EventAdminPage() {
   const [cardFeedback, setCardFeedback] = useState<{ id: string; text: string; error: boolean } | null>(null);
   // 初回パスワード変更ゲートの状態（unknown の間は管理画面を出さない）。
   const [passwordGate, setPasswordGate] = useState<'unknown' | 'required' | 'clear'>('unknown');
+  // 世界観の名前（申込時の希望名）。新規作成フォームのプロジェクト名の初期値に使う。
+  const [worldNameDefault, setWorldNameDefault] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [newPasswordConfirm, setNewPasswordConfirm] = useState('');
   const [gateMessage, setGateMessage] = useState('');
@@ -336,6 +338,14 @@ export default function EventAdminPage() {
         const data = await callApi('/api/organizers/me');
         if (!cancelled) {
           setPasswordGate(data.mustChangePassword ? 'required' : 'clear');
+          // 世界観の名前があれば、新規作成フォームのプロジェクト名の
+          // 初期値にする（既に入力済みの名前は上書きしない）。
+          if (typeof data.worldName === 'string' && data.worldName) {
+            setWorldNameDefault(data.worldName);
+            setForm((prev) =>
+              prev.name === '' ? { ...prev, name: data.worldName as string } : prev,
+            );
+          }
         }
       } catch {
         // 判定に失敗しても管理画面は開けるようにする
@@ -513,7 +523,7 @@ export default function EventAdminPage() {
       setEvents((prev) => prev.filter((e) => e.id !== event.id));
       if (selectedId === event.id) {
         setSelectedId(null);
-        setForm(emptyForm);
+        setForm({ ...emptyForm, name: worldNameDefault });
         setMessage(adminText(locale, 'deletedMessage'));
       }
     } catch (e) {
