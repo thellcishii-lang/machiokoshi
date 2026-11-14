@@ -2,8 +2,8 @@
 //
 // 契約が一時的に上位プランへ上がっている間、契約枠は大きくなるが、
 // リバート日（tempSubscriberCapUntil）に restoredSubscriberCap まで戻る。
-// 開催中イベントの登録者数がすでに戻し先の枠を超えていると、リバート後に
-// そのイベントへの新規登録が止まってしまうため、管理画面のバナーで
+// 開催中プロジェクトの登録者数がすでに戻し先の枠を超えていると、リバート後に
+// そのプロジェクトへの新規登録が止まってしまうため、管理画面のバナーで
 // 事前に知らせる（延長操作は本家のプラン画面で行う）。
 //
 // 登録者数はプロビジョニング照会（lib/provisioning-usage.ts）と同じく
@@ -26,7 +26,7 @@ export interface CapWarning {
   revertDate: string;
   /** リバート後の購読者枠 */
   restoredSubscriberCap: number;
-  /** 戻し先の枠を超えている開催中イベント */
+  /** 戻し先の枠を超えている開催中プロジェクト */
   events: CapWarningEvent[];
 }
 
@@ -41,7 +41,7 @@ export interface CapWarningCandidate {
  * 警告を出すかどうかの判定（純粋関数）。
  * 契約者レコードが無い、または一時上げの情報（リバート日／戻し先の枠）が
  * 無ければ警告なし。対象は開催中（live）で登録者数が戻し先の枠を
- * 「超えて」いるイベントのみ（枠ちょうどは新規登録がまだ可能なため対象外）。
+ * 「超えて」いるプロジェクトのみ（枠ちょうどは新規登録がまだ可能なため対象外）。
  */
 export function buildCapWarning(
   organizer: Pick<
@@ -76,7 +76,7 @@ export async function getCapWarningForOwner(
 ): Promise<CapWarning | null> {
   const organizer = await findOrganizerByOwnerUid(ownerUid);
   if (!organizer) return null;
-  // 一時上げの情報が無い契約ではイベントの走査自体が不要。
+  // 一時上げの情報が無い契約ではプロジェクトの走査自体が不要。
   if (
     !organizer.tempSubscriberCapUntil ||
     organizer.restoredSubscriberCap === null

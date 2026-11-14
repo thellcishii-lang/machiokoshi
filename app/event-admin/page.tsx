@@ -1,20 +1,20 @@
 'use client';
 
 // app/event-admin/page.tsx
-// Push-taro EVENT の主催者向けイベント設定画面。
-// イベントの一覧・作成・編集（開催期間／リセット方式／リセット時刻／上限／バックアップ保持日数／状態）。
+// Push-taro EVENT の主催者向けプロジェクト設定画面。
+// プロジェクトの一覧・作成・編集（開催期間／リセット方式／リセット時刻／上限／バックアップ保持日数／状態）。
 // 作成は「下書きで作成」と「登録（開催中として作成）」の2ボタンで状態を明示する。
 // 下書きはカードの「開催中にする」から公開でき、下書きと終了はカードから
 // 削除できる（開催中は削除不可。削除は DELETE /api/events/[eventId]）。
-// 編集はカードの「編集」ボタン（またはイベント名クリック）で選択して
-// フォームへスクロール。イベント内の画面のサイドバーにあるイベント名は
+// 編集はカードの「編集」ボタン（またはプロジェクト名クリック）で選択して
+// フォームへスクロール。プロジェクト内の画面のサイドバーにあるプロジェクト名は
 // ?edit=<eventId> 付きで戻り、この画面が読み取って同じ編集を開く。
 // 削除はカードと編集フォームの両方からできる（下書き・終了のみ）。
 // 契約まわりの導線として、一覧の上にプラン変更、各カードにクーポン
 // 追加購入を置く（どちらも本家の EVENT 専用契約ページへのリンク）。
 // 将来の管理画面3分割（プッシュ＋消込／予約／クーポン管理）の土台として、
-// まずはイベント設定に絞った単独画面にしている。
-// 同時に仕込めるイベントは3つまで（下書き＋開催中。終了は数えない）で、
+// まずはプロジェクト設定に絞った単独画面にしている。
+// 同時に仕込めるプロジェクトは3つまで（下書き＋開催中。終了は数えない）で、
 // 上限の判定は lib/event.ts の canCreateAnotherEvent、強制は POST /api/events 側。
 // 初回ログイン時（プロビジョニング直後）はパスワード変更が必須で、
 // 変更が終わるまでこの画面自体をパスワード変更フォームに差し替える
@@ -66,10 +66,6 @@ import { adminText, uiText } from '@/lib/ui-text';
 
 interface EventForm {
   name: string;
-  startDate: string;
-  endDate: string;
-  resetMode: EventResetMode;
-  resetTime: string;
   defaultLocale: Locale;
   admissionQrEnabled: boolean;
   subscriberCap: string;
@@ -79,10 +75,6 @@ interface EventForm {
 
 const emptyForm: EventForm = {
   name: '',
-  startDate: '',
-  endDate: '',
-  resetMode: 'full-daily',
-  resetTime: '00:00',
   defaultLocale: 'ja',
   admissionQrEnabled: false,
   subscriberCap: '50000',
@@ -93,10 +85,6 @@ const emptyForm: EventForm = {
 function toForm(event: EventConfig): EventForm {
   return {
     name: event.name,
-    startDate: event.startDate,
-    endDate: event.endDate,
-    resetMode: event.resetMode,
-    resetTime: event.resetTime,
     defaultLocale: event.defaultLocale,
     admissionQrEnabled: event.admissionQrEnabled,
     subscriberCap: String(event.subscriberCap),
@@ -286,7 +274,7 @@ export default function EventAdminPage() {
   const [message, setMessage] = useState('');
   const [loadMessage, setLoadMessage] = useState('');
   const [busy, setBusy] = useState(false);
-  // イベントフォームの送信中状態（保存／下書きで作成／登録で作成を区別する）。
+  // プロジェクトフォームの送信中状態（保存／下書きで作成／登録で作成を区別する）。
   const [formBusy, setFormBusy] = useState<null | 'save' | 'draft' | 'live'>(null);
   // カード上のアクション（開催中にする／削除）の処理中と結果表示。
   const [cardBusy, setCardBusy] = useState<{ id: string; action: 'publish' | 'delete' } | null>(null);
@@ -365,7 +353,7 @@ export default function EventAdminPage() {
   }, [user, passwordGate, loadEvents]);
 
   // 編集フォーム（#event-form）までスクロールする。カードの「編集」と
-  // イベント名クリック、?edit= ディープリンクで共用する。
+  // プロジェクト名クリック、?edit= ディープリンクで共用する。
   const scrollToEventForm = useCallback(() => {
     requestAnimationFrame(() => {
       document
@@ -374,8 +362,8 @@ export default function EventAdminPage() {
     });
   }, []);
 
-  // イベント内の画面の「イベント設定」から ?edit=<eventId> で戻ってきたら、
-  // そのイベントを選択して編集フォームを開く（初回のみ）。
+  // プロジェクト内の画面の「プロジェクト設定」から ?edit=<eventId> で戻ってきたら、
+  // そのプロジェクトを選択して編集フォームを開く（初回のみ）。
   const editParamApplied = useRef(false);
   useEffect(() => {
     if (editParamApplied.current || events.length === 0) return;
@@ -438,10 +426,6 @@ export default function EventAdminPage() {
 
   const buildPayload = () => ({
     name: form.name,
-    startDate: form.startDate,
-    endDate: form.endDate,
-    resetMode: form.resetMode,
-    resetTime: form.resetTime,
     defaultLocale: form.defaultLocale,
     admissionQrEnabled: form.admissionQrEnabled,
     // 購読者上限は契約枠（料金の軸）なので主催者からは送信しない。運営側のみ変更可。
@@ -517,8 +501,8 @@ export default function EventAdminPage() {
     }
   };
 
-  // 下書き・終了イベントの削除。確認ダイアログ（イベント名＋復元不可の明示）を
-  // 挟み、成功したら一覧から取り除く。編集中のイベントを消した場合は
+  // 下書き・終了プロジェクトの削除。確認ダイアログ（プロジェクト名＋復元不可の明示）を
+  // 挟み、成功したら一覧から取り除く。編集中のプロジェクトを消した場合は
   // フォームを新規作成の状態に戻す。
   const handleDelete = async (event: EventConfig) => {
     if (!window.confirm(adminText(locale, 'deleteConfirm', { name: event.name }))) return;
@@ -783,14 +767,7 @@ export default function EventAdminPage() {
                 >
                   <div style={{ fontSize: 13, color: '#475569', lineHeight: 1.6 }}>
                     {adminText(locale, 'eventMeta', {
-                      start: event.startDate,
-                      end: event.endDate,
                       status: statusText(event.status),
-                      mode: adminText(
-                        locale,
-                        event.resetMode === 'full-daily' ? 'resetModeFullShort' : 'resetModeKeepShort',
-                      ),
-                      time: event.resetTime,
                     })}
                   </div>
                   <div style={{ fontSize: 13, color: '#475569', marginTop: 6 }}>
@@ -979,39 +956,6 @@ export default function EventAdminPage() {
         <label style={labelStyle}>
           {adminText(locale, 'eventNameLabel')}
           <input style={inputStyle} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-        </label>
-        <label style={labelStyle}>
-          {adminText(locale, 'startDateLabel')}
-          <input style={inputStyle} type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
-        </label>
-        <label style={labelStyle}>
-          {adminText(locale, 'endDateLabel')}
-          <input style={inputStyle} type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
-        </label>
-        <fieldset style={{ border: '1px solid #E7E3F4', borderRadius: 12, padding: '12px 14px', margin: '0 0 12px', backgroundColor: '#F7F5FD' }}>
-          <legend style={{ fontSize: 13, fontWeight: 600 }}>{adminText(locale, 'resetModeLegend')}</legend>
-          <label style={{ display: 'block', fontSize: 14, marginBottom: 6 }}>
-            <input
-              type="radio"
-              name="resetMode"
-              checked={form.resetMode === 'full-daily'}
-              onChange={() => setForm({ ...form, resetMode: 'full-daily' })}
-            />{' '}
-            {adminText(locale, 'resetModeFull')}
-          </label>
-          <label style={{ display: 'block', fontSize: 14 }}>
-            <input
-              type="radio"
-              name="resetMode"
-              checked={form.resetMode === 'keep-phones'}
-              onChange={() => setForm({ ...form, resetMode: 'keep-phones' })}
-            />{' '}
-            {adminText(locale, 'resetModeKeep')}
-          </label>
-        </fieldset>
-        <label style={labelStyle}>
-          {adminText(locale, 'resetTimeLabel')}
-          <input style={inputStyle} type="time" value={form.resetTime} onChange={(e) => setForm({ ...form, resetTime: e.target.value })} />
         </label>
         <label style={labelStyle}>
           {adminText(locale, 'defaultLocaleLabel')}

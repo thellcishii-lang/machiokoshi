@@ -2,7 +2,7 @@
 // 画面の固定文の辞書（ja / en / zh / ko）。
 // 人が書く文（配信・クーポン）は lib/translate.ts の自動翻訳が担い、
 // ボタンや案内のような固定文はここで持つ。
-// 言語の決まり方（個人 > イベントのデフォルト > 日本語）は lib/i18n.ts。
+// 言語の決まり方（個人 > プロジェクトのデフォルト > 日本語）は lib/i18n.ts。
 
 import { DEFAULT_LOCALE, type Locale } from './i18n';
 
@@ -20,7 +20,7 @@ export const UI_TEXT = {
     ko: '언어',
   },
   notFoundTitle: {
-    ja: 'イベントが見つかりません',
+    ja: 'プロジェクトが見つかりません',
     en: 'Event not found',
     zh: '未找到活动',
     ko: '이벤트를 찾을 수 없습니다',
@@ -50,13 +50,13 @@ export const UI_TEXT = {
     ko: '관련 링크',
   },
   endedMessage: {
-    ja: 'このイベントは終了しました。',
+    ja: 'このプロジェクトは終了しました。',
     en: 'This event has ended.',
     zh: '本活动已结束。',
     ko: '이 이벤트는 종료되었습니다.',
   },
   notAccepting: {
-    ja: 'このイベントは現在、登録を受け付けていません。',
+    ja: 'このプロジェクトは現在、登録を受け付けていません。',
     en: 'This event is not accepting registrations right now.',
     zh: '本活动目前不接受登记。',
     ko: '이 이벤트는 현재 등록을 받고 있지 않습니다.',
@@ -176,7 +176,7 @@ export const UI_TEXT = {
     ko: '알림 등록은 매일 초기화됩니다. 다음 날에도 알림을 받으려면 이 페이지에서 다시 등록해 주세요.',
   },
   keepPhonesNote: {
-    ja: '電話番号とクーポンの取得・利用記録は会期中保持され、イベント終了時に消去されます。',
+    ja: '電話番号とクーポンの取得・利用記録は会期中保持され、プロジェクト終了時に消去されます。',
     en: 'Your phone number and coupon claim/redemption records are kept during the event period and deleted when the event ends.',
     zh: '您的手机号码以及优惠券领取和使用记录将在活动期间保留，活动结束时删除。',
     ko: '전화번호와 쿠폰 취득·사용 기록은 행사 기간 동안 보관되며, 이벤트 종료 시 삭제됩니다.',
@@ -778,7 +778,7 @@ export const ADMIN_TEXT = {
     ko: 'Push-taro EVENT 관리 로그인',
   },
   adminTitle: {
-    ja: 'Push-taro EVENT イベント設定',
+    ja: 'Push-taro EVENT プロジェクト設定',
     en: 'Push-taro EVENT event settings',
     zh: 'Push-taro EVENT 活动设置',
     ko: 'Push-taro EVENT 이벤트 설정',
@@ -856,7 +856,7 @@ export const ADMIN_TEXT = {
     ko: '④ 설정',
   },
   navSettings: {
-    ja: 'イベント設定',
+    ja: 'プロジェクト設定',
     en: 'Event settings',
     zh: '活动设置',
     ko: '이벤트 설정',
@@ -868,13 +868,13 @@ export const ADMIN_TEXT = {
     ko: '메뉴',
   },
   eventsListTitle: {
-    ja: 'イベント一覧',
+    ja: 'プロジェクト一覧',
     en: 'Events',
     zh: '活动列表',
     ko: '이벤트 목록',
   },
   noEvents: {
-    ja: 'まだイベントがありません。',
+    ja: 'まだプロジェクトがありません。',
     en: 'No events yet.',
     zh: '尚无活动。',
     ko: '아직 이벤트가 없습니다.',
@@ -898,10 +898,10 @@ export const ADMIN_TEXT = {
     ko: '종료',
   },
   eventMeta: {
-    ja: '{start} 〜 {end}／状態: {status}／リセット: {mode} {time}',
-    en: '{start} – {end} / Status: {status} / Reset: {mode} {time}',
-    zh: '{start} 〜 {end}／状态：{status}／重置：{mode} {time}',
-    ko: '{start} ~ {end} / 상태: {status} / 리셋: {mode} {time}',
+    ja: '状態: {status}',
+    en: 'Status: {status}',
+    zh: '状态：{status}',
+    ko: '상태: {status}',
   },
   resetModeFullShort: {
     ja: '毎日フルリセット',
@@ -916,19 +916,19 @@ export const ADMIN_TEXT = {
     ko: '기간 중 전화번호 유지',
   },
   newEventButton: {
-    ja: '＋ 新規イベント',
+    ja: '＋ 新規プロジェクト',
     en: '+ New event',
     zh: '＋ 新建活动',
     ko: '＋ 새 이벤트',
   },
   concurrentCapNote: {
-    ja: '同時に仕込めるイベントは{cap}つまでです（現在{active}つ）',
+    ja: '同時に仕込めるプロジェクトは{cap}つまでです（現在{active}つ）',
     en: 'You can set up to {cap} events at a time ({active} so far)',
     zh: '同时最多可创建{cap}个活动（当前{active}个）',
     ko: '동시에 준비할 수 있는 이벤트는 최대 {cap}개입니다(현재 {active}개)',
   },
   concurrentCapReached: {
-    ja: '同時に仕込めるイベントの上限（{cap}つ）に達しています。新しいイベントを作るには、先にいずれかのイベントを終了してください。',
+    ja: '同時に仕込めるプロジェクトの上限（{cap}つ）に達しています。新しいプロジェクトを作るには、先にいずれかのプロジェクトを終了してください。',
     en: 'You have reached the limit of {cap} events set up at once. End one of your events to create a new one.',
     zh: '已达到同时创建活动的上限（{cap}个）。如需新建活动，请先结束其中一个活动。',
     ko: '동시에 준비할 수 있는 이벤트 상한({cap}개)에 도달했습니다. 새 이벤트를 만들려면 먼저 이벤트 중 하나를 종료해 주세요.',
@@ -964,13 +964,13 @@ export const ADMIN_TEXT = {
     ko: '편집: {name}',
   },
   newEventTitle: {
-    ja: '新規イベント作成',
+    ja: '新規プロジェクト作成',
     en: 'Create a new event',
     zh: '新建活动',
     ko: '새 이벤트 만들기',
   },
   eventNameLabel: {
-    ja: 'イベント名',
+    ja: 'プロジェクト名',
     en: 'Event name',
     zh: '活动名称',
     ko: '이벤트 이름',
@@ -1102,7 +1102,7 @@ export const ADMIN_TEXT = {
     ko: '저장했습니다',
   },
   createdMessage: {
-    ja: 'イベントを作成しました',
+    ja: 'プロジェクトを作成しました',
     en: 'Event created',
     zh: '活动已创建',
     ko: '이벤트를 만들었습니다',
@@ -1120,7 +1120,7 @@ export const ADMIN_TEXT = {
     ko: '등록(진행 중으로 만들기)',
   },
   createdLiveMessage: {
-    ja: '開催中としてイベントを作成しました',
+    ja: '開催中としてプロジェクトを作成しました',
     en: 'Event created and set live',
     zh: '活动已创建并设为进行中',
     ko: '진행 중으로 이벤트를 만들었습니다',
@@ -1138,7 +1138,7 @@ export const ADMIN_TEXT = {
     ko: '편집',
   },
   deleteEventButton: {
-    ja: 'このイベントを削除',
+    ja: 'このプロジェクトを削除',
     en: 'Delete this event',
     zh: '删除此活动',
     ko: '이 이벤트 삭제',
@@ -1156,13 +1156,13 @@ export const ADMIN_TEXT = {
     ko: '진행 중으로 변경하지 못했습니다',
   },
   deleteConfirm: {
-    ja: 'イベント「{name}」を削除しますか？\n購読者・登録者・クーポン・参加店など、このイベントのデータはすべて削除され、元に戻せません。',
+    ja: 'プロジェクト「{name}」を削除しますか？\n購読者・登録者・クーポン・参加店など、このプロジェクトのデータはすべて削除され、元に戻せません。',
     en: 'Delete the event "{name}"?\nAll data for this event (subscribers, members, coupons, exhibitors, and more) will be permanently deleted. This cannot be undone.',
     zh: '要删除活动“{name}”吗？\n该活动的全部数据（订阅者、注册者、优惠券、参展商等）都将被删除，且无法恢复。',
     ko: '이벤트 "{name}"을(를) 삭제하시겠습니까?\n구독자·등록자·쿠폰·출점자 등 이 이벤트의 모든 데이터가 삭제되며 되돌릴 수 없습니다.',
   },
   deletedMessage: {
-    ja: 'イベントを削除しました',
+    ja: 'プロジェクトを削除しました',
     en: 'Event deleted',
     zh: '活动已删除',
     ko: '이벤트를 삭제했습니다',
@@ -1588,7 +1588,7 @@ export const ADMIN_TEXT = {
     ko: '사용 처리 로그인용 이메일',
   },
   exhibitorEmailNote: {
-    ja: 'このイベント専用のログインパスワードを発行し、このメールアドレス宛てに送信します。パスワードはイベントごとに別々に発行されます。',
+    ja: 'このプロジェクト専用のログインパスワードを発行し、このメールアドレス宛てに送信します。パスワードはプロジェクトごとに別々に発行されます。',
     en: 'A login password for this event only is issued and sent to this email address. Passwords are issued separately for each event.',
     zh: '将发送本活动专用的登录密码至该邮箱。密码按活动分别发送。',
     ko: '이 이벤트 전용 로그인 비밀번호를 발급해 이 이메일 주소로 보냅니다. 비밀번호는 이벤트마다 별도로 발급됩니다.',
@@ -1840,7 +1840,7 @@ export const ADMIN_TEXT = {
     ko: '방문객 등록 QR 코드',
   },
   visitorQrNote: {
-    ja: 'このQRコードを読み取ると、このイベントの来場者ページが開きます。ポスターなどに印刷して会場に掲示してください。',
+    ja: 'このQRコードを読み取ると、このプロジェクトの来場者ページが開きます。ポスターなどに印刷して会場に掲示してください。',
     en: 'Scanning this QR code opens this event’s visitor page. Print it on posters and display it at the venue.',
     zh: '扫描此二维码可打开本活动的访客页面。请打印在海报上并张贴于会场。',
     ko: '이 QR 코드를 스캔하면 이 이벤트의 방문객 페이지가 열립니다. 포스터 등에 인쇄해 행사장에 게시해 주세요.',
@@ -1912,7 +1912,7 @@ export const ADMIN_TEXT = {
     ko: '플랜 한도 경고',
   },
   capWarningBody: {
-    ja: '{date} にプランが下位プランへ戻ると、購読者枠は {cap} 人に戻ります。以下の開催中イベントはすでにその枠を超えているため、プランが戻ると新規登録が止まります。',
+    ja: '{date} にプランが下位プランへ戻ると、購読者枠は {cap} 人に戻ります。以下の開催中プロジェクトはすでにその枠を超えているため、プランが戻ると新規登録が止まります。',
     en: 'When your plan returns to the lower tier on {date}, the subscriber cap goes back to {cap}. The live events below already exceed that cap, so new registrations will stop once the plan reverts.',
     zh: '当您的套餐于 {date} 恢复为低档套餐时，订阅者上限将恢复为 {cap} 人。以下进行中的活动已超过该上限，套餐恢复后将停止新注册。',
     ko: '{date}에 플랜이 하위 플랜으로 돌아가면 구독자 한도가 {cap}명으로 돌아갑니다. 아래 진행 중인 이벤트는 이미 그 한도를 초과했으므로, 플랜이 돌아가면 신규 등록이 중단됩니다.',
@@ -1924,7 +1924,7 @@ export const ADMIN_TEXT = {
     ko: '{name}: 등록자 {count}명',
   },
   capWarningGuidance: {
-    ja: '大きなイベントが続く場合は、本家のプラン画面から「もう1か月延長」できます。',
+    ja: '大きなプロジェクトが続く場合は、本家のプラン画面から「もう1か月延長」できます。',
     en: 'If your big event continues, you can extend the higher plan by one month from the plan screen on push-taro.com.',
     zh: '如果大型活动仍在继续，可在 push-taro.com 的套餐页面选择“再延长1个月”。',
     ko: '큰 이벤트가 계속되는 경우 push-taro.com의 플랜 화면에서 "1개월 더 연장"을 선택할 수 있습니다.',
@@ -1942,7 +1942,7 @@ export const ADMIN_TEXT = {
     ko: '쿠폰 한도 추가 구매',
   },
   couponOptionBody: {
-    ja: 'このイベントのクーポン上限は現在 {cap} 件です。必要な場合は、本家サイトで +100件（¥10,000）ずつ追加購入できます（上限500件）。',
+    ja: 'このプロジェクトのクーポン上限は現在 {cap} 件です。必要な場合は、本家サイトで +100件（¥10,000）ずつ追加購入できます（上限500件）。',
     en: 'This event currently allows up to {cap} coupons. If you need more, you can buy +100 slots (¥10,000) at a time on push-taro.com (max 500).',
     zh: '该活动目前的优惠券上限为 {cap} 张。如有需要，可在 push-taro.com 以 +100张（¥10,000）为单位追加购买（上限500张）。',
     ko: '이 이벤트의 쿠폰 상한은 현재 {cap}개입니다. 필요한 경우 push-taro.com에서 +100개(¥10,000) 단위로 추가 구매할 수 있습니다(상한 500개).',
@@ -1976,6 +1976,48 @@ export const ADMIN_TEXT = {
     en: 'Buy coupon slots',
     zh: '追加购买优惠券',
     ko: '쿠폰 추가 구매',
+  },
+  projectManageTitle: {
+    ja: 'プロジェクトの管理',
+    en: 'Project management',
+    zh: '项目管理',
+    ko: '프로젝트 관리',
+  },
+  projectEndNote: {
+    ja: 'プロジェクトを終了すると、お客さん向けの画面やスタンプ・クーポンは使えなくなります。終了してもデータ（スタンプ・レビューなど）は削除されません。',
+    en: 'Ending the project disables the visitor screens, stamps and coupons. Data such as stamps and reviews is not deleted.',
+    zh: '结束项目后，访客页面、印章和优惠券将无法使用。印章、评价等数据不会被删除。',
+    ko: '프로젝트를 종료하면 방문자 화면, 스탬프, 쿠폰을 사용할 수 없게 됩니다. 스탬프와 리뷰 등의 데이터는 삭제되지 않습니다.',
+  },
+  projectEndButton: {
+    ja: 'プロジェクトを終了する',
+    en: 'End this project',
+    zh: '结束项目',
+    ko: '프로젝트 종료',
+  },
+  confirmEndProject: {
+    ja: 'プロジェクトを終了しますか？終了後は開催中に戻せません。',
+    en: 'End this project? It cannot be returned to live afterwards.',
+    zh: '要结束项目吗？结束后无法恢复为进行中。',
+    ko: '프로젝트를 종료하시겠습니까? 종료 후에는 진행 중으로 되돌릴 수 없습니다.',
+  },
+  projectEndedNote: {
+    ja: 'このプロジェクトは終了しています。',
+    en: 'This project has ended.',
+    zh: '此项目已结束。',
+    ko: '이 프로젝트는 종료되었습니다.',
+  },
+  projectEndDone: {
+    ja: 'プロジェクトを終了しました。',
+    en: 'The project has been ended.',
+    zh: '项目已结束。',
+    ko: '프로젝트를 종료했습니다.',
+  },
+  projectEndFailed: {
+    ja: 'プロジェクトの終了に失敗しました',
+    en: 'Failed to end the project',
+    zh: '结束项目失败',
+    ko: '프로젝트 종료에 실패했습니다',
   },
 } as const satisfies Record<string, Record<Locale, string>>;
 

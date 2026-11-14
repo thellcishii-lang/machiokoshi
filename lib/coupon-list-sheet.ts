@@ -1,12 +1,12 @@
 // lib/coupon-list-sheet.ts
-// 主催者向け「出店者・クーポン一覧」シート（印刷用）の組み立て。
+// 管理人向け「参加店・クーポン一覧」シート（印刷用）の組み立て。
 //
-// クーポン管理画面の出店者一覧とクーポン一覧を、別々に書き出すと
-// 紛らわしいため、1枚の表に統合する（左 = 出店者、右 = その出店者の
-// クーポン）。左だけ読めば出店者一覧、右だけ読めばクーポン一覧になる。
+// クーポン管理画面の参加店一覧とクーポン一覧を、別々に書き出すと
+// 紛らわしいため、1枚の表に統合する（左 = 参加店、右 = その参加店の
+// クーポン）。左だけ読めば参加店一覧、右だけ読めばクーポン一覧になる。
 // この関数は並び替えとグループ化だけを行う純粋関数。
 
-/** シートに載せる出店者の最小形（EventExhibitor と構造互換）。 */
+/** シートに載せる参加店の最小形（EventExhibitor と構造互換）。 */
 export interface SheetExhibitor {
   id: string;
   name: string;
@@ -18,24 +18,24 @@ export interface SheetExhibitor {
 export interface SheetCoupon {
   id: string;
   exhibitorId: string;
-  /** 出店者が一覧に無い場合の表示名フォールバック */
+  /** 参加店が一覧に無い場合の表示名フォールバック */
   exhibitorName: string;
   title: string;
   active: boolean;
 }
 
-/** シートの1ブロック: 出店者1社と、その全クーポン（0件もありうる）。 */
+/** シートの1ブロック: 参加店1社と、その全クーポン（0件もありうる）。 */
 export interface ExhibitorCouponGroup {
   exhibitor: SheetExhibitor;
   coupons: SheetCoupon[];
 }
 
 /**
- * 全出店者と全クーポンを、出店者ごとのグループにまとめる。
- * - 出店者の並びは入力順を保持し、クーポンが0件の出店者も必ず含める。
- * - クーポンの並びは各出店者内で入力順を保持する。
- * - 出店者一覧に存在しない exhibitorId のクーポン（データ不整合時の
- *   フォールバック）も落とさず、クーポン側の出店者名で末尾にまとめる。
+ * 全参加店と全クーポンを、参加店ごとのグループにまとめる。
+ * - 参加店の並びは入力順を保持し、クーポンが0件の参加店も必ず含める。
+ * - クーポンの並びは各参加店内で入力順を保持する。
+ * - 参加店一覧に存在しない exhibitorId のクーポン（データ不整合時の
+ *   フォールバック）も落とさず、クーポン側の参加店名で末尾にまとめる。
  */
 export function buildExhibitorCouponGroups(
   exhibitors: SheetExhibitor[],
