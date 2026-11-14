@@ -31,6 +31,10 @@ import {
 } from '@/lib/i18n';
 import { uiText } from '@/lib/ui-text';
 import { buildCouponGroups } from '@/lib/coupon-groups';
+import {
+  buildFreeCouponQrPayload,
+  buildStampQrPayload,
+} from '@/lib/stamp-qr';
 import { QRCodeSVG } from 'qrcode.react';
 import { Html5Qrcode } from 'html5-qrcode';
 
@@ -80,6 +84,28 @@ interface MemberClaim {
   title: string;
   exhibitorName: string;
   status: 'claimed' | 'redeemed';
+}
+
+interface MemberFreeCoupon {
+  id: string;
+  round: number;
+  status: 'active' | 'used';
+  usedExhibitorName: string | null;
+}
+
+interface MemberStampCard {
+  memberId: string;
+  round: number;
+  goalCount: number;
+  countInRound: number;
+  remaining: number;
+  stamps: Array<{
+    id: string;
+    exhibitorId: string;
+    exhibitorName: string;
+    round: number;
+  }>;
+  freeCoupons: MemberFreeCoupon[];
 }
 
 interface InfoPdf {
@@ -217,6 +243,7 @@ export default function EventVisitorPage() {
   const [couponQuery, setCouponQuery] = useState('');
   const [coupons, setCoupons] = useState<PublicCoupon[]>([]);
   const [myClaims, setMyClaims] = useState<MemberClaim[]>([]);
+  const [stampCard, setStampCard] = useState<MemberStampCard | null>(null);
   const [notices, setNotices] = useState<EventNotice[]>([]);
   const [couponMessage, setCouponMessage] = useState('');
   const [infoPdfs, setInfoPdfs] = useState<InfoPdf[]>([]);
@@ -450,11 +477,26 @@ export default function EventVisitorPage() {
     }
   };
 
+  // スタンプカードは購読者だけが持つ（未登録なら API が card: null を返す）
+  const loadMyStamps = async (currentUser: User) => {
+    try {
+      const idToken = await currentUser.getIdToken();
+      const res = await fetch(`/api/events/${eventId}/my-stamps`, {
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) setStampCard((data.card as MemberStampCard | null) ?? null);
+    } catch {
+      // 同上
+    }
+  };
+
   useEffect(() => {
     if (!user) return;
     void loadCoupons(locale);
     void loadMyClaims(user, locale);
     void loadNotices(user, locale);
+    void loadMyStamps(user);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, eventId, locale]);
 
@@ -602,6 +644,7 @@ export default function EventVisitorPage() {
       if (document.visibilityState === 'visible') {
         void loadMyClaims(user, locale);
         void loadNotices(user, locale);
+        void loadMyStamps(user);
       }
     };
     const timer = window.setInterval(refresh, 15000);
@@ -1365,6 +1408,222 @@ export default function EventVisitorPage() {
                 );
               })}
             </>
+          )}
+
+          {stampCard && (
+            <section style={{ marginTop: 28 }}>
+              <h2
+                style={{
+                  fontSize: 17,
+                  fontWeight: 800,
+                  margin: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                <span aria-hidden="true">🔖</span>
+                <span style={{ flex: 1 }}>{uiText(locale, 'stampCardTitle')}</span>
+                <span style={{ fontSize: 13, color: '#64748b', fontWeight: 600 }}>
+                  {uiText(locale, 'stampRoundLabel', { round: String(stampCard.round) })}
+                </span>
+              </h2>
+              <div style={{ ...cardStyle, padding: 16, marginTop: 12 }}>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: `repeat(${Math.min(Math.max(stampCard.goalCount, 1), 5)}, 1fr)`,
+                    gap: 8,
+                  }}
+                >
+                  {Array.from({ length: stampCard.goalCount }, (_, i) => {
+                    const stamp = stampCard.stamps[i];
+                    return (
+                      <div
+                        key={i}
+                        style={{
+                          border: stamp
+                            ? `2px solid ${VIOLET}`
+                            : '2px dashed #cbd5e1',
+                          backgroundColor: stamp ? '#f5f3ff' : '#ffffff',
+                          borderRadius: 12,
+                          minHeight: 62,
+                          padding: '8px 6px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          textAlign: 'center',
+                          boxSizing: 'border-box',
+                        }}
+                      >
+                        {stamp ? (
+                          <span
+                            style={{
+                              fontSize: 12,
+                              fontWeight: 700,
+                              color: VIOLET,
+                              wordBreak: 'break-all',
+                            }}
+                          >
+                            {stamp.exhibitorName}
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: 16, color: '#cbd5e1', fontWeight: 800 }}>
+                            {i + 1}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <p
+                  style={{
+                    fontSize: 15,
+                    fontWeight: 800,
+                    textAlign: 'center',
+                    margin: '14px 0 0',
+                  }}
+                >
+                  {stampCard.countInRound} / {stampCard.goalCount}
+                </p>
+                {stampCard.remaining > 0 && (
+                  <p
+                    style={{
+                      fontSize: 13.5,
+                      color: '#475569',
+                      textAlign: 'center',
+                      margin: '4px 0 0',
+                    }}
+                  >
+                    {uiText(locale, 'stampRemaining', {
+                      count: String(stampCard.remaining),
+                    })}
+                  </p>
+                )}
+                <div
+                  style={{
+                    marginTop: 14,
+                    backgroundColor: '#ffffff',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: 14,
+                    padding: 14,
+                    display: 'flex',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <QRCodeSVG
+                    value={buildStampQrPayload(eventId, stampCard.memberId)}
+                    size={176}
+                  />
+                </div>
+                <p
+                  style={{
+                    fontSize: 14.5,
+                    fontWeight: 800,
+                    color: VIOLET,
+                    textAlign: 'center',
+                    margin: '12px 0 0',
+                  }}
+                >
+                  {uiText(locale, 'stampShowQrNote')}
+                </p>
+              </div>
+
+              {stampCard.freeCoupons.map((freeCoupon) =>
+                freeCoupon.status === 'active' ? (
+                  <article
+                    key={freeCoupon.id}
+                    style={{
+                      background: CARD_GRADIENT,
+                      border: '1px solid #ddd6fe',
+                      borderRadius: 16,
+                      padding: 16,
+                      marginTop: 12,
+                      boxShadow: '0 2px 8px rgba(109, 40, 217, 0.12)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <span
+                        style={{
+                          backgroundColor: '#16a34a',
+                          color: '#ffffff',
+                          borderRadius: 6,
+                          padding: '3px 10px',
+                          fontWeight: 700,
+                          fontSize: 12,
+                        }}
+                      >
+                        {uiText(locale, 'freeCouponTitle')}
+                      </span>
+                      <span style={{ fontSize: 13, color: '#475569' }}>
+                        {uiText(locale, 'stampRoundLabel', {
+                          round: String(freeCoupon.round),
+                        })}
+                      </span>
+                    </div>
+                    <div
+                      style={{
+                        marginTop: 14,
+                        backgroundColor: '#ffffff',
+                        borderRadius: 14,
+                        padding: 14,
+                        display: 'flex',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <QRCodeSVG
+                        value={buildFreeCouponQrPayload(eventId, freeCoupon.id)}
+                        size={176}
+                      />
+                    </div>
+                    <p
+                      style={{
+                        fontSize: 13.5,
+                        fontWeight: 700,
+                        color: VIOLET,
+                        textAlign: 'center',
+                        margin: '12px 0 0',
+                      }}
+                    >
+                      {uiText(locale, 'freeCouponNote')}
+                    </p>
+                  </article>
+                ) : (
+                  <article
+                    key={freeCoupon.id}
+                    style={{
+                      backgroundColor: '#e9edf2',
+                      borderRadius: 16,
+                      padding: 16,
+                      marginTop: 12,
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <span
+                        style={{
+                          backgroundColor: '#6b7280',
+                          color: '#ffffff',
+                          borderRadius: 6,
+                          padding: '3px 10px',
+                          fontWeight: 700,
+                          fontSize: 12,
+                        }}
+                      >
+                        {uiText(locale, 'usedStamp')}
+                      </span>
+                      <span style={{ fontSize: 13, color: '#6b7280' }}>
+                        {uiText(locale, 'freeCouponTitle')}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: 13, margin: '6px 0 0', color: '#6b7280' }}>
+                      {uiText(locale, 'freeCouponUsed', {
+                        shop: freeCoupon.usedExhibitorName ?? '',
+                      })}
+                    </p>
+                  </article>
+                ),
+              )}
+            </section>
           )}
 
           {notices.length > 0 && (

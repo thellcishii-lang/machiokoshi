@@ -54,6 +54,14 @@ export interface EventConfig {
    */
   admissionQrEnabled: boolean;
   /**
+   * スタンプラリーの達成個数（1〜MAX_STAMP_SLOTS）。管理人がプロジェクト
+   * ごとに設定する。1つの周（ラリー1周）で異なる参加店のスタンプを
+   * この個数集めると「好きな店で1回無料」クーポンが発行される。
+   * 導入前に作られたプロジェクトには項目自体が無いため、読み取り時は
+   * DEFAULT_STAMP_GOAL_COUNT に倒す。
+   */
+  stampGoalCount: number;
+  /**
    * 主催者リンク（最大 MAX_EVENT_LINKS 件）。設定画面で登録し、来場者画面に
    * タイトル付きで表示する（案内PDFと同じく登録前でも見える位置）。
    * 未登録なら空配列で、来場者画面には何も出ない。
@@ -107,6 +115,10 @@ export const MAX_EVENT_LINKS = 3;
 export const DEFAULT_RESET_TIME = '00:00';
 /** 町おこし: プロジェクトは常設。終了日を持たないことを表す番兵値（終了処理は走らない）。 */
 export const PERMANENT_END_DATE = '9999-12-31';
+/** スタンプカードの枠の最大数（達成個数の上限）。 */
+export const MAX_STAMP_SLOTS = 10;
+/** スタンプの達成個数の既定値（管理人が未設定のプロジェクト）。 */
+export const DEFAULT_STAMP_GOAL_COUNT = 5;
 export const DEFAULT_BACKUP_RETENTION_DAYS = 30;
 export const DEFAULT_RESET_MODE: EventResetMode = 'full-daily';
 
@@ -123,6 +135,7 @@ export interface CreateEventInput {
   subscriberCap?: number;
   defaultLocale?: Locale;
   admissionQrEnabled?: boolean;
+  stampGoalCount?: number;
   links?: EventLink[];
   couponCap?: number;
   backupRetentionDays?: number;
@@ -301,6 +314,26 @@ export function isFinalizationDue(
 ): boolean {
   if (event.finalizedAt) return false;
   return jstDateString(now) > event.endDate;
+}
+
+/** スタンプの達成個数として有効な値かどうか（1〜MAX_STAMP_SLOTS の整数）。 */
+export function isValidStampGoalCount(value: unknown): boolean {
+  return (
+    typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= 1 &&
+    value <= MAX_STAMP_SLOTS
+  );
+}
+
+/**
+ * 保存済みの達成個数を防御的に読む（読み取り用。throw しない）。
+ * 項目が無い旧プロジェクトや不正な値は DEFAULT_STAMP_GOAL_COUNT に倒す。
+ */
+export function parseStampGoalCount(value: unknown): number {
+  return isValidStampGoalCount(value)
+    ? (value as number)
+    : DEFAULT_STAMP_GOAL_COUNT;
 }
 
 export type SubscriberUsageLevel = 'normal' | 'warning' | 'full';

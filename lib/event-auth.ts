@@ -64,6 +64,7 @@ export async function getRequestAuth(
 import { NextResponse } from 'next/server';
 import { EventConfig } from './event';
 import { getEvent } from './event-store';
+import { getExhibitor, type EventExhibitor } from './event-coupon';
 import { findOrganizerByOwnerUid, shouldBlockForPasswordChange } from './organizers';
 
 /**
@@ -110,4 +111,52 @@ export async function requireEventOwner(
   const block = await passwordChangeBlock(uid);
   if (block) return { error: block };
   return { uid, event };
+}
+
+/**
+ * 参加店セッションだけを対象にする API 用ガード（スタンプ・無料クーポン等、
+ * 店だけが行う操作用）。
+ * 認証なし=401、プロジェクトなし=404、管理人（所有者）=403
+ * （管理人は店の操作を行わない）、それ以外の第三者=403 を返す。
+ */
+export async function requireEventExhibitor(
+  request: Request,
+  eventId: string,
+): Promise<
+  | { exhibitor: EventExhibitor; event: EventConfig }
+  | { error: NextResponse }
+> {
+  const auth = await getRequestAuth(request);
+  if (!auth) {
+    return {
+      error: NextResponse.json({ error: '認証が必要です' }, { status: 401 }),
+    };
+  }
+  const event = await getEvent(eventId);
+  if (!event) {
+    return {
+      error: NextResponse.json(
+        { error: 'プロジェクトが見つかりません' },
+        { status: 404 },
+      ),
+    };
+  }
+  if (auth.exhibitor && auth.exhibitor.eventId === eventId) {
+    const exhibitor = await getExhibitor(eventId, auth.exhibitor.exhibitorId);
+    if (exhibitor) return { exhibitor, event };
+  }
+  if (event.ownerUid === auth.uid) {
+    return {
+      error: NextResponse.json(
+        { error: 'この操作は参加店だけが行えます' },
+        { status: 403 },
+      ),
+    };
+  }
+  return {
+    error: NextResponse.json(
+      { error: 'このプロジェクトの参加店として登録されていません' },
+      { status: 403 },
+    ),
+  };
 }

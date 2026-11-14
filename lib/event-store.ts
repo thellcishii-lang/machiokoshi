@@ -16,9 +16,12 @@ import {
   EventConfig,
   MAX_COUPONS_PER_EVENT,
   isValidResetTime,
+  DEFAULT_STAMP_GOAL_COUNT,
   EVENT_SUBCOLLECTIONS,
+  isValidStampGoalCount,
   normalizeEventLinks,
   parseEventLinks,
+  parseStampGoalCount,
   receivesCapsPropagation,
 } from './event';
 
@@ -42,6 +45,8 @@ function toEventConfig(id: string, data: FirebaseFirestore.DocumentData): EventC
     defaultLocale: normalizeLocale(data.defaultLocale),
     // 入場用QRは既定オフ。導入前に作られたイベントには項目自体が無い
     admissionQrEnabled: data.admissionQrEnabled === true,
+    // スタンプ達成個数も導入前のイベントには項目が無いため既定値に倒す
+    stampGoalCount: parseStampGoalCount(data.stampGoalCount),
     // 主催者リンクは導入前のイベントには項目自体が無い
     links: parseEventLinks(data.links),
     couponCap: data.couponCap ?? MAX_COUPONS_PER_EVENT,
@@ -65,6 +70,12 @@ export async function createEvent(input: CreateEventInput): Promise<EventConfig>
   if (input.defaultLocale !== undefined && !isLocale(input.defaultLocale)) {
     throw new Error('対応していない言語です（ja / en / zh / ko）');
   }
+  if (
+    input.stampGoalCount !== undefined &&
+    !isValidStampGoalCount(input.stampGoalCount)
+  ) {
+    throw new Error('スタンプの達成個数は1〜10の整数で指定してください');
+  }
 
   const ref = db.collection(EVENTS_COLLECTION).doc();
   const data: EventDocData = {
@@ -77,6 +88,7 @@ export async function createEvent(input: CreateEventInput): Promise<EventConfig>
     subscriberCap: input.subscriberCap ?? DEFAULT_SUBSCRIBER_CAP,
     defaultLocale: input.defaultLocale ?? DEFAULT_LOCALE,
     admissionQrEnabled: input.admissionQrEnabled ?? false,
+    stampGoalCount: input.stampGoalCount ?? DEFAULT_STAMP_GOAL_COUNT,
     links: normalizeEventLinks(input.links),
     couponCap: input.couponCap ?? MAX_COUPONS_PER_EVENT,
     backupRetentionDays:
@@ -236,6 +248,7 @@ export type UpdateEventInput = Partial<
     | 'subscriberCap'
     | 'defaultLocale'
     | 'admissionQrEnabled'
+    | 'stampGoalCount'
     | 'links'
     | 'couponCap'
     | 'backupRetentionDays'
@@ -260,6 +273,12 @@ export async function updateEvent(
     typeof patch.admissionQrEnabled !== 'boolean'
   ) {
     throw new Error('入場用QR設定の形式が不正です');
+  }
+  if (
+    patch.stampGoalCount !== undefined &&
+    !isValidStampGoalCount(patch.stampGoalCount)
+  ) {
+    throw new Error('スタンプの達成個数は1〜10の整数で指定してください');
   }
   // 主催者リンクは検証してから正規化した形で保存する
   const links =

@@ -32,6 +32,7 @@ import {
   type Locale,
 } from '@/lib/i18n';
 import { redeemText, uiText } from '@/lib/ui-text';
+import { parseRedeemQrPayload } from '@/lib/stamp-qr';
 import PasswordInput from '@/components/PasswordInput';
 
 interface Exhibitor {
@@ -53,6 +54,16 @@ interface RedeemResult {
   ok: boolean;
   text: string;
   at: Date;
+  /** スタンプ系の結果は「消込完了」の見出しを出さない */
+  stamp?: boolean;
+}
+
+interface TodayStamp {
+  id: string;
+  memberId: string;
+  round: number;
+  grantedDateJst: string;
+  grantedAt: string | null;
 }
 
 const VIOLET = '#6D28D9';
@@ -166,6 +177,7 @@ export default function ExhibitorRedeemPage() {
   const [exhibitor, setExhibitor] = useState<Exhibitor | null>(null);
   const [exhibitorError, setExhibitorError] = useState('');
   const [coupons, setCoupons] = useState<OwnCoupon[]>([]);
+  const [todayStamps, setTodayStamps] = useState<TodayStamp[]>([]);
   const [manualClaimId, setManualClaimId] = useState('');
   const [result, setResult] = useState<RedeemResult | null>(null);
   const [busy, setBusy] = useState(false);
@@ -214,6 +226,11 @@ export default function ExhibitorRedeemPage() {
     setCoupons(data.coupons ?? []);
   }, [callApi, eventId]);
 
+  const loadTodayStamps = useCallback(async () => {
+    const data = await callApi(`/api/events/${eventId}/stamps?scope=mine-today`);
+    setTodayStamps(data.stamps ?? []);
+  }, [callApi, eventId]);
+
   useEffect(() => {
     if (!user) return;
     (async () => {
@@ -224,6 +241,8 @@ export default function ExhibitorRedeemPage() {
         if (me.exhibitor?.lang) setLocale(normalizeLocale(me.exhibitor.lang));
         setExhibitorError('');
         await loadCoupons();
+        // 当日スタンプの取得失敗で画面自体は止めない
+        await loadTodayStamps().catch(() => {});
       } catch (e) {
         setExhibitor(null);
         setExhibitorError(
@@ -351,7 +370,7 @@ export default function ExhibitorRedeemPage() {
             gap: 8,
           }}
         >
-          {result.ok ? (
+          {result.ok && !result.stamp ? (
             <p style={{ fontSize: 20, fontWeight: 800, color: '#15803d', margin: 0 }}>
               {redeemText(locale, 'redeemDoneTitle')}
             </p>
@@ -457,6 +476,124 @@ export default function ExhibitorRedeemPage() {
     [callApi, eventId, locale, loadCoupons],
   );
 
+  const doStampGrant = useCallback(
+    async (memberId: string) => {
+      setBusy(true);
+      setResult(null);
+      try {
+        const data = await callApi(`/api/events/${eventId}/stamps`, {
+          method: 'POST',
+          body: JSON.stringify({ memberId }),
+        });
+        setResult({
+          ok: true,
+          stamp: true,
+          text: data.completed
+            ? redeemText(locale, 'stampCompleted')
+            : redeemText(locale, 'stampGranted', {
+                count: String(data.countInRound),
+                goal: String(data.goalCount),
+              }),
+          at: new Date(),
+        });
+        // 取消し一覧に出すため、当日スタンプを取り直す（失敗は無視）
+        await loadTodayStamps().catch(() => {});
+      } catch (e) {
+        setResult({
+          ok: false,
+          text: e instanceof Error ? e.message : redeemText(locale, 'redeemFailed'),
+          at: new Date(),
+        });
+      } finally {
+        setBusy(false);
+      }
+    },
+    [callApi, eventId, locale, loadTodayStamps],
+  );
+
+  const doFreeRedeem = useCallback(
+    async (freeCouponId: string) => {
+      setBusy(true);
+      setResult(null);
+      try {
+        await callApi(`/api/events/${eventId}/free-coupons/redeem`, {
+          method: 'POST',
+          body: JSON.stringify({ freeCouponId }),
+        });
+        setResult({
+          ok: true,
+          text: redeemText(locale, 'freeRedeemDone'),
+          at: new Date(),
+        });
+      } catch (e) {
+        setResult({
+          ok: false,
+          text: e instanceof Error ? e.message : redeemText(locale, 'redeemFailed'),
+          at: new Date(),
+        });
+      } finally {
+        setBusy(false);
+      }
+    },
+    [callApi, eventId, locale],
+  );
+
+  /**
+   * 読み取った文字列の振り分け。JSON ペイロードはスタンプ／無料クーポン、
+   * それ以外は従来のクーポン claimId として扱う（lib/stamp-qr）。
+   * 別プロジェクトの QR はここで弾く（サーバー側でも eventId で検証される）。
+   */
+  const handleScanned = useCallback(
+    async (text: string) => {
+      const payload = parseRedeemQrPayload(text);
+      if (!payload) return;
+      if (payload.type === 'claim') {
+        await doRedeem(payload.claimId);
+        return;
+      }
+      if (payload.eventId !== eventId) {
+        setResult({
+          ok: false,
+          text: redeemText(locale, 'wrongProjectQr'),
+          at: new Date(),
+        });
+        return;
+      }
+      if (payload.type === 'stamp') {
+        await doStampGrant(payload.memberId);
+      } else {
+        await doFreeRedeem(payload.freeCouponId);
+      }
+    },
+    [doRedeem, doStampGrant, doFreeRedeem, eventId, locale],
+  );
+
+  const doCancelStamp = async (stampId: string) => {
+    if (!window.confirm(redeemText(locale, 'confirmCancelStamp'))) return;
+    setBusy(true);
+    setResult(null);
+    try {
+      await callApi(`/api/events/${eventId}/stamps/${stampId}`, {
+        method: 'DELETE',
+      });
+      setResult({
+        ok: true,
+        stamp: true,
+        text: redeemText(locale, 'stampCancelled'),
+        at: new Date(),
+      });
+      await loadTodayStamps().catch(() => {});
+    } catch (e) {
+      setResult({
+        ok: false,
+        text: e instanceof Error ? e.message : redeemText(locale, 'redeemFailed'),
+        at: new Date(),
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const stopCamera = useCallback(async () => {
     const scanner = scannerRef.current;
     if (scanner) {
@@ -482,7 +619,7 @@ export default function ExhibitorRedeemPage() {
         { fps: 10, qrbox: { width: 250, height: 250 } },
         async (decodedText) => {
           await stopCamera();
-          await doRedeem(decodedText);
+          await handleScanned(decodedText);
         },
         () => {},
       );
@@ -724,7 +861,10 @@ export default function ExhibitorRedeemPage() {
               />
             </label>
             <button
-              onClick={() => void doRedeem(manualClaimId)}
+              onClick={() => {
+                void handleScanned(manualClaimId);
+                setManualClaimId('');
+              }}
               disabled={busy || !manualClaimId.trim()}
               style={{
                 ...primaryButtonStyle,
@@ -843,6 +983,58 @@ export default function ExhibitorRedeemPage() {
               </article>
             );
           })}
+
+          <h2 style={{ fontSize: 18, fontWeight: 800, marginTop: 28 }}>
+            {redeemText(locale, 'todayStampsTitle')}
+          </h2>
+          {todayStamps.length === 0 && (
+            <p style={{ fontSize: 14, color: '#64748b' }}>
+              {redeemText(locale, 'noTodayStamps')}
+            </p>
+          )}
+          {todayStamps.map((stamp) => (
+            <article
+              key={stamp.id}
+              style={{
+                ...cardStyle,
+                borderRadius: 16,
+                padding: '12px 16px',
+                marginTop: 10,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ fontWeight: 800, fontSize: 15 }}>
+                  {stamp.grantedAt
+                    ? formatTime(new Date(stamp.grantedAt))
+                    : stamp.grantedDateJst}
+                </span>
+                <span style={{ fontSize: 13, color: '#64748b', marginLeft: 8 }}>
+                  {uiText(locale, 'stampRoundLabel', { round: String(stamp.round) })}
+                </span>
+              </div>
+              <button
+                onClick={() => void doCancelStamp(stamp.id)}
+                disabled={busy}
+                style={{
+                  padding: '8px 14px',
+                  fontSize: 13.5,
+                  fontWeight: 700,
+                  borderRadius: 10,
+                  border: '1px solid #fca5a5',
+                  backgroundColor: '#ffffff',
+                  color: '#b91c1c',
+                  cursor: 'pointer',
+                  opacity: busy ? 0.6 : 1,
+                  flexShrink: 0,
+                }}
+              >
+                {redeemText(locale, 'stampCancelButton')}
+              </button>
+            </article>
+          ))}
         </>
       )}
     </main>
