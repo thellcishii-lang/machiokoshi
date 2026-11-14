@@ -1,7 +1,7 @@
 // components/AdminBrand.tsx
 // 主催者管理画面共通のブランドバー（承認済みモック準拠）。
 // バイオレットの角丸スクエア＋吹き出しマークと
-// 「Push-taro EVENT / ORGANIZER CONSOLE」の2段表記を全管理画面で揃える。
+// 「Push-taro 町おこし / ORGANIZER CONSOLE」の2段表記を全管理画面で揃える。
 import type { ReactNode } from 'react';
 
 export const ADMIN_VIOLET = '#6D28D9';
@@ -59,7 +59,7 @@ export function AdminBrandBar({ right }: { right?: ReactNode }) {
               lineHeight: 1.15,
             }}
           >
-            Push-taro EVENT
+            Push-taro 町おこし
           </div>
           <div
             style={{
