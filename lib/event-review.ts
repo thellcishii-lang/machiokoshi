@@ -361,7 +361,8 @@ function mapReview(
   };
 }
 
-async function listAllReviews(
+/** プロジェクトの全レビュー（非表示も含む）。ランキング集計など内部用。 */
+export async function listAllReviews(
   db: Firestore,
   eventId: string,
 ): Promise<EventReview[]> {

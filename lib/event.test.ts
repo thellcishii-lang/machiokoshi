@@ -9,7 +9,9 @@ import {
   isFinalizationDue,
   isResetDue,
   isValidResetTime,
+  isValidRankingMinReviews,
   isValidStampGoalCount,
+  parseRankingMinReviews,
   parseStampGoalCount,
   receivesCapsPropagation,
   resolveCreateStatus,
@@ -233,5 +235,26 @@ describe('スタンプ達成個数（stampGoalCount）', () => {
     expect(parseStampGoalCount(0)).toBe(5);
     expect(parseStampGoalCount(99)).toBe(5);
     expect(parseStampGoalCount('3')).toBe(5);
+  });
+});
+
+describe('ランキング最低レビュー件数（rankingMinReviews）', () => {
+  it('1〜20 の整数だけが有効', () => {
+    expect(isValidRankingMinReviews(1)).toBe(true);
+    expect(isValidRankingMinReviews(3)).toBe(true);
+    expect(isValidRankingMinReviews(20)).toBe(true);
+    expect(isValidRankingMinReviews(0)).toBe(false);
+    expect(isValidRankingMinReviews(21)).toBe(false);
+    expect(isValidRankingMinReviews(2.5)).toBe(false);
+    expect(isValidRankingMinReviews('3')).toBe(false);
+    expect(isValidRankingMinReviews(undefined)).toBe(false);
+    expect(isValidRankingMinReviews(null)).toBe(false);
+  });
+  it('読み取り時は不正な値を既定値 3 に倒す', () => {
+    expect(parseRankingMinReviews(5)).toBe(5);
+    expect(parseRankingMinReviews(undefined)).toBe(3);
+    expect(parseRankingMinReviews(0)).toBe(3);
+    expect(parseRankingMinReviews(99)).toBe(3);
+    expect(parseRankingMinReviews('5')).toBe(3);
   });
 });

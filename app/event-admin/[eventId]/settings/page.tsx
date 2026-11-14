@@ -137,6 +137,9 @@ export default function EventSettingsAdminPage() {
   const [stampGoalCount, setStampGoalCount] = useState(5);
   const [stampGoalMessage, setStampGoalMessage] = useState('');
   const [stampGoalSaving, setStampGoalSaving] = useState(false);
+  const [rankingMinReviews, setRankingMinReviews] = useState(3);
+  const [rankingMessage, setRankingMessage] = useState('');
+  const [rankingSaving, setRankingSaving] = useState(false);
   const [pdfTitle, setPdfTitle] = useState('');
   const [pdfUploading, setPdfUploading] = useState(false);
   const [message, setMessage] = useState('');
@@ -195,6 +198,9 @@ export default function EventSettingsAdminPage() {
       if (typeof data.event?.status === 'string') setEventStatus(data.event.status);
       if (typeof data.event?.stampGoalCount === 'number') {
         setStampGoalCount(data.event.stampGoalCount);
+      }
+      if (typeof data.event?.rankingMinReviews === 'number') {
+        setRankingMinReviews(data.event.rankingMinReviews);
       }
       const links: Array<{ title: string; url: string }> = data.event?.links ?? [];
       setLinkSlots(
@@ -273,6 +279,27 @@ export default function EventSettingsAdminPage() {
       );
     } finally {
       setStampGoalSaving(false);
+    }
+  };
+
+  const handleSaveRanking = async () => {
+    setRankingSaving(true);
+    setRankingMessage('');
+    try {
+      const data = await callApi(`/api/events/${eventId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ rankingMinReviews }),
+      });
+      if (typeof data.event?.rankingMinReviews === 'number') {
+        setRankingMinReviews(data.event.rankingMinReviews);
+      }
+      setRankingMessage(adminText(locale, 'rankingSaved'));
+    } catch (e) {
+      setRankingMessage(
+        e instanceof Error ? e.message : adminText(locale, 'rankingSaveFailed'),
+      );
+    } finally {
+      setRankingSaving(false);
     }
   };
 
@@ -539,6 +566,40 @@ export default function EventSettingsAdminPage() {
             </span>
           </button>
           {stampGoalMessage && <p style={adminFeedbackStyle}>{stampGoalMessage}</p>}
+        </div>
+      </section>
+
+      <section style={{ marginTop: 32 }}>
+        <h2 style={sectionTitleStyle}>{adminText(locale, 'rankingSettingsTitle')}</h2>
+        <p style={{ fontSize: 12.5, color: '#64748b', marginTop: 5 }}>
+          {adminText(locale, 'rankingMinNote')}
+        </p>
+        <div style={{ ...cardStyle, marginTop: 12, padding: 24 }}>
+          <label style={{ ...labelStyle, marginBottom: 0 }}>
+            {adminText(locale, 'rankingMinLabel')}
+            <select
+              style={inputStyle}
+              value={rankingMinReviews}
+              onChange={(e) => setRankingMinReviews(Number(e.target.value))}
+            >
+              {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            onClick={() => void handleSaveRanking()}
+            disabled={rankingSaving}
+            style={{ ...primaryButtonStyle, marginTop: 20 }}
+          >
+            <span style={adminButtonContentStyle}>
+              {rankingSaving && <ButtonSpinner />}
+              {adminText(locale, 'rankingSaveButton')}
+            </span>
+          </button>
+          {rankingMessage && <p style={adminFeedbackStyle}>{rankingMessage}</p>}
         </div>
       </section>
 

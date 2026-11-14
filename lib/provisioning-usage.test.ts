@@ -19,6 +19,7 @@ function eventWith(status: EventConfig['status']): EventConfig {
     defaultLocale: 'ja',
     admissionQrEnabled: false,
     stampGoalCount: 5,
+    rankingMinReviews: 3,
     links: [],
     couponCap: 100,
     backupRetentionDays: 30,
