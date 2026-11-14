@@ -368,7 +368,7 @@ export const UI_TEXT = {
     ko: '입장용 QR',
   },
   admissionQrIntro: {
-    ja: '主催者から受け取った入場用QRコードを読み込むと、この画面に保存して入場時に表示できます。',
+    ja: '管理人から受け取った入場用QRコードを読み込むと、この画面に保存して入場時に表示できます。',
     en: 'Scan the admission QR code you received from the organizer to save it here and show it at the entrance.',
     zh: '扫描主办方发放的入场二维码，即可保存到此页面并在入场时出示。',
     ko: '주최자로부터 받은 입장용 QR 코드를 읽으면 이 화면에 저장해 입장 시 제시할 수 있습니다.',
@@ -410,7 +410,7 @@ export const UI_TEXT = {
     ko: '입장 시 이 QR 코드를 제시해 주세요',
   },
   admissionQrScanHint: {
-    ja: '主催者から受け取った入場用QRコードをカメラに向けてください',
+    ja: '管理人から受け取った入場用QRコードをカメラに向けてください',
     en: 'Point the camera at the admission QR code you received',
     zh: '请将收到的入场二维码对准摄像头',
     ko: '받은 입장용 QR 코드를 카메라에 비춰 주세요',
@@ -536,11 +536,11 @@ export function uiText(
   return lookup(UI_TEXT, locale, key, params);
 }
 
-// ─── 出店者 消込画面 ───
+// ─── 参加店 消込画面 ───
 
 export const REDEEM_TEXT = {
   redeemLoginTitle: {
-    ja: '出店者 消込ログイン',
+    ja: '参加店 消込ログイン',
     en: 'Exhibitor redemption login',
     zh: '参展商核销登录',
     ko: '출점자 사용 처리 로그인',
@@ -606,19 +606,19 @@ export const REDEEM_TEXT = {
     ko: '로그아웃',
   },
   exhibitorLoadFailed: {
-    ja: '出店者情報の取得に失敗しました',
+    ja: '参加店情報の取得に失敗しました',
     en: 'Failed to load exhibitor information',
     zh: '获取参展商信息失败',
     ko: '출점자 정보를 가져오지 못했습니다',
   },
   exhibitorErrorNote: {
-    ja: '。主催者に登録状況を確認してください。',
+    ja: '。管理人に登録状況を確認してください。',
     en: '. Please ask the organizer to check your registration.',
     zh: '。请向主办方确认您的登记状态。',
     ko: '. 주최자에게 등록 상태를 확인해 주세요.',
   },
   exhibitorLine: {
-    ja: '出店者: {name}（自社のクーポンのみ消込できます）',
+    ja: '参加店: {name}（自社のクーポンのみ消込できます）',
     en: 'Exhibitor: {name} (you can redeem only your own coupons)',
     zh: '参展商：{name}（只能核销本公司的优惠券）',
     ko: '출점자: {name}(자사 쿠폰만 사용 처리할 수 있습니다)',
@@ -759,7 +759,7 @@ export const REDEEM_TEXT = {
 
 export type RedeemTextKey = keyof typeof REDEEM_TEXT;
 
-/** 出店者 消込画面の固定文を言語で引く。 */
+/** 参加店 消込画面の固定文を言語で引く。 */
 export function redeemText(
   locale: Locale,
   key: RedeemTextKey,
@@ -768,7 +768,7 @@ export function redeemText(
   return lookup(REDEEM_TEXT, locale, key, params);
 }
 
-// ─── 主催者 管理画面 ───
+// ─── 管理人 管理画面 ───
 
 export const ADMIN_TEXT = {
   adminLoginTitle: {
@@ -1018,7 +1018,7 @@ export const ADMIN_TEXT = {
     ko: '기본 언어',
   },
   defaultLocaleNote: {
-    ja: '来場者・出店者の初期表示言語です。本人は自分の言語に変更できます。',
+    ja: '来場者・参加店の初期表示言語です。本人は自分の言語に変更できます。',
     en: 'The initial display language for visitors and exhibitors. Each person can change it to their own language.',
     zh: '访客和参展商的初始显示语言。本人可以更改为自己的语言。',
     ko: '방문자와 출점자의 초기 표시 언어입니다. 본인이 자신의 언어로 변경할 수 있습니다.',
@@ -1030,7 +1030,7 @@ export const ADMIN_TEXT = {
     ko: '입장용 QR(가져오기) 사용',
   },
   admissionQrNote: {
-    ja: 'オンにすると、来場者が主催者側の仕組みで発行された入場用QR（事前登録・チケット等）を自分の画面で読み込んで保存し、入場時に表示できます。',
+    ja: 'オンにすると、来場者が管理人側の仕組みで発行された入場用QR（事前登録・チケット等）を自分の画面で読み込んで保存し、入場時に表示できます。',
     en: 'When on, visitors can scan an admission QR issued by your own system (pre-registration, tickets, etc.), save it in this app, and show it at the entrance.',
     zh: '开启后，访客可将主办方系统发放的入场二维码（预登记、门票等）扫描保存到本页面，并在入场时出示。',
     ko: '켜면 방문객이 주최 측 시스템에서 발급된 입장용 QR(사전 등록, 티켓 등)을 스캔해 이 화면에 저장하고 입장 시 제시할 수 있습니다.',
@@ -1156,7 +1156,7 @@ export const ADMIN_TEXT = {
     ko: '진행 중으로 변경하지 못했습니다',
   },
   deleteConfirm: {
-    ja: 'イベント「{name}」を削除しますか？\n購読者・登録者・クーポン・出店者など、このイベントのデータはすべて削除され、元に戻せません。',
+    ja: 'イベント「{name}」を削除しますか？\n購読者・登録者・クーポン・参加店など、このイベントのデータはすべて削除され、元に戻せません。',
     en: 'Delete the event "{name}"?\nAll data for this event (subscribers, members, coupons, exhibitors, and more) will be permanently deleted. This cannot be undone.',
     zh: '要删除活动“{name}”吗？\n该活动的全部数据（订阅者、注册者、优惠券、参展商等）都将被删除，且无法恢复。',
     ko: '이벤트 "{name}"을(를) 삭제하시겠습니까?\n구독자·등록자·쿠폰·출점자 등 이 이벤트의 모든 데이터가 삭제되며 되돌릴 수 없습니다.',
@@ -1282,7 +1282,7 @@ export const ADMIN_TEXT = {
     ko: '발송에 실패했습니다',
   },
   organizerRedeemTitle: {
-    ja: 'クーポン消込（主催者）',
+    ja: 'クーポン消込（管理人）',
     en: 'Coupon redemption (organizer)',
     zh: '优惠券核销（主办方）',
     ko: '쿠폰 사용 처리(주최자)',
@@ -1456,7 +1456,7 @@ export const ADMIN_TEXT = {
     ko: '쿠폰 관리',
   },
   downloadListButton: {
-    ja: '出店者・クーポン一覧をダウンロード',
+    ja: '参加店・クーポン一覧をダウンロード',
     en: 'Download exhibitor & coupon list',
     zh: '下载参展商与优惠券列表',
     ko: '출점자·쿠폰 목록 다운로드',
@@ -1468,13 +1468,13 @@ export const ADMIN_TEXT = {
     ko: '설정',
   },
   exhibitorsTitle: {
-    ja: '出店者（{count}社）',
+    ja: '参加店（{count}社）',
     en: 'Exhibitors ({count})',
     zh: '参展商（{count}家）',
     ko: '출점자({count}개사)',
   },
   exhibitorSearchPlaceholder: {
-    ja: '出店者名・メールアドレスで検索',
+    ja: '参加店名・メールアドレスで検索',
     en: 'Search by exhibitor name or email',
     zh: '按参展商名称或邮箱搜索',
     ko: '출점자명·이메일로 검색',
@@ -1492,13 +1492,13 @@ export const ADMIN_TEXT = {
     ko: '닫기',
   },
   exhibitorSearchNoMatch: {
-    ja: '該当する出店者がありません',
+    ja: '該当する参加店がありません',
     en: 'No matching exhibitors',
     zh: '没有符合的参展商',
     ko: '일치하는 출점자가 없습니다',
   },
   exhibitorFilterHint: {
-    ja: '出店者をタップすると、その出店者のクーポンだけを表示します',
+    ja: '参加店をタップすると、その参加店のクーポンだけを表示します',
     en: 'Tap an exhibitor to show only their coupons',
     zh: '点按参展商可只显示其优惠券',
     ko: '출점자를 탭하면 해당 출점자의 쿠폰만 표시합니다',
@@ -1516,7 +1516,7 @@ export const ADMIN_TEXT = {
     ko: '필터 해제',
   },
   couponsFilteredEmpty: {
-    ja: 'この出店者のクーポンはまだありません',
+    ja: 'この参加店のクーポンはまだありません',
     en: 'This exhibitor has no coupons yet',
     zh: '该参展商暂无优惠券',
     ko: '이 출점자의 쿠폰이 아직 없습니다',
@@ -1540,7 +1540,7 @@ export const ADMIN_TEXT = {
     ko: '비밀번호 재발급',
   },
   exhibitorReissueConfirm: {
-    ja: 'この出店者のパスワードを再発行しますか？今までのパスワードは使えなくなります。',
+    ja: 'この参加店のパスワードを再発行しますか？今までのパスワードは使えなくなります。',
     en: 'Reissue this exhibitor’s password? The current password will stop working.',
     zh: '要重新发送该参展商的密码吗？现有密码将失效。',
     ko: '이 출점자의 비밀번호를 재발급하시겠습니까? 기존 비밀번호는 사용할 수 없게 됩니다.',
@@ -1558,7 +1558,7 @@ export const ADMIN_TEXT = {
     ko: '비밀번호 재발급에 실패했습니다',
   },
   exhibitorAddedMailFailed: {
-    ja: '登録しましたが、パスワードのメール送信に失敗しました。出店者一覧の「パスワード再発行」から送り直してください',
+    ja: '登録しましたが、パスワードのメール送信に失敗しました。参加店一覧の「パスワード再発行」から送り直してください',
     en: 'The exhibitor was added, but the password email could not be sent. Please resend it from “Reissue password” in the exhibitor list.',
     zh: '参展商已登记，但密码邮件发送失败。请从参展商列表中的“重新发送密码”重新发送。',
     ko: '출점자를 등록했지만 비밀번호 이메일 전송에 실패했습니다. 출점자 목록의 “비밀번호 재발급”에서 다시 보내 주세요.',
@@ -1576,7 +1576,7 @@ export const ADMIN_TEXT = {
     ko: '로그인용 이메일 주소를 입력해 주세요',
   },
   exhibitorNameLabel: {
-    ja: '出店者名（会社名）',
+    ja: '参加店名（会社名）',
     en: 'Exhibitor name (company)',
     zh: '参展商名称（公司名）',
     ko: '출점자명(회사명)',
@@ -1594,19 +1594,19 @@ export const ADMIN_TEXT = {
     ko: '이 이벤트 전용 로그인 비밀번호를 발급해 이 이메일 주소로 보냅니다. 비밀번호는 이벤트마다 별도로 발급됩니다.',
   },
   addExhibitorButton: {
-    ja: '出店者を登録',
+    ja: '参加店を登録',
     en: 'Add exhibitor',
     zh: '登记参展商',
     ko: '출점자 등록',
   },
   exhibitorAdded: {
-    ja: '出店者を登録し、パスワードをメールで送信しました',
+    ja: '参加店を登録し、パスワードをメールで送信しました',
     en: 'Exhibitor added; the password has been sent by email',
     zh: '参展商已登记，密码已通过邮件发送',
     ko: '출점자를 등록하고 비밀번호를 이메일로 보냈습니다',
   },
   exhibitorAddFailed: {
-    ja: '出店者の登録に失敗しました',
+    ja: '参加店の登録に失敗しました',
     en: 'Failed to add exhibitor',
     zh: '参展商登记失败',
     ko: '출점자 등록에 실패했습니다',
@@ -1636,7 +1636,7 @@ export const ADMIN_TEXT = {
     ko: ' / 현재 비활성',
   },
   exhibitorSelectLabel: {
-    ja: '出店者',
+    ja: '参加店',
     en: 'Exhibitor',
     zh: '参展商',
     ko: '출점자',
@@ -1774,7 +1774,7 @@ export const ADMIN_TEXT = {
     ko: 'PDF 등록에 실패했습니다',
   },
   organizerLinksTitle: {
-    ja: '主催者リンク',
+    ja: '管理人リンク',
     en: 'Organizer links',
     zh: '主办方链接',
     ko: '주최자 링크',
@@ -1981,7 +1981,7 @@ export const ADMIN_TEXT = {
 
 export type AdminTextKey = keyof typeof ADMIN_TEXT;
 
-/** 主催者 管理画面の固定文を言語で引く。 */
+/** 管理人 管理画面の固定文を言語で引く。 */
 export function adminText(
   locale: Locale,
   key: AdminTextKey,

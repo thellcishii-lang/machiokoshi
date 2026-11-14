@@ -6,9 +6,9 @@ import Link from 'next/link';
 import BrandLogo from '@/components/BrandLogo';
 
 export const metadata: Metadata = {
-  title: 'Push-taro.EVENT｜展示会向けプッシュ通知 × クーポン',
+  title: 'Push-taro.町おこし｜ご当地グルメ スタンプラリー',
   description:
-    'Push-taro.EVENT は展示会・大型イベント向けのプッシュ通知 × クーポン基盤です。来場者の方は会場のQRコードからアクセスしてください。',
+    'Push-taro.町おこし は、ご当地グルメのスタンプラリー基盤です。お客さんの方は参加店のQRコードからアクセスしてください。',
   robots: { index: false, follow: false },
 };
 
@@ -29,12 +29,12 @@ export default function HomePage() {
     >
       <BrandLogo />
       <h1 style={{ fontSize: '28px', fontWeight: 900, color: '#0f172a', margin: '24px 0 12px' }}>
-        Push-taro.EVENT
+        Push-taro.町おこし
       </h1>
       <p style={{ fontSize: '15px', color: '#64748b', lineHeight: 1.9, maxWidth: '520px', marginBottom: '32px' }}>
-        このドメインは、展示会・大型イベント向けアプリ「Push-taro.EVENT」専用です。
+        このドメインは、ご当地グルメ・スタンプラリーアプリ「Push-taro.町おこし」専用です。
         <br />
-        来場者の方は、会場に掲示されたQRコードからアクセスしてください。
+        お客さんの方は、参加店に掲示されたQRコードからアクセスしてください。
         <br />
         サービスの紹介は本家サイトに掲載しています。
       </p>
@@ -53,10 +53,10 @@ export default function HomePage() {
             boxShadow: '0 6px 20px rgba(255,69,0,0.3)',
           }}
         >
-          主催者ログイン（管理画面）
+          管理人ログイン（管理画面）
         </Link>
         <a
-          href="https://push-taro.com/event"
+          href="https://push-taro.com/machiokoshi"
           style={{
             display: 'inline-block',
             padding: '14px 28px',
