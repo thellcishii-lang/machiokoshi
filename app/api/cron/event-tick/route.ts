@@ -3,13 +3,18 @@
 // 外部のスケジューラ（Cloud Scheduler 等）から15分ごとに叩く前提。
 //
 // 町おこしのプロジェクトは常設のため、EVENT にあった終了処理（データ消去）と
-// 日次リセットは行わない。tick の役割は予約配信の実行だけ:
-// 到期した campaign を開催中プロジェクトごとに処理する。
+// 日次リセットは行わない。tick の役割は2つ:
+// 1. 予約配信の実行: 到期した campaign を開催中プロジェクトごとに処理する。
+// 2. 週次ランキングの補完: 「直近で完了した週」のランキングが未保存の
+//    プロジェクトについて計算して保存する（冪等な catch-up）。
 // プロジェクトごとに try/catch し、1プロジェクトの失敗が他プロジェクトの処理を止めない。
+// ランキングの失敗も配信とは独立に局所化する。
 import { NextResponse } from 'next/server';
 import { isValidCronRequest } from '@/lib/cron-auth';
+import { db } from '@/lib/firebase-admin';
 import { listLiveEvents } from '@/lib/event-store';
 import { processDueCampaigns } from '@/lib/event-push';
+import { ensurePreviousWeekRanking } from '@/lib/event-ranking';
 import { recordTickRun, type TickRunInput } from '@/lib/tick-runs';
 import { dispatchOperatorAlerts } from '@/lib/monitoring';
 
@@ -50,6 +55,16 @@ export async function GET(req: Request) {
         errors.push({
           eventId: event.id,
           message: `配信処理に失敗: ${error instanceof Error ? error.message : String(error)}`,
+        });
+      }
+      // ランキングの補完は配信と独立。失敗してもこのプロジェクトの
+      // 配信結果や、他プロジェクトの処理には影響させない。
+      try {
+        await ensurePreviousWeekRanking(db, event, now);
+      } catch (error) {
+        errors.push({
+          eventId: event.id,
+          message: `ランキング計算に失敗: ${error instanceof Error ? error.message : String(error)}`,
         });
       }
     }

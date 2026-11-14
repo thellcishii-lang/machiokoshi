@@ -62,6 +62,14 @@ export interface EventConfig {
    */
   stampGoalCount: number;
   /**
+   * 週次ランキングの対象になる最低レビュー件数（1〜20）。管理人が
+   * プロジェクトごとに設定する。その週の可視レビューがこの件数に
+   * 届いた参加店だけがランキングに入る（件数自体も一緒に表示する）。
+   * 導入前に作られたプロジェクトには項目自体が無いため、読み取り時は
+   * DEFAULT_RANKING_MIN_REVIEWS に倒す。
+   */
+  rankingMinReviews: number;
+  /**
    * 主催者リンク（最大 MAX_EVENT_LINKS 件）。設定画面で登録し、来場者画面に
    * タイトル付きで表示する（案内PDFと同じく登録前でも見える位置）。
    * 未登録なら空配列で、来場者画面には何も出ない。
@@ -119,6 +127,10 @@ export const PERMANENT_END_DATE = '9999-12-31';
 export const MAX_STAMP_SLOTS = 10;
 /** スタンプの達成個数の既定値（管理人が未設定のプロジェクト）。 */
 export const DEFAULT_STAMP_GOAL_COUNT = 5;
+/** 週次ランキングの最低レビュー件数の上限。 */
+export const MAX_RANKING_MIN_REVIEWS = 20;
+/** 週次ランキングの最低レビュー件数の既定値（管理人が未設定のプロジェクト）。 */
+export const DEFAULT_RANKING_MIN_REVIEWS = 3;
 export const DEFAULT_BACKUP_RETENTION_DAYS = 30;
 export const DEFAULT_RESET_MODE: EventResetMode = 'full-daily';
 
@@ -136,6 +148,7 @@ export interface CreateEventInput {
   defaultLocale?: Locale;
   admissionQrEnabled?: boolean;
   stampGoalCount?: number;
+  rankingMinReviews?: number;
   links?: EventLink[];
   couponCap?: number;
   backupRetentionDays?: number;
@@ -334,6 +347,26 @@ export function parseStampGoalCount(value: unknown): number {
   return isValidStampGoalCount(value)
     ? (value as number)
     : DEFAULT_STAMP_GOAL_COUNT;
+}
+
+/** ランキングの最低レビュー件数として有効な値かどうか（1〜20 の整数）。 */
+export function isValidRankingMinReviews(value: unknown): boolean {
+  return (
+    typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= 1 &&
+    value <= MAX_RANKING_MIN_REVIEWS
+  );
+}
+
+/**
+ * 保存済みの最低レビュー件数を防御的に読む（読み取り用。throw しない）。
+ * 項目が無い旧プロジェクトや不正な値は DEFAULT_RANKING_MIN_REVIEWS に倒す。
+ */
+export function parseRankingMinReviews(value: unknown): number {
+  return isValidRankingMinReviews(value)
+    ? (value as number)
+    : DEFAULT_RANKING_MIN_REVIEWS;
 }
 
 export type SubscriberUsageLevel = 'normal' | 'warning' | 'full';

@@ -37,6 +37,13 @@ service firebase.storage {
     match /events/{eventId}/review-photos/{memberId}/{fileName} {
       allow read: if true;
     }
+    // 店舗写真（events/{eventId}/shop-photos/{exhibitorId}/...）:
+    // レビュー写真と同じ扱い。アップロードは API 経由で Admin SDK が
+    // 行うため、クライアントからの書き込みは許可しない。特設サイトや
+    // アプリの店舗表示で使うため、読み取りは公開する。
+    match /events/{eventId}/shop-photos/{exhibitorId}/{fileName} {
+      allow read: if true;
+    }
     // 移行前の旧パス（events/{eventId}/...）: 登録済みファイルの表示用に
     // 読み取りだけ残し、書き込みは許可しない。
     match /events/{eventId}/info-pdfs/{fileName} {

@@ -16,11 +16,14 @@ import {
   EventConfig,
   MAX_COUPONS_PER_EVENT,
   isValidResetTime,
+  DEFAULT_RANKING_MIN_REVIEWS,
   DEFAULT_STAMP_GOAL_COUNT,
   EVENT_SUBCOLLECTIONS,
+  isValidRankingMinReviews,
   isValidStampGoalCount,
   normalizeEventLinks,
   parseEventLinks,
+  parseRankingMinReviews,
   parseStampGoalCount,
   receivesCapsPropagation,
 } from './event';
@@ -47,6 +50,8 @@ function toEventConfig(id: string, data: FirebaseFirestore.DocumentData): EventC
     admissionQrEnabled: data.admissionQrEnabled === true,
     // スタンプ達成個数も導入前のイベントには項目が無いため既定値に倒す
     stampGoalCount: parseStampGoalCount(data.stampGoalCount),
+    // ランキングの最低レビュー件数も同様に既定値に倒す
+    rankingMinReviews: parseRankingMinReviews(data.rankingMinReviews),
     // 主催者リンクは導入前のイベントには項目自体が無い
     links: parseEventLinks(data.links),
     couponCap: data.couponCap ?? MAX_COUPONS_PER_EVENT,
@@ -76,6 +81,12 @@ export async function createEvent(input: CreateEventInput): Promise<EventConfig>
   ) {
     throw new Error('スタンプの達成個数は1〜10の整数で指定してください');
   }
+  if (
+    input.rankingMinReviews !== undefined &&
+    !isValidRankingMinReviews(input.rankingMinReviews)
+  ) {
+    throw new Error('ランキングの最低レビュー件数は1〜20の整数で指定してください');
+  }
 
   const ref = db.collection(EVENTS_COLLECTION).doc();
   const data: EventDocData = {
@@ -89,6 +100,7 @@ export async function createEvent(input: CreateEventInput): Promise<EventConfig>
     defaultLocale: input.defaultLocale ?? DEFAULT_LOCALE,
     admissionQrEnabled: input.admissionQrEnabled ?? false,
     stampGoalCount: input.stampGoalCount ?? DEFAULT_STAMP_GOAL_COUNT,
+    rankingMinReviews: input.rankingMinReviews ?? DEFAULT_RANKING_MIN_REVIEWS,
     links: normalizeEventLinks(input.links),
     couponCap: input.couponCap ?? MAX_COUPONS_PER_EVENT,
     backupRetentionDays:
@@ -249,6 +261,7 @@ export type UpdateEventInput = Partial<
     | 'defaultLocale'
     | 'admissionQrEnabled'
     | 'stampGoalCount'
+    | 'rankingMinReviews'
     | 'links'
     | 'couponCap'
     | 'backupRetentionDays'
@@ -279,6 +292,12 @@ export async function updateEvent(
     !isValidStampGoalCount(patch.stampGoalCount)
   ) {
     throw new Error('スタンプの達成個数は1〜10の整数で指定してください');
+  }
+  if (
+    patch.rankingMinReviews !== undefined &&
+    !isValidRankingMinReviews(patch.rankingMinReviews)
+  ) {
+    throw new Error('ランキングの最低レビュー件数は1〜20の整数で指定してください');
   }
   // 主催者リンクは検証してから正規化した形で保存する
   const links =
