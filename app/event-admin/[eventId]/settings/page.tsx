@@ -123,6 +123,9 @@ export default function EventSettingsAdminPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [eventName, setEventName] = useState('');
+  const [eventStatus, setEventStatus] = useState('');
+  const [endMessage, setEndMessage] = useState('');
+  const [ending, setEnding] = useState(false);
   const [pdfs, setPdfs] = useState<InfoPdf[]>([]);
   const [linkSlots, setLinkSlots] = useState<Array<{ title: string; url: string }>>([
     { title: '', url: '' },
@@ -186,6 +189,7 @@ export default function EventSettingsAdminPage() {
     try {
       const data = await callApi(`/api/events/${eventId}`);
       if (typeof data.event?.name === 'string') setEventName(data.event.name);
+      if (typeof data.event?.status === 'string') setEventStatus(data.event.status);
       const links: Array<{ title: string; url: string }> = data.event?.links ?? [];
       setLinkSlots(
         [0, 1, 2].map((i) => ({
@@ -242,6 +246,22 @@ export default function EventSettingsAdminPage() {
       setLinksMessage(e instanceof Error ? e.message : adminText(locale, 'linksSaveFailed'));
     } finally {
       setLinksSaving(false);
+    }
+  };
+
+  const handleEndProject = async () => {
+    if (!window.confirm(adminText(locale, 'confirmEndProject'))) return;
+    setEnding(true);
+    setEndMessage('');
+    try {
+      const data = await callApi(`/api/events/${eventId}/end`, { method: 'POST' });
+      if (typeof data.event?.status === 'string') setEventStatus(data.event.status);
+      else setEventStatus('ended');
+      setEndMessage(adminText(locale, 'projectEndDone'));
+    } catch (e) {
+      setEndMessage(e instanceof Error ? e.message : adminText(locale, 'projectEndFailed'));
+    } finally {
+      setEnding(false);
     }
   };
 
@@ -460,6 +480,36 @@ export default function EventSettingsAdminPage() {
           {linksMessage && <p style={adminFeedbackStyle}>{linksMessage}</p>}
         </div>
       </section>
+
+      {(eventStatus === 'live' || eventStatus === 'ended') && (
+        <section style={{ marginTop: 32 }}>
+          <h2 style={sectionTitleStyle}>{adminText(locale, 'projectManageTitle')}</h2>
+          <div style={{ ...cardStyle, marginTop: 12, padding: 24 }}>
+            {eventStatus === 'live' ? (
+              <>
+                <p style={{ fontSize: 13, color: '#475569', margin: 0 }}>
+                  {adminText(locale, 'projectEndNote')}
+                </p>
+                <button
+                  onClick={() => void handleEndProject()}
+                  disabled={ending}
+                  style={{ ...dangerButtonStyle, marginTop: 16 }}
+                >
+                  <span style={adminButtonContentStyle}>
+                    {ending && <ButtonSpinner />}
+                    {adminText(locale, 'projectEndButton')}
+                  </span>
+                </button>
+              </>
+            ) : (
+              <p style={{ fontSize: 13, color: '#475569', margin: 0 }}>
+                {adminText(locale, 'projectEndedNote')}
+              </p>
+            )}
+            {endMessage && <p style={adminFeedbackStyle}>{endMessage}</p>}
+          </div>
+        </section>
+      )}
     </AdminShell>
   );
 }

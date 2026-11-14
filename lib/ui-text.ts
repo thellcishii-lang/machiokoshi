@@ -1977,6 +1977,48 @@ export const ADMIN_TEXT = {
     zh: '追加购买优惠券',
     ko: '쿠폰 추가 구매',
   },
+  projectManageTitle: {
+    ja: 'プロジェクトの管理',
+    en: 'Project management',
+    zh: '项目管理',
+    ko: '프로젝트 관리',
+  },
+  projectEndNote: {
+    ja: 'プロジェクトを終了すると、お客さん向けの画面やスタンプ・クーポンは使えなくなります。終了してもデータ（スタンプ・レビューなど）は削除されません。',
+    en: 'Ending the project disables the visitor screens, stamps and coupons. Data such as stamps and reviews is not deleted.',
+    zh: '结束项目后，访客页面、印章和优惠券将无法使用。印章、评价等数据不会被删除。',
+    ko: '프로젝트를 종료하면 방문자 화면, 스탬프, 쿠폰을 사용할 수 없게 됩니다. 스탬프와 리뷰 등의 데이터는 삭제되지 않습니다.',
+  },
+  projectEndButton: {
+    ja: 'プロジェクトを終了する',
+    en: 'End this project',
+    zh: '结束项目',
+    ko: '프로젝트 종료',
+  },
+  confirmEndProject: {
+    ja: 'プロジェクトを終了しますか？終了後は開催中に戻せません。',
+    en: 'End this project? It cannot be returned to live afterwards.',
+    zh: '要结束项目吗？结束后无法恢复为进行中。',
+    ko: '프로젝트를 종료하시겠습니까? 종료 후에는 진행 중으로 되돌릴 수 없습니다.',
+  },
+  projectEndedNote: {
+    ja: 'このプロジェクトは終了しています。',
+    en: 'This project has ended.',
+    zh: '此项目已结束。',
+    ko: '이 프로젝트는 종료되었습니다.',
+  },
+  projectEndDone: {
+    ja: 'プロジェクトを終了しました。',
+    en: 'The project has been ended.',
+    zh: '项目已结束。',
+    ko: '프로젝트를 종료했습니다.',
+  },
+  projectEndFailed: {
+    ja: 'プロジェクトの終了に失敗しました',
+    en: 'Failed to end the project',
+    zh: '结束项目失败',
+    ko: '프로젝트 종료에 실패했습니다',
+  },
 } as const satisfies Record<string, Record<Locale, string>>;
 
 export type AdminTextKey = keyof typeof ADMIN_TEXT;

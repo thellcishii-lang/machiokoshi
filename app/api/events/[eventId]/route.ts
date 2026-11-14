@@ -83,10 +83,11 @@ export async function PATCH(
   for (const field of EDITABLE_FIELDS) {
     if (body[field] !== undefined) patch[field] = body[field];
   }
-  // status='ended' は終了処理（データ消去）経由でのみ遷移させる
+  // status='ended' への遷移は終了エンドポイント
+  // （POST /api/events/[eventId]/end）経由でのみ行わせる。
   if (patch.status === 'ended') {
     return NextResponse.json(
-      { error: '終了はスケジューラの終了処理でのみ行われます' },
+      { error: 'プロジェクトの終了は終了操作から行ってください' },
       { status: 400 },
     );
   }
@@ -116,7 +117,7 @@ export async function DELETE(
   if ('error' in guard) return guard.error;
 
   // 開催中は削除できない。先に終了させる運用
-  // （終了はスケジューラの終了処理で遷移する）。
+  // （終了は POST /api/events/[eventId]/end で遷移する）。
   if (!canDeleteEvent(guard.event)) {
     return NextResponse.json(
       {
