@@ -1,17 +1,17 @@
 // lib/event.ts
-// Push-taro EVENT のイベント設定モデル（純粋な型・定数・判定ロジックのみ）。
+// Push-taro EVENT のエリア設定モデル（純粋な型・定数・判定ロジックのみ）。
 // Firestore への読み書きは lib/event-store.ts に分離する。
 //
 // 設計原則（干渉しない・波及しない）:
-// - イベントごとにデータ名前空間を分ける（events/{eventId} 配下で完結）。
+// - エリアごとにデータ名前空間を分ける（events/{eventId} 配下で完結）。
 // - リセット等の定期処理は「固定時刻の一括 cron」にせず、
-//   15分間隔のスケジューラがイベント単独で拾って実行する前提の判定関数を用意する。
+//   15分間隔のスケジューラがエリア単独で拾って実行する前提の判定関数を用意する。
 
 import type { Locale } from './i18n';
 
-/** 日次リセットの方式。イベントごとに選択する。 */
+/** 日次リセットの方式。エリアごとに選択する。 */
 export type EventResetMode =
-  /** 方式A: 購読も電話番号も毎日消去する（単日イベント向け） */
+  /** 方式A: 購読も電話番号も毎日消去する（単日エリア向け） */
   | 'full-daily'
   /** 方式B: 毎日リセットするのは購読のみ。電話番号と取得・消込記録は期間中保持し、終了時に消去する */
   | 'keep-phones';
@@ -20,7 +20,7 @@ export type EventStatus = 'draft' | 'live' | 'ended';
 
 /**
  * 主催者リンク（最大3件）。来場者画面にタイトル付きカードで表示される。
- * イベントドキュメントの links フィールドに配列で持つ。
+ * エリアドキュメントの links フィールドに配列で持つ。
  * タイトルは主催者が書いた原文のまま表示する（案内PDFのタイトルと同じ扱い、
  * 自動翻訳しない）。
  */
@@ -31,7 +31,7 @@ export interface EventLink {
 
 export interface EventConfig {
   id: string;
-  /** イベント名（例: 展示会名） */
+  /** エリア名（例: 展示会名） */
   name: string;
   /** 主催者の Firebase Auth uid */
   ownerUid: string;
@@ -40,11 +40,11 @@ export interface EventConfig {
   /** 開催終了日（JST, 'YYYY-MM-DD'）。この日を過ぎたら終了処理（電話番号消去）の対象 */
   endDate: string;
   resetMode: EventResetMode;
-  /** リセット時刻（JST, 'HH:MM'）。イベントごとに変更可能 */
+  /** リセット時刻（JST, 'HH:MM'）。エリアごとに変更可能 */
   resetTime: string;
   /** 購読者上限 */
   subscriberCap: number;
-  /** イベントのデフォルト言語（主催者が設定）。個人の言語選択がこれを上書きする */
+  /** エリアのデフォルト言語（主催者が設定）。個人の言語選択がこれを上書きする */
   defaultLocale: Locale;
   /**
    * 入場用QRの取り込みを有効にするか（主催者が設定。既定オフ）。
@@ -57,11 +57,11 @@ export interface EventConfig {
    * 主催者リンク（最大 MAX_EVENT_LINKS 件）。設定画面で登録し、来場者画面に
    * タイトル付きで表示する（案内PDFと同じく登録前でも見える位置）。
    * 未登録なら空配列で、来場者画面には何も出ない。
-   * 導入前に作られたイベントには項目自体が無いため、読み取り時は空配列に倒す。
+   * 導入前に作られたエリアには項目自体が無いため、読み取り時は空配列に倒す。
    */
   links: EventLink[];
   /**
-   * クーポン上限（イベント全体の件数）。購読者上限と同じく契約枠の軸なので、
+   * クーポン上限（エリア全体の件数）。購読者上限と同じく契約枠の軸なので、
    * 変更は運営側のみ。既定は MAX_COUPONS_PER_EVENT。
    */
   couponCap: number;
@@ -97,18 +97,20 @@ export type EventSubcollection =
 export const DEFAULT_SUBSCRIBER_CAP = 50_000;
 export const MAX_COUPONS_PER_EVENT = 100;
 /**
- * 1主催者が同時に仕込めるイベント数の上限（下書き＋開催中）。
+ * 1主催者が同時に仕込めるエリア数の上限（下書き＋開催中）。
  * 会場日程が重なる運用（例: 月-水／水-金／週末）を想定した製品ルール。
- * 終了したイベントは数えない。
+ * 終了したエリアは数えない。
  */
 export const MAX_CONCURRENT_EVENTS = 3;
 export const MAX_INFO_PDFS = 5;
 export const MAX_EVENT_LINKS = 3;
 export const DEFAULT_RESET_TIME = '00:00';
+/** 町おこし: エリアは常設。終了日を持たないことを表す番兵値（終了処理は走らない）。 */
+export const PERMANENT_END_DATE = '9999-12-31';
 export const DEFAULT_BACKUP_RETENTION_DAYS = 30;
 export const DEFAULT_RESET_MODE: EventResetMode = 'full-daily';
 
-/** 新規イベントの入力。省略項目は既定値で補完する。 */
+/** 新規エリアの入力。省略項目は既定値で補完する。 */
 export interface CreateEventInput {
   name: string;
   ownerUid: string;
@@ -197,7 +199,7 @@ export function normalizeEventLinks(input: unknown): EventLink[] {
 
 /**
  * 保存済みの主催者リンクを防御的に読む（読み取り用。throw しない）。
- * 項目が無い旧イベントは空配列。不正な要素は落とし、上限で切り詰める。
+ * 項目が無い旧エリアは空配列。不正な要素は落とし、上限で切り詰める。
  */
 export function parseEventLinks(value: unknown): EventLink[] {
   if (!Array.isArray(value)) return [];
@@ -213,15 +215,15 @@ export function parseEventLinks(value: unknown): EventLink[] {
 }
 
 /**
- * このイベントの「今日分」の日次リセットが実行すべき状態かどうか。
+ * このエリアの「今日分」の日次リセットが実行すべき状態かどうか。
  *
- * スケジューラ（15分間隔）が各イベントについて呼ぶ前提:
+ * スケジューラ（15分間隔）が各エリアについて呼ぶ前提:
  * - 開催期間中（startDate <= 今日 <= endDate）であること
  * - 設定時刻を過ぎていること
  * - 今日分がまだ未実施（lastResetDate が今日でない）こと
  *
  * 冪等性は lastResetDate で担保する: 途中で失敗しても次の tick で再判定され、
- * 成功済みのイベントは二重にリセットされない。
+ * 成功済みのエリアは二重にリセットされない。
  */
 export function isResetDue(
   event: Pick<EventConfig, 'startDate' | 'endDate' | 'resetTime' | 'lastResetDate' | 'status'>,
@@ -234,21 +236,21 @@ export function isResetDue(
   return jstTimeString(now) >= event.resetTime;
 }
 
-/** 同時イベント上限のカウント対象かどうか（終了したイベントは数えない）。 */
+/** 同時エリア上限のカウント対象かどうか（終了したエリアは数えない）。 */
 export function countsTowardConcurrentCap(
   event: Pick<EventConfig, 'status'>,
 ): boolean {
   return event.status !== 'ended';
 }
 
-/** 主催者が現在仕込んでいるイベント数（下書き＋開催中）。 */
+/** 主催者が現在仕込んでいるエリア数（下書き＋開催中）。 */
 export function countConcurrentEvents(
   events: Pick<EventConfig, 'status'>[],
 ): number {
   return events.filter(countsTowardConcurrentCap).length;
 }
 
-/** 新しいイベントをもう1つ仕込めるかどうか（同時上限 MAX_CONCURRENT_EVENTS 未満）。 */
+/** 新しいエリアをもう1つ仕込めるかどうか（同時上限 MAX_CONCURRENT_EVENTS 未満）。 */
 export function canCreateAnotherEvent(
   events: Pick<EventConfig, 'status'>[],
 ): boolean {
@@ -268,7 +270,7 @@ export function resolveCreateStatus(value: unknown): 'draft' | 'live' {
 }
 
 /**
- * 主催者がイベントを削除できるかどうか（純粋関数・テスト対象）。
+ * 主催者がエリアを削除できるかどうか（純粋関数・テスト対象）。
  * 開催中は削除できない（先に終了させる運用）。削除できるのは
  * 下書きと、終了処理まで済んだ 'ended' のみ。
  */
@@ -277,10 +279,10 @@ export function canDeleteEvent(event: Pick<EventConfig, 'status'>): boolean {
 }
 
 /**
- * 契約枠の変更（プロビジョニング更新）を伝播してよいイベントかどうか。
- * 「終わった」イベント = 終了ステータス（'ended'）または終了処理完了
+ * 契約枠の変更（プロビジョニング更新）を伝播してよいエリアかどうか。
+ * 「終わった」エリア = 終了ステータス（'ended'）または終了処理完了
  * （finalizedAt 設定済み）。それ以外（下書き・開催中）は伝播対象で、
- * 終了済みのイベントの枠は履歴として触らない。
+ * 終了済みのエリアの枠は履歴として触らない。
  */
 export function receivesCapsPropagation(
   event: Pick<EventConfig, 'status' | 'finalizedAt'>,
@@ -290,7 +292,7 @@ export function receivesCapsPropagation(
 
 /**
  * 終了処理（電話番号消去）の対象かどうか。
- * 終了日を過ぎていて、まだ finalized されていないイベントが対象。
+ * 終了日を過ぎていて、まだ finalized されていないエリアが対象。
  * リセットより優先される（終了後にリセットは走らない）。
  */
 export function isFinalizationDue(
@@ -304,7 +306,7 @@ export function isFinalizationDue(
 export type SubscriberUsageLevel = 'normal' | 'warning' | 'full';
 
 /**
- * 購読者枠の使用状況（イベントカードのインジケーター用）。
+ * 購読者枠の使用状況（エリアカードのインジケーター用）。
  * percent は 0–100 に丸め、level は 90%以上で warning、上限到達で full。
  */
 export function subscriberUsage(
