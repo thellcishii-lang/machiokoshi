@@ -8,7 +8,7 @@
 // 現在地はどちらもバイオレットの塗りつぶしで示す（承認済みモック準拠）。
 // 構造: 先頭は常に「プロジェクト設定」（= 主催者トップ。プロジェクト一覧がTOP）。
 // プロジェクト内の画面では、その下にプロジェクト名（そのプロジェクトの編集フォーム
-// への入口）→ プッシュ＋消込 → 予約配信 → クーポン管理 → レビュー管理 → 設定 と並び、
+// への入口）→ プッシュ＋消込 → 予約配信 → クーポン管理 → レビュー管理 → 投稿 → 設定 と並び、
 // 今どのプロジェクトの中にいるかがサイドバーで分かるようにする。
 // eventId が無い場合（主催者トップ）はプロジェクト設定のみを現在地として出す。
 // 上限警告バナー（CapWarningBanner）は各画面のコンテンツ側で描画する。
@@ -74,6 +74,14 @@ const couponsIcon = (
 const reviewsIcon = (
   <NavIcon>
     <path d="M12 3.6l2.5 5.1 5.6.8-4 4 1 5.6-5.1-2.7-5.1 2.7 1-5.6-4-4 5.6-.8z" />
+  </NavIcon>
+);
+
+const socialIcon = (
+  <NavIcon>
+    <rect x="3" y="3" width="18" height="18" rx="5" />
+    <circle cx="12" cy="12" r="4" />
+    <circle cx="17.2" cy="6.8" r="0.6" fill="currentColor" />
   </NavIcon>
 );
 
@@ -161,7 +169,8 @@ export function AdminNav({
           { key: '②', href: `/event-admin/${eventId}/schedule`, label: adminText(locale, 'navSchedule'), icon: scheduleIcon },
           { key: '③', href: `/event-admin/${eventId}/coupons`, label: adminText(locale, 'navCoupons'), icon: couponsIcon },
           { key: '④', href: `/event-admin/${eventId}/reviews`, label: adminText(locale, 'navReviews'), icon: reviewsIcon },
-          { key: '⑤', href: `/event-admin/${eventId}/settings`, label: adminText(locale, 'navConfig'), icon: gearIcon },
+          { key: '⑤', href: `/event-admin/${eventId}/social`, label: adminText(locale, 'navSocial'), icon: socialIcon },
+          { key: '⑥', href: `/event-admin/${eventId}/settings`, label: adminText(locale, 'navConfig'), icon: gearIcon },
         ]
       : []),
   ];
