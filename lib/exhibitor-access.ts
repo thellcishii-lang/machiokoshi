@@ -1,19 +1,19 @@
 // lib/exhibitor-access.ts
-// 出店者ログインの「イベント専用アクセスコード」基盤。
+// 参加店ログインの「プロジェクト専用アクセスコード」基盤。
 //
-// 決定（2026-11-10 Ishii、仕様メモ「出店者ログインの作り直し」）:
-// 出店者は Firebase Auth に入れない。Auth のアカウントは契約者（主催者）
-// だけ。出店者の頭の中は「イベントごと・主催者ごと」なので、ログイン資格も
-// イベントごとに独立させる:
-// - 出店者は events/{eventId}/exhibitors/{id} ドキュメントにメールアドレスと
+// 決定（2026-11-10 Ishii、仕様メモ「参加店ログインの作り直し」）:
+// 参加店は Firebase Auth に入れない。Auth のアカウントは契約者（管理人）
+// だけ。参加店の頭の中は「プロジェクトごと・管理人ごと」なので、ログイン資格も
+// プロジェクトごとに独立させる:
+// - 参加店は events/{eventId}/exhibitors/{id} ドキュメントにメールアドレスと
 // アクセスコード（ハッシュ化して accessCode フィールドに保存）を持つ。
 // 画面上の表記は「パスワード」。
-// - 登録時にイベント専用コードを発行し、メールで出店者へ渡す。同じ人が別
-// イベントに出店すれば別ドキュメント・別コードで、互いに影響しない。
-// - ログインはメール＋コードをサーバーで照合し、通ればそのイベント専用の
+// - 登録時にプロジェクト専用コードを発行し、メールで参加店へ渡す。同じ人が別
+// プロジェクトに出店すれば別ドキュメント・別コードで、互いに影響しない。
+// - ログインはメール＋コードをサーバーで照合し、通ればそのプロジェクト専用の
 // カスタムトークン（合成 uid + クレーム）でセッション化する。
 // - 再発行はフィールドの書き換えだけ。旧コードはその場で失効する。
-// - イベント終了時はコレクションごとリセット（Auth 側の削除作業なし）。
+// - プロジェクト終了時はコレクションごとリセット（Auth 側の削除作業なし）。
 //
 // 旧方式（PR #36: Auth アカウント自動作成＋パスワード設定リンク招待、
 // lib/exhibitor-account.ts）はこの方式に置き換えて廃止した。
@@ -142,7 +142,7 @@ return false;
 }
 
 /**
-* 出店者が存在しない場合のタイミング均一化用ダミー。照合時間の差で
+* 参加店が存在しない場合のタイミング均一化用ダミー。照合時間の差で
 * 「そのメールが登録されているか」を推測されないようにするためのもので、
 * 実際のコードとは一致しない（生成時の入力は破棄済み）。
 */
@@ -164,8 +164,8 @@ return email.length > 0 && email.length <= 254 && EMAIL_PATTERN.test(email);
 // ─── セッション ───
 
 /**
-* 出店者セッション（カスタムトークン）の合成 uid。
-* そのイベント配下だけを指す一時的な ID で、Auth のアカウントではない。
+* 参加店セッション（カスタムトークン）の合成 uid。
+* そのプロジェクト配下だけを指す一時的な ID で、Auth のアカウントではない。
 */
 export function exhibitorSessionUid(eventId: string, exhibitorId: string): string {
 return `exhibitor:${eventId}:${exhibitorId}`;
@@ -272,12 +272,12 @@ await exhibitorsRef(eventId).doc(exhibitorId).update({ email});
 
 // ─── アプリの origin と消込ページ URL ───
 
-// origin の実体は共有 lib（lib/app-origin）に切り出した。主催者コンソール
+// origin の実体は共有 lib（lib/app-origin）に切り出した。管理人コンソール
 // （クライアント側）でも来場者ページ URL を組み立てるため、サーバー専用
 // コードを含まない場所に置く。既存の import 互換のため、ここからも公開する。
 export { APP_ORIGIN, resolveAppOrigin };
 
-/** 出店者の消込（ログイン）ページ URL。メール本文に載せて出店者に渡す。 */
+/** 参加店の消込（ログイン）ページ URL。メール本文に載せて参加店に渡す。 */
 export function exhibitorRedeemUrl(eventId: string): string {
 return `${resolveAppOrigin()}/e/${encodeURIComponent(eventId)}/redeem`;
 }
@@ -316,19 +316,19 @@ loginUrl: string;
 reissued: boolean;
 }): string {
 const eventPart = input.eventName
-? `イベント「${escapeHtml(input.eventName)}」`
-: 'Push-taro EVENT のイベント';
+? `プロジェクト「${escapeHtml(input.eventName)}」`
+: 'Push-taro 町おこし のプロジェクト';
 const lead = input.reissued
 ? `<p>${eventPart}の消込ログイン用パスワードを再発行しました。今までのパスワードは使えなくなります。</p>`
-: `<p>Push-taro EVENT の主催者により、${eventPart}の出店者として登録されました。</p>`;
+: `<p>Push-taro 町おこし の管理人により、${eventPart}の参加店として登録されました。</p>`;
 return `
 <p>${escapeHtml(input.exhibitorName)} 様</p>
 ${lead}
-<p>クーポンの消し込みに使う、出店者ログインのパスワード（このイベント専用）をお知らせします。</p>
+<p>クーポンの消し込みに使う、参加店ログインのパスワード（このプロジェクト専用）をお知らせします。</p>
 <p>ログインIDは ご登録のメールアドレスです</p>
 <p>パスワード: <strong>${escapeHtml(input.code)}</strong></p>
 <p>ログインURL: ${escapeHtml(input.loginUrl)}</p>
-<p>消込ページで、このメールアドレスと上記のパスワードを入力してログインしてください。パスワードはイベントごとに異なります。</p>
+<p>消込ページで、このメールアドレスと上記のパスワードを入力してログインしてください。パスワードはプロジェクトごとに異なります。</p>
 <p>※パスワードは他の人に教えないでください。</p>
 <p>※このメールに心当たりがない場合は、破棄していただいて構いません。</p>
 `;
@@ -342,7 +342,7 @@ eventId: string;
 code: string;
 }): { subject: string; html: string} {
 return {
-subject: '出店者ログイン用パスワードのお知らせ',
+subject: '参加店ログイン用パスワードのお知らせ',
 html: buildPasswordEmailHtml({
 exhibitorName: input.exhibitorName,
 eventName: input.eventName,
@@ -361,7 +361,7 @@ eventId: string;
 code: string;
 }): { subject: string; html: string} {
 return {
-subject: '出店者ログイン用パスワード再発行のお知らせ',
+subject: '参加店ログイン用パスワード再発行のお知らせ',
 html: buildPasswordEmailHtml({
 exhibitorName: input.exhibitorName,
 eventName: input.eventName,
@@ -382,10 +382,10 @@ mailSent: boolean;
 }
 
 /**
-* 出店者を登録し、イベント専用パスワードを発行してメールで送る。
-* - メール形式が不正なら 400。同一イベント内で同じメールが既にあれば 400。
-* - コード自体は戻り値に含めない（メールでのみ出店者に渡る）。
-* - メール送信の失敗は登録の失敗にしない（主催者は再発行で送り直せる）。
+* 参加店を登録し、プロジェクト専用パスワードを発行してメールで送る。
+* - メール形式が不正なら 400。同一プロジェクト内で同じメールが既にあれば 400。
+* - コード自体は戻り値に含めない（メールでのみ参加店に渡る）。
+* - メール送信の失敗は登録の失敗にしない（管理人は再発行で送り直せる）。
 */
 export async function registerExhibitor(
 input: {
@@ -398,7 +398,7 @@ eventName?: string | null;
 deps: ExhibitorAccessDeps = defaultDeps,
 ): Promise<RegisterExhibitorResult> {
 const name = input.name.trim();
-if (!name) throw new ExhibitorAccessError('出店者名が必要です', 400);
+if (!name) throw new ExhibitorAccessError('参加店名が必要です', 400);
 const rawEmail = input.email.trim();
 if (!rawEmail) throw new ExhibitorAccessError('メールアドレスが必要です', 400);
 const email = normalizeExhibitorEmail(rawEmail);
@@ -409,7 +409,7 @@ throw new ExhibitorAccessError('メールアドレスの形式が正しくあり
 const existing = await deps.store.findByEmail(input.eventId, email);
 if (existing) {
 throw new ExhibitorAccessError(
-'そのメールアドレスはこのイベントで既に登録されています',
+'そのメールアドレスはこのプロジェクトで既に登録されています',
 400,
 );
 }
@@ -458,7 +458,7 @@ email: string;
 }
 
 /**
-* メール＋コードの照合。成功時のみ出店者を返す。
+* メール＋コードの照合。成功時のみ参加店を返す。
 * 存在しないメールでもダミーハッシュで照合して時間を均し、
 * 「登録されているか」を応答時間から推測されないようにする。
 */
@@ -482,9 +482,9 @@ mailSent: boolean;
 }
 
 /**
-* パスワード再発行（主催者操作）。新コードに差し替え、登録メールへ送る。
+* パスワード再発行（管理人操作）。新コードに差し替え、登録メールへ送る。
 * 旧コードはハッシュを上書きした時点で失効する。
-* メール未登録の旧出店者（Auth 時代のドキュメント）は、email を渡せば
+* メール未登録の旧参加店（Auth 時代のドキュメント）は、email を渡せば
 * その場で設定して発行できる。
 */
 export async function reissueExhibitorPassword(
@@ -497,7 +497,7 @@ eventName?: string | null;
 deps: ExhibitorAccessDeps = defaultDeps,
 ): Promise<ReissueExhibitorPasswordResult> {
 const exhibitor = await deps.store.getById(input.eventId, input.exhibitorId);
-if (!exhibitor) throw new ExhibitorAccessError('出店者が見つかりません', 404);
+if (!exhibitor) throw new ExhibitorAccessError('参加店が見つかりません', 404);
 
 let email = exhibitor.email;
 const requested = input.email?.trim();
@@ -513,7 +513,7 @@ if (normalized!== email) {
 const duplicate = await deps.store.findByEmail(input.eventId, normalized);
 if (duplicate && duplicate.id!== exhibitor.id) {
 throw new ExhibitorAccessError(
-'そのメールアドレスはこのイベントで既に登録されています',
+'そのメールアドレスはこのプロジェクトで既に登録されています',
 400,
 );
 }
@@ -558,7 +558,7 @@ return { email, mailSent};
 }
 
 /**
-* パスワード再発行（出店者の自己申請）。登録メールへ新コードを送る。
+* パスワード再発行（参加店の自己申請）。登録メールへ新コードを送る。
 * メールが登録されているかどうかを外部に漏らさないため、存在しない場合も
 * 例外なく正常に終わる（呼び出し側は常に汎用の完了文を返す）。
 */
