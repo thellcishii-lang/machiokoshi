@@ -9,6 +9,8 @@ import {
   isFinalizationDue,
   isResetDue,
   isValidResetTime,
+  isValidStampGoalCount,
+  parseStampGoalCount,
   receivesCapsPropagation,
   resolveCreateStatus,
   subscriberUsage,
@@ -210,5 +212,26 @@ describe('subscriberUsage', () => {
 
   it('枠が 0 以下なら 0% normal', () => {
     expect(subscriberUsage(10, 0)).toEqual({ percent: 0, level: 'normal' });
+  });
+});
+
+describe('スタンプ達成個数（stampGoalCount）', () => {
+  it('1〜10 の整数だけが有効', () => {
+    expect(isValidStampGoalCount(1)).toBe(true);
+    expect(isValidStampGoalCount(5)).toBe(true);
+    expect(isValidStampGoalCount(10)).toBe(true);
+    expect(isValidStampGoalCount(0)).toBe(false);
+    expect(isValidStampGoalCount(11)).toBe(false);
+    expect(isValidStampGoalCount(2.5)).toBe(false);
+    expect(isValidStampGoalCount('5')).toBe(false);
+    expect(isValidStampGoalCount(undefined)).toBe(false);
+    expect(isValidStampGoalCount(null)).toBe(false);
+  });
+  it('読み取り時は不正な値を既定値 5 に倒す', () => {
+    expect(parseStampGoalCount(3)).toBe(3);
+    expect(parseStampGoalCount(undefined)).toBe(5);
+    expect(parseStampGoalCount(0)).toBe(5);
+    expect(parseStampGoalCount(99)).toBe(5);
+    expect(parseStampGoalCount('3')).toBe(5);
   });
 });

@@ -18,6 +18,7 @@ function eventWith(status: EventConfig['status']): EventConfig {
     subscriberCap: 50000,
     defaultLocale: 'ja',
     admissionQrEnabled: false,
+    stampGoalCount: 5,
     links: [],
     couponCap: 100,
     backupRetentionDays: 30,

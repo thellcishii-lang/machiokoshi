@@ -1,0 +1,549 @@
+// lib/event-stamp.ts
+// Push-taro 町おこし のスタンプラリー基盤（events/{eventId} 配下）。
+//
+// - stamps/{memberId}_{round}_{exhibitorId}: スタンプ記録。ドキュメントIDの
+//   一意性で「1つの周では同じ店のスタンプは1つまで」を構造的に担保する。
+//   取消しはドキュメントの削除で行い、残っているものだけが有効なスタンプ。
+// - freeCoupons/{id}: 達成で発行される「好きな店で1回無料」クーポン。
+//   どの参加店でも使える。クーポン枠（couponCap）の数には数えない
+//   （あれは管理人が発行する通常クーポンの枠）。
+// - 周（ラリー1周）の現在位置は購読者ドキュメントの stampRound に持つ。
+//   達成したら無料クーポンを発行し、stampRound を次周へ進める
+//   （達成後も次の無料分へカウントが継続する）。
+//
+// 付与の鉄則: 押せるのは参加店セッションだけ（管理人は押せない）。
+// 自店のスタンプしか押せないのは ID の構造上自明だが、判定はすべて
+// サーバー側（この lib）で行う。
+import { FieldValue, type Firestore } from 'firebase-admin/firestore';
+import { EVENT_SUBCOLLECTIONS, jstDateString } from './event';
+import { getEvent } from './event-store';
+import type { EventExhibitor } from './event-coupon';
+
+// stamps / freeCoupons はリセット・終了削除の対象外（電話番号を含まない台帳）。
+// EVENT_SUBCOLLECTIONS の4つとは分けて持つ（event-coupon.ts の exhibitors /
+// coupons と同じ扱い）。プロジェクトの完全削除は listCollections で拾うため
+// 対象に含まれる。
+export const EVENT_STAMPS_COLLECTION = 'stamps';
+export const EVENT_FREE_COUPONS_COLLECTION = 'freeCoupons';
+
+export interface EventStamp {
+  id: string;
+  memberId: string;
+  exhibitorId: string;
+  exhibitorName: string;
+  /** 何周目に押されたか（1始まり） */
+  round: number;
+  /** 押した日（JST, 'YYYY-MM-DD'）。取消し可否の判定に使う */
+  grantedDateJst: string;
+  grantedAt: string | null;
+}
+
+export interface StampFreeCoupon {
+  id: string;
+  memberId: string;
+  /** 何周目の達成で発行されたか */
+  round: number;
+  status: 'active' | 'used';
+  usedExhibitorId: string | null;
+  usedExhibitorName: string | null;
+}
+
+export interface StampCard {
+  memberId: string;
+  /** 現在の周（1始まり） */
+  round: number;
+  goalCount: number;
+  /** 現在の周で集めたスタンプ数 */
+  countInRound: number;
+  /** 達成まであと何個か */
+  remaining: number;
+  /** 現在の周のスタンプ（押した順） */
+  stamps: EventStamp[];
+  /** 無料クーポン（新しい周の順） */
+  freeCoupons: StampFreeCoupon[];
+}
+
+/** スタンプ記録のドキュメントID。周ごとに店が一意になるよう構成する。 */
+export function stampIdFor(
+  memberId: string,
+  round: number,
+  exhibitorId: string,
+): string {
+  return `${memberId}_${round}_${exhibitorId}`;
+}
+
+/** 周内のスタンプ数が達成個数に届いたかどうか（純粋関数）。 */
+export function isRoundCompleted(countInRound: number, goalCount: number): boolean {
+  return countInRound >= goalCount;
+}
+
+/**
+ * 現在の周を解決する（純粋関数）。
+ * 通常は購読者に保存された stampRound が正。ただし stampRound を持たない
+ * 旧購読者（導入前の登録）では、スタンプの実績から復元する:
+ * 最も大きい周が達成済みならその次の周、未達成ならその周。
+ */
+export function resolveCurrentRound(
+  storedRound: unknown,
+  stampRounds: number[],
+  goalCount: number,
+): number {
+  if (
+    typeof storedRound === 'number' &&
+    Number.isInteger(storedRound) &&
+    storedRound >= 1
+  ) {
+    return storedRound;
+  }
+  if (stampRounds.length === 0) return 1;
+  const maxRound = Math.max(...stampRounds);
+  const countInMax = stampRounds.filter((r) => r === maxRound).length;
+  return isRoundCompleted(countInMax, goalCount) ? maxRound + 1 : maxRound;
+}
+
+export type StampCancelRejection =
+  | 'not-owner'
+  | 'not-current-round'
+  | 'not-today';
+
+export type StampCancelDecision =
+  | { allowed: true }
+  | { allowed: false; reason: StampCancelRejection };
+
+/**
+ * スタンプ取消しの可否（純粋関数）。
+ * 取り消せるのは「自店が」「当日（JST）に」「現在の周で」押したスタンプだけ。
+ * 過去の周のスタンプは、達成済みでも未達成でも取り消せない。
+ */
+export function evaluateStampCancel(
+  stamp: Pick<EventStamp, 'exhibitorId' | 'round' | 'grantedDateJst'>,
+  actorExhibitorId: string,
+  currentRound: number,
+  todayJst: string,
+): StampCancelDecision {
+  if (stamp.exhibitorId !== actorExhibitorId) {
+    return { allowed: false, reason: 'not-owner' };
+  }
+  if (stamp.round !== currentRound) {
+    return { allowed: false, reason: 'not-current-round' };
+  }
+  if (stamp.grantedDateJst !== todayJst) {
+    return { allowed: false, reason: 'not-today' };
+  }
+  return { allowed: true };
+}
+
+// ─── Firestore 読み書き ───
+
+function stampsRef(db: Firestore, eventId: string) {
+  return db
+    .collection('events')
+    .doc(eventId)
+    .collection(EVENT_STAMPS_COLLECTION);
+}
+
+function freeCouponsRef(db: Firestore, eventId: string) {
+  return db
+    .collection('events')
+    .doc(eventId)
+    .collection(EVENT_FREE_COUPONS_COLLECTION);
+}
+
+function subscriberRef(db: Firestore, eventId: string, memberId: string) {
+  return db
+    .collection('events')
+    .doc(eventId)
+    .collection(EVENT_SUBCOLLECTIONS.subscribers)
+    .doc(memberId);
+}
+
+function mapStamp(
+  id: string,
+  data: FirebaseFirestore.DocumentData,
+): EventStamp {
+  const grantedAt = data.grantedAt as
+    | { toDate?: () => Date }
+    | undefined;
+  return {
+    id,
+    memberId: String(data.memberId ?? ''),
+    exhibitorId: String(data.exhibitorId ?? ''),
+    exhibitorName: String(data.exhibitorName ?? ''),
+    round: typeof data.round === 'number' ? data.round : 0,
+    grantedDateJst: String(data.grantedDateJst ?? ''),
+    grantedAt: grantedAt?.toDate?.().toISOString() ?? null,
+  };
+}
+
+function mapFreeCoupon(
+  id: string,
+  data: FirebaseFirestore.DocumentData,
+): StampFreeCoupon {
+  return {
+    id,
+    memberId: String(data.memberId ?? ''),
+    round: typeof data.round === 'number' ? data.round : 0,
+    status: data.status === 'used' ? 'used' : 'active',
+    usedExhibitorId:
+      typeof data.usedExhibitorId === 'string' ? data.usedExhibitorId : null,
+    usedExhibitorName:
+      typeof data.usedExhibitorName === 'string'
+        ? data.usedExhibitorName
+        : null,
+  };
+}
+
+// ─── 付与 ───
+
+export type GrantStampResult =
+  | {
+      ok: true;
+      stampId: string;
+      /** スタンプが属する周 */
+      round: number;
+      /** その周で集めた数（今回を含む） */
+      countInRound: number;
+      goalCount: number;
+      /** 今回で達成したか（無料クーポン発行済み） */
+      completed: boolean;
+      freeCouponId: string | null;
+    }
+  | { ok: false; status: number; error: string };
+
+/**
+ * スタンプを1つ付与する。購読者でない人には押せない（404）。
+ * 現在の周で同じ店のスタンプが既にあれば 409（二重押し防止は
+ * ドキュメントIDの一意性でも担保される）。
+ * 達成したら無料クーポンを発行し、購読者の stampRound を次周へ進める。
+ */
+export async function grantStamp(
+  db: Firestore,
+  input: {
+    eventId: string;
+    exhibitor: EventExhibitor;
+    memberId: string;
+    now?: Date;
+  },
+): Promise<GrantStampResult> {
+  const event = await getEvent(input.eventId);
+  if (!event) {
+    return { ok: false, status: 404, error: 'プロジェクトが見つかりません' };
+  }
+  if (event.status !== 'live') {
+    return {
+      ok: false,
+      status: 403,
+      error: 'このプロジェクトは現在スタンプを受け付けていません',
+    };
+  }
+  const goalCount = event.stampGoalCount;
+  const today = jstDateString(input.now ?? new Date());
+  const memberStampsRef = stampsRef(db, input.eventId);
+  const subRef = subscriberRef(db, input.eventId, input.memberId);
+
+  return db.runTransaction(async (tx) => {
+    const subscriberSnap = await tx.get(subRef);
+    if (!subscriberSnap.exists) {
+      return {
+        ok: false,
+        status: 404,
+        error: '登録が見つかりません',
+      } as GrantStampResult;
+    }
+    const allStampsSnap = await tx.get(
+      memberStampsRef.where('memberId', '==', input.memberId),
+    );
+    const stampRounds = allStampsSnap.docs
+      .map((doc) => Number(doc.data().round ?? 0))
+      .filter((r) => Number.isInteger(r) && r >= 1);
+    const round = resolveCurrentRound(
+      subscriberSnap.data()?.stampRound,
+      stampRounds,
+      goalCount,
+    );
+    const stampId = stampIdFor(input.memberId, round, input.exhibitor.id);
+    const stampRef = memberStampsRef.doc(stampId);
+    const stampSnap = await tx.get(stampRef);
+    if (stampSnap.exists) {
+      return {
+        ok: false,
+        status: 409,
+        error: 'この周では、すでにこのお店のスタンプを押しています',
+      } as GrantStampResult;
+    }
+
+    const countInRound =
+      stampRounds.filter((r) => r === round).length + 1;
+    const completed = isRoundCompleted(countInRound, goalCount);
+
+    tx.set(stampRef, {
+      memberId: input.memberId,
+      exhibitorId: input.exhibitor.id,
+      exhibitorName: input.exhibitor.name,
+      round,
+      grantedAt: FieldValue.serverTimestamp(),
+      grantedDateJst: today,
+    });
+
+    let freeCouponId: string | null = null;
+    if (completed) {
+      const freeRef = freeCouponsRef(db, input.eventId).doc();
+      freeCouponId = freeRef.id;
+      tx.set(freeRef, {
+        memberId: input.memberId,
+        round,
+        status: 'active',
+        issuedAt: FieldValue.serverTimestamp(),
+      });
+      tx.update(subRef, {
+        stampRound: round + 1,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    } else if (subscriberSnap.data()?.stampRound !== round) {
+      // stampRound を持たない旧購読者には、解決した周を書き戻しておく
+      tx.update(subRef, {
+        stampRound: round,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
+
+    return {
+      ok: true,
+      stampId,
+      round,
+      countInRound,
+      goalCount,
+      completed,
+      freeCouponId,
+    } as GrantStampResult;
+  });
+}
+
+// ─── 取消し ───
+
+export type CancelStampResult =
+  | { ok: true; stampId: string }
+  | { ok: false; status: number; error: string };
+
+const CANCEL_ERRORS: Record<
+  StampCancelRejection,
+  { status: number; error: string }
+> = {
+  'not-owner': { status: 403, error: '自店のスタンプだけ取り消せます' },
+  'not-current-round': {
+    status: 409,
+    error: '過去の周のスタンプは取り消せません',
+  },
+  'not-today': {
+    status: 409,
+    error: '取り消せるのは当日に押したスタンプだけです',
+  },
+};
+
+/**
+ * スタンプを取り消す（押し間違い対応）。条件は evaluateStampCancel のとおり
+ * （自店・当日・現在の周のみ）。取り消しはドキュメントの削除。
+ * 達成済みの周のスタンプは「現在の周」ではないため、ここでは消せない
+ * （発行済みの無料クーポンと不整合にならない）。
+ */
+export async function cancelStamp(
+  db: Firestore,
+  input: {
+    eventId: string;
+    exhibitor: EventExhibitor;
+    stampId: string;
+    now?: Date;
+  },
+): Promise<CancelStampResult> {
+  const event = await getEvent(input.eventId);
+  if (!event) {
+    return { ok: false, status: 404, error: 'プロジェクトが見つかりません' };
+  }
+  const today = jstDateString(input.now ?? new Date());
+  const memberStampsRef = stampsRef(db, input.eventId);
+  const stampRef = memberStampsRef.doc(input.stampId);
+
+  return db.runTransaction(async (tx) => {
+    const stampSnap = await tx.get(stampRef);
+    if (!stampSnap.exists) {
+      return {
+        ok: false,
+        status: 404,
+        error: 'スタンプが見つかりません',
+      } as CancelStampResult;
+    }
+    const stamp = mapStamp(stampSnap.id, stampSnap.data()!);
+    const subRef = subscriberRef(db, input.eventId, stamp.memberId);
+    const [subscriberSnap, allStampsSnap] = await Promise.all([
+      tx.get(subRef),
+      tx.get(memberStampsRef.where('memberId', '==', stamp.memberId)),
+    ]);
+    const stampRounds = allStampsSnap.docs
+      .map((doc) => Number(doc.data().round ?? 0))
+      .filter((r) => Number.isInteger(r) && r >= 1);
+    const currentRound = resolveCurrentRound(
+      subscriberSnap.exists ? subscriberSnap.data()?.stampRound : undefined,
+      stampRounds,
+      event.stampGoalCount,
+    );
+    const decision = evaluateStampCancel(
+      stamp,
+      input.exhibitor.id,
+      currentRound,
+      today,
+    );
+    if (!decision.allowed) {
+      const response = CANCEL_ERRORS[decision.reason];
+      return {
+        ok: false,
+        status: response.status,
+        error: response.error,
+      } as CancelStampResult;
+    }
+    tx.delete(stampRef);
+    return { ok: true, stampId: input.stampId } as CancelStampResult;
+  });
+}
+
+// ─── 一覧・カード ───
+
+/** 参加店が当日に押したスタンプ（取消し UI 用。新しい順）。 */
+export async function listTodayStampsByExhibitor(
+  db: Firestore,
+  eventId: string,
+  exhibitorId: string,
+  now?: Date,
+): Promise<EventStamp[]> {
+  const today = jstDateString(now ?? new Date());
+  const snap = await stampsRef(db, eventId)
+    .where('exhibitorId', '==', exhibitorId)
+    .where('grantedDateJst', '==', today)
+    .get();
+  return snap.docs
+    .map((doc) => mapStamp(doc.id, doc.data()))
+    .sort((a, b) => (b.grantedAt ?? '').localeCompare(a.grantedAt ?? ''));
+}
+
+/**
+ * 来場者本人のスタンプカード表示データ。
+ * 購読者でなければ null（画面には何も出さない）。
+ */
+export async function getStampCard(
+  db: Firestore,
+  eventId: string,
+  memberId: string,
+): Promise<StampCard | null> {
+  const event = await getEvent(eventId);
+  if (!event) return null;
+  const subSnap = await subscriberRef(db, eventId, memberId).get();
+  if (!subSnap.exists) return null;
+
+  const stampsSnap = await stampsRef(db, eventId)
+    .where('memberId', '==', memberId)
+    .get();
+  const allStamps = stampsSnap.docs.map((doc) => mapStamp(doc.id, doc.data()));
+  const round = resolveCurrentRound(
+    subSnap.data()?.stampRound,
+    allStamps.map((s) => s.round),
+    event.stampGoalCount,
+  );
+  const stamps = allStamps
+    .filter((s) => s.round === round)
+    .sort((a, b) => (a.grantedAt ?? '').localeCompare(b.grantedAt ?? ''));
+
+  const freeSnap = await freeCouponsRef(db, eventId)
+    .where('memberId', '==', memberId)
+    .get();
+  const freeCoupons = freeSnap.docs
+    .map((doc) => mapFreeCoupon(doc.id, doc.data()))
+    .sort((a, b) => b.round - a.round || a.id.localeCompare(b.id));
+
+  return {
+    memberId,
+    round,
+    goalCount: event.stampGoalCount,
+    countInRound: stamps.length,
+    remaining: Math.max(event.stampGoalCount - stamps.length, 0),
+    stamps,
+    freeCoupons,
+  };
+}
+
+// ─── 無料クーポン消込 ───
+
+export type RedeemFreeCouponResult =
+  | { ok: true; freeCouponId: string }
+  | { ok: false; status: number; error: string };
+
+/**
+ * 無料クーポンを使う（消込）。通常クーポンと違い、所有店の制限はない:
+ * どの参加店でも使え、原価は使われた店の負担（ここでは記録だけ）。
+ * used への遷移はトランザクションで一度だけ。
+ */
+export async function redeemFreeCoupon(
+  db: Firestore,
+  input: {
+    eventId: string;
+    exhibitor: EventExhibitor;
+    freeCouponId: string;
+  },
+): Promise<RedeemFreeCouponResult> {
+  const event = await getEvent(input.eventId);
+  if (!event) {
+    return { ok: false, status: 404, error: 'プロジェクトが見つかりません' };
+  }
+  if (event.status !== 'live') {
+    return {
+      ok: false,
+      status: 403,
+      error: 'このプロジェクトは現在受け付けていません',
+    };
+  }
+  const freeRef = freeCouponsRef(db, input.eventId).doc(input.freeCouponId);
+
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(freeRef);
+    if (!snap.exists) {
+      return {
+        ok: false,
+        status: 404,
+        error: '無料クーポンが見つかりません',
+      } as RedeemFreeCouponResult;
+    }
+    if (snap.data()?.status === 'used') {
+      return {
+        ok: false,
+        status: 409,
+        error: 'この無料クーポンは使用済みです',
+      } as RedeemFreeCouponResult;
+    }
+    tx.update(freeRef, {
+      status: 'used',
+      usedAt: FieldValue.serverTimestamp(),
+      usedExhibitorId: input.exhibitor.id,
+      usedExhibitorName: input.exhibitor.name,
+    });
+    return { ok: true, freeCouponId: input.freeCouponId } as RedeemFreeCouponResult;
+  });
+}
+
+// ─── レビュー資格 ───
+
+/**
+ * その店のレビューを書けるかどうか（レビュー機能の前提）。
+ * スタンプをもらった（=取消しされず残っている）客だけが書ける。
+ * どの周のスタンプでも資格になる。
+ */
+export async function hasStampForShop(
+  db: Firestore,
+  eventId: string,
+  memberId: string,
+  exhibitorId: string,
+): Promise<boolean> {
+  const snap = await stampsRef(db, eventId)
+    .where('memberId', '==', memberId)
+    .where('exhibitorId', '==', exhibitorId)
+    .limit(1)
+    .get();
+  return !snap.empty;
+}

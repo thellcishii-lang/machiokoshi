@@ -134,6 +134,9 @@ export default function EventSettingsAdminPage() {
   ]);
   const [linksMessage, setLinksMessage] = useState('');
   const [linksSaving, setLinksSaving] = useState(false);
+  const [stampGoalCount, setStampGoalCount] = useState(5);
+  const [stampGoalMessage, setStampGoalMessage] = useState('');
+  const [stampGoalSaving, setStampGoalSaving] = useState(false);
   const [pdfTitle, setPdfTitle] = useState('');
   const [pdfUploading, setPdfUploading] = useState(false);
   const [message, setMessage] = useState('');
@@ -190,6 +193,9 @@ export default function EventSettingsAdminPage() {
       const data = await callApi(`/api/events/${eventId}`);
       if (typeof data.event?.name === 'string') setEventName(data.event.name);
       if (typeof data.event?.status === 'string') setEventStatus(data.event.status);
+      if (typeof data.event?.stampGoalCount === 'number') {
+        setStampGoalCount(data.event.stampGoalCount);
+      }
       const links: Array<{ title: string; url: string }> = data.event?.links ?? [];
       setLinkSlots(
         [0, 1, 2].map((i) => ({
@@ -246,6 +252,27 @@ export default function EventSettingsAdminPage() {
       setLinksMessage(e instanceof Error ? e.message : adminText(locale, 'linksSaveFailed'));
     } finally {
       setLinksSaving(false);
+    }
+  };
+
+  const handleSaveStampGoal = async () => {
+    setStampGoalSaving(true);
+    setStampGoalMessage('');
+    try {
+      const data = await callApi(`/api/events/${eventId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ stampGoalCount }),
+      });
+      if (typeof data.event?.stampGoalCount === 'number') {
+        setStampGoalCount(data.event.stampGoalCount);
+      }
+      setStampGoalMessage(adminText(locale, 'stampGoalSaved'));
+    } catch (e) {
+      setStampGoalMessage(
+        e instanceof Error ? e.message : adminText(locale, 'stampGoalSaveFailed'),
+      );
+    } finally {
+      setStampGoalSaving(false);
     }
   };
 
@@ -478,6 +505,40 @@ export default function EventSettingsAdminPage() {
             </span>
           </button>
           {linksMessage && <p style={adminFeedbackStyle}>{linksMessage}</p>}
+        </div>
+      </section>
+
+      <section style={{ marginTop: 32 }}>
+        <h2 style={sectionTitleStyle}>{adminText(locale, 'stampSettingsTitle')}</h2>
+        <p style={{ fontSize: 12.5, color: '#64748b', marginTop: 5 }}>
+          {adminText(locale, 'stampGoalNote')}
+        </p>
+        <div style={{ ...cardStyle, marginTop: 12, padding: 24 }}>
+          <label style={{ ...labelStyle, marginBottom: 0 }}>
+            {adminText(locale, 'stampGoalLabel')}
+            <select
+              style={inputStyle}
+              value={stampGoalCount}
+              onChange={(e) => setStampGoalCount(Number(e.target.value))}
+            >
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            onClick={() => void handleSaveStampGoal()}
+            disabled={stampGoalSaving}
+            style={{ ...primaryButtonStyle, marginTop: 20 }}
+          >
+            <span style={adminButtonContentStyle}>
+              {stampGoalSaving && <ButtonSpinner />}
+              {adminText(locale, 'stampGoalSaveButton')}
+            </span>
+          </button>
+          {stampGoalMessage && <p style={adminFeedbackStyle}>{stampGoalMessage}</p>}
         </div>
       </section>
 
