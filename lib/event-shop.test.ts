@@ -4,6 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   emptyShopProfile,
+  isShopPubliclyListed,
   parseShopProfile,
   shopPhotoStoragePath,
   toPublicShop,
@@ -147,5 +148,24 @@ describe('shopPhotoStoragePath', () => {
     expect(shopPhotoStoragePath('ev1', 'shop-a', 'x.jpg')).toBe(
       'events/ev1/shop-photos/shop-a/x.jpg',
     );
+  });
+});
+
+describe('isShopPubliclyListed', () => {
+  it('掲載あり＋課金停止でなければ公開する', () => {
+    const profile = parseShopProfile({ published: true });
+    expect(isShopPubliclyListed(profile, undefined)).toBe(true);
+    expect(isShopPubliclyListed(profile, false)).toBe(true);
+  });
+
+  it('課金停止中の店は、掲載設定がオンでも公開しない', () => {
+    const profile = parseShopProfile({ published: true });
+    expect(isShopPubliclyListed(profile, true)).toBe(false);
+  });
+
+  it('店自身が掲載をオフにしていれば、課金状態によらず公開しない', () => {
+    const profile = parseShopProfile({ published: false });
+    expect(isShopPubliclyListed(profile, undefined)).toBe(false);
+    expect(isShopPubliclyListed(profile, true)).toBe(false);
   });
 });

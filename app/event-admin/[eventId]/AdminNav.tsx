@@ -85,6 +85,13 @@ const socialIcon = (
   </NavIcon>
 );
 
+const billingIcon = (
+  <NavIcon>
+    <rect x="3" y="6" width="18" height="13" rx="2" />
+    <path d="M3 10h18M7 15h4" />
+  </NavIcon>
+);
+
 const gearIcon = (
   <NavIcon>
     <circle cx="12" cy="12" r="3" />
@@ -171,6 +178,9 @@ export function AdminNav({
           { key: '④', href: `/event-admin/${eventId}/reviews`, label: adminText(locale, 'navReviews'), icon: reviewsIcon },
           { key: '⑤', href: `/event-admin/${eventId}/social`, label: adminText(locale, 'navSocial'), icon: socialIcon },
           { key: '⑥', href: `/event-admin/${eventId}/settings`, label: adminText(locale, 'navConfig'), icon: gearIcon },
+          // 課金は別料金オプション。ナビは常時出し、オプション OFF の
+          // 契約では課金ページ側で案内文を出す（API が 404 を返す）。
+          { key: '⑦', href: `/event-admin/${eventId}/billing`, label: adminText(locale, 'navBilling'), icon: billingIcon },
         ]
       : []),
   ];

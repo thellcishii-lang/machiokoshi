@@ -45,6 +45,13 @@ export interface Organizer {
   restoredSubscriberCap: number | null;
   /** 代理店コード（保持のみ。集計は本家側） */
   agencyCode: string | null;
+  /**
+   * 店舗課金オプション（別料金）が有効かどうか。既定は無効（false）。
+   * 有効な契約でのみ、店舗課金の画面・API・掲載停止ロジックが動く。
+   * 設定は将来のプロビジョニング（本家接続）または運営側の変更で行う。
+   * 旧レコード（フィールド自体が無い）は false 扱い。
+   */
+  billingOptionEnabled: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -68,6 +75,7 @@ function toOrganizer(id: string, data: FirebaseFirestore.DocumentData): Organize
     restoredSubscriberCap:
       typeof data.restoredSubscriberCap === 'number' ? data.restoredSubscriberCap : null,
     agencyCode: (data.agencyCode as string | null) ?? null,
+    billingOptionEnabled: data.billingOptionEnabled === true,
     createdAt: data.createdAt?.toDate?.().toISOString() ?? '',
     updatedAt: data.updatedAt?.toDate?.().toISOString() ?? '',
   };
@@ -133,7 +141,12 @@ export async function listOrganizers(): Promise<Organizer[]> {
 /** 契約枠と状態の運営側変更。存在しなければ false。 */
 export async function updateOrganizer(
   contractId: string,
-  patch: { subscriberCap?: number; couponCap?: number; status?: OrganizerStatus },
+  patch: {
+    subscriberCap?: number;
+    couponCap?: number;
+    status?: OrganizerStatus;
+    billingOptionEnabled?: boolean;
+  },
 ): Promise<boolean> {
   const ref = db.collection(ORGANIZERS_COLLECTION).doc(contractId);
   const snap = await ref.get();

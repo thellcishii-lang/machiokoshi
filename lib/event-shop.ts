@@ -227,6 +227,26 @@ export function shopPhotoStoragePath(
   return `events/${eventId}/shop-photos/${exhibitorId}/${fileName}`;
 }
 
+// ─── 課金による掲載停止（店舗課金オプション） ───
+//
+// 参加店ドキュメントのトップレベル項目 `billingSuspended` で管理する。
+// プロフィール（profile）の中には入れない: 店が店舗専用ページで
+// プロフィールを保存すると profile は丸ごと置き換わるため、その際に
+// 課金側の停止状態が消えたり、店自身が解除できたりしないようにする。
+// 店自身の掲載 ON/OFF（profile.published）とは独立したフラグで、
+// 公開判定は「掲載する設定 かつ 課金停止でない」こと。
+
+/**
+ * 公開一覧に載せるかどうか（純粋関数）。
+ * billingSuspended が未設定（undefined）の旧ドキュメントは停止でない扱い。
+ */
+export function isShopPubliclyListed(
+  profile: ShopProfile,
+  billingSuspended: unknown,
+): boolean {
+  return profile.published && billingSuspended !== true;
+}
+
 // ─── Firestore 読み書き ───
 
 function exhibitorRef(db: Firestore, eventId: string, exhibitorId: string) {
@@ -269,7 +289,9 @@ export async function updateShopProfile(
 
 /**
  * 公開用の店舗一覧（掲載中の店だけ）。
- * 表示名の解決（未設定なら登録名）は toPublicShop で行う。
+ * 「掲載する設定（profile.published）」かつ「課金停止でない
+ * （billingSuspended）」店だけを返す。表示名の解決（未設定なら
+ * 登録名）は toPublicShop で行う。
  */
 export async function listPublicShops(
   db: Firestore,
@@ -281,12 +303,33 @@ export async function listPublicShops(
     .collection(EVENT_EXHIBITORS_COLLECTION)
     .get();
   return snap.docs
-    .map((doc) =>
-      toPublicShop(
+    .map((doc) => ({
+      shop: toPublicShop(
         { id: doc.id, name: String(doc.data().name ?? '') },
         doc.data().profile,
       ),
+      billingSuspended: doc.data().billingSuspended,
+    }))
+    .filter(({ shop, billingSuspended }) =>
+      isShopPubliclyListed(shop.profile, billingSuspended),
     )
-    .filter((shop) => shop.profile.published)
+    .map(({ shop }) => shop)
     .sort((a, b) => a.profile.displayName.localeCompare(b.profile.displayName, 'ja'));
+}
+
+/**
+ * 課金による掲載停止フラグの付け替え（店舗課金オプションの Webhook
+ * 処理から使う）。プロフィールには触れない。店が無ければ false。
+ */
+export async function setShopBillingSuspended(
+  db: Firestore,
+  eventId: string,
+  exhibitorId: string,
+  suspended: boolean,
+): Promise<boolean> {
+  const ref = exhibitorRef(db, eventId, exhibitorId);
+  const snap = await ref.get();
+  if (!snap.exists) return false;
+  await ref.update({ billingSuspended: suspended });
+  return true;
 }
