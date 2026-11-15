@@ -1,5 +1,5 @@
 // app/page.tsx
-// EVENT 専用デプロイのルート。公開向けの紹介ページは本家 push-taro.com/event に集約し、
+// 町おこし専用デプロイのルート。公開向けの紹介ページは push-taro.com/machiokoshi に集約し、
 // ここはアプリの入口としての最小限の案内だけを置く。
 import type { Metadata } from 'next';
 import Link from 'next/link';
@@ -36,7 +36,7 @@ export default function HomePage() {
         <br />
         お客さんの方は、参加店に掲示されたQRコードからアクセスしてください。
         <br />
-        サービスの紹介は本家サイトに掲載しています。
+        サービスの紹介は Push-taro.com に掲載しています。
       </p>
       <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', justifyContent: 'center' }}>
         <Link
