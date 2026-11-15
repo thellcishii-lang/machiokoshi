@@ -5,12 +5,14 @@
 - 仕様の正: LP https://push-taro.com/machiokoshi （LP が仕様を兼ねる）
 - 土台: push-taro-event @ e6337ae（EVENT 公開時点、PR #61 まで）
 
-## デプロイ前に差し替えるもの（Firebase プロジェクト作成後）
+## Firebase プロジェクト差し替え（2026-11-15 差し替え済み）
 
-- `apphosting.yaml` の NEXT_PUBLIC_FIREBASE_* 一式（現状は EVENT のプロジェクト値）
-- `lib/app-origin.ts` の APP_ORIGIN（現状は EVENT の App Hosting URL）
-- `lib/storage-bucket.ts` のデフォルトバケット（現状は EVENT のバケット）
-- Secret Manager のシークレット参照（INFOMAIL_USER / INFOMAIL_PASS / CRON_SECRET）は新プロジェクト側に用意する
+新プロジェクト: **push-taro-machiokoshi**（プロジェクト番号 896726381284）
+
+- `apphosting.yaml` の NEXT_PUBLIC_FIREBASE_* 一式 → 新プロジェクト値に差し替え済み
+- `lib/app-origin.ts` の APP_ORIGIN → 新 App Hosting URL（バックエンド 'machiokoshi'）に差し替え済み
+- `lib/storage-bucket.ts` のデフォルトバケット → `push-taro-machiokoshi.firebasestorage.app` に差し替え済み
+- Secret Manager のシークレット参照（INFOMAIL_USER / INFOMAIL_PASS / CRON_SECRET）は新プロジェクト側に用意する（参照名はそのまま）
 
 ## テキストでないため未収録のファイル（Codespace から追加する）
 
