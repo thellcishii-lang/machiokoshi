@@ -3,7 +3,8 @@
 // app/event-admin/[eventId]/site/page.tsx
 // Push-taro 町おこし 管理人向けの特設サイト編集画面。
 // 本家（push-taro.com）上の特設サイトに表示される、プロジェクトごとの
-// 紹介文・ヒーロー画像・追加事項（タイトル＋本文、最大5件）を編集する。
+// 紹介文・ヒーロー画像・アイコン・追加事項（タイトル＋本文、最大5件）を
+// 編集する。
 // あわせて、トップ掲載（先頭5枠）課金の ON/OFF と月額料金もここで設定する。
 // 保存先はプロジェクトドキュメントのトップレベル項目で、読み書きは
 // /api/events/{eventId}/site-settings、画像アップロードは
@@ -143,14 +144,18 @@ export default function SiteEditAdminPage() {
   const [loadMessage, setLoadMessage] = useState('');
   const [description, setDescription] = useState('');
   const [heroImageUrl, setHeroImageUrl] = useState<string | null>(null);
+  const [siteIconUrl, setSiteIconUrl] = useState<string | null>(null);
   const [notes, setNotes] = useState<SiteNote[]>([{ title: '', body: '' }]);
   const [topPlacementEnabled, setTopPlacementEnabled] = useState(false);
   const [topPlacementPrice, setTopPlacementPrice] = useState('');
   const [uploading, setUploading] = useState(false);
   const [imageMessage, setImageMessage] = useState('');
+  const [iconUploading, setIconUploading] = useState(false);
+  const [iconMessage, setIconMessage] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const iconFileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -196,6 +201,9 @@ export default function SiteEditAdminPage() {
       setHeroImageUrl(
         typeof siteData.heroImageUrl === 'string' ? siteData.heroImageUrl : null,
       );
+      setSiteIconUrl(
+        typeof siteData.siteIconUrl === 'string' ? siteData.siteIconUrl : null,
+      );
       const loadedNotes: SiteNote[] = Array.isArray(siteData.siteNotes)
         ? siteData.siteNotes
         : [];
@@ -228,26 +236,36 @@ export default function SiteEditAdminPage() {
     }
   };
 
+  // 画像アップロード共通処理（kind でヒーロー画像／アイコンを区別する）。
+  // URL はフォーム状態にだけ入れる。公開ページへの反映は「保存する」時点。
+  const uploadSiteImage = async (
+    file: File,
+    kind: 'hero' | 'icon',
+  ): Promise<string> => {
+    if (!user) throw new Error(adminText(locale, 'heroImageUploadFailed'));
+    const idToken = await user.getIdToken();
+    const form = new FormData();
+    form.append('file', file);
+    form.append('kind', kind);
+    const res = await fetch(`/api/events/${eventId}/site-image`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${idToken}` },
+      body: form,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error ?? adminText(locale, 'heroImageUploadFailed'));
+    }
+    return data.url as string;
+  };
+
   const handleImageSelected = async (files: FileList | null) => {
     const file = files?.[0];
     if (!file || !user) return;
     setUploading(true);
     setImageMessage('');
     try {
-      const idToken = await user.getIdToken();
-      const form = new FormData();
-      form.append('file', file);
-      const res = await fetch(`/api/events/${eventId}/site-image`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${idToken}` },
-        body: form,
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data.error ?? adminText(locale, 'heroImageUploadFailed'));
-      }
-      // URL はフォーム状態にだけ入れる。公開ページへの反映は「保存する」時点。
-      setHeroImageUrl(data.url as string);
+      setHeroImageUrl(await uploadSiteImage(file, 'hero'));
     } catch (e) {
       setImageMessage(
         e instanceof Error ? e.message : adminText(locale, 'heroImageUploadFailed'),
@@ -255,6 +273,23 @@ export default function SiteEditAdminPage() {
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleIconSelected = async (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file || !user) return;
+    setIconUploading(true);
+    setIconMessage('');
+    try {
+      setSiteIconUrl(await uploadSiteImage(file, 'icon'));
+    } catch (e) {
+      setIconMessage(
+        e instanceof Error ? e.message : adminText(locale, 'heroImageUploadFailed'),
+      );
+    } finally {
+      setIconUploading(false);
+      if (iconFileInputRef.current) iconFileInputRef.current.value = '';
     }
   };
 
@@ -274,6 +309,7 @@ export default function SiteEditAdminPage() {
         body: JSON.stringify({
           siteDescription: description,
           heroImageUrl,
+          siteIconUrl,
           siteNotes: notes,
           topPlacementEnabled,
           topPlacementPrice: priceText === '' ? null : Number(priceText),
@@ -285,6 +321,9 @@ export default function SiteEditAdminPage() {
       }
       setHeroImageUrl(
         typeof data.heroImageUrl === 'string' ? data.heroImageUrl : null,
+      );
+      setSiteIconUrl(
+        typeof data.siteIconUrl === 'string' ? data.siteIconUrl : null,
       );
       const savedNotes: SiteNote[] = Array.isArray(data.siteNotes)
         ? data.siteNotes
@@ -429,6 +468,62 @@ export default function SiteEditAdminPage() {
             )}
           </div>
           {imageMessage && <p style={adminFeedbackStyle}>{imageMessage}</p>}
+        </div>
+      </section>
+
+      <section style={{ marginTop: 32 }}>
+        <h2 style={sectionTitleStyle}>{adminText(locale, 'siteIconLabel')}</h2>
+        <p style={noteTextStyle}>{adminText(locale, 'siteIconNote')}</p>
+        <div style={{ ...cardStyle, marginTop: 12, padding: 24 }}>
+          {siteIconUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={siteIconUrl}
+              alt={adminText(locale, 'siteIconLabel')}
+              style={{
+                display: 'block',
+                width: 96,
+                height: 96,
+                objectFit: 'cover',
+                borderRadius: 20,
+                border: '1px solid #E8DCC4',
+                marginBottom: 16,
+              }}
+            />
+          )}
+          <input
+            ref={iconFileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            style={{ display: 'none' }}
+            onChange={(e) => void handleIconSelected(e.target.files)}
+          />
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <button
+              onClick={() => iconFileInputRef.current?.click()}
+              disabled={iconUploading}
+              style={secondaryButtonStyle}
+            >
+              <span style={adminButtonContentStyle}>
+                {iconUploading && <ButtonSpinner />}
+                {iconUploading
+                  ? adminText(locale, 'heroImageUploading')
+                  : siteIconUrl
+                    ? adminText(locale, 'heroImageReplaceButton')
+                    : adminText(locale, 'heroImageUploadButton')}
+              </span>
+            </button>
+            {siteIconUrl && (
+              <button
+                onClick={() => setSiteIconUrl(null)}
+                disabled={iconUploading}
+                style={dangerButtonStyle}
+              >
+                {adminText(locale, 'heroImageRemoveButton')}
+              </button>
+            )}
+          </div>
+          {iconMessage && <p style={adminFeedbackStyle}>{iconMessage}</p>}
         </div>
       </section>
 

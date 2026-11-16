@@ -34,6 +34,7 @@ import {
 import {
   normalizeHeroImageUrl,
   normalizeSiteDescription,
+  normalizeSiteIconUrl,
   normalizeSiteNotes,
   parseSiteSettings,
 } from './event-site';
@@ -120,6 +121,7 @@ export async function createEvent(input: CreateEventInput): Promise<EventConfig>
     // 特設サイトの表示内容は作成時点では未設定（編集画面で後から設定する）
     siteDescription: '',
     heroImageUrl: null,
+    siteIconUrl: null,
     siteNotes: [],
     // トップ掲載も作成時点では無効・料金未設定（特設サイト編集画面で設定する）
     topPlacementEnabled: false,
@@ -287,6 +289,7 @@ export type UpdateEventInput = Partial<
     | 'links'
     | 'siteDescription'
     | 'heroImageUrl'
+    | 'siteIconUrl'
     | 'siteNotes'
     | 'topPlacementEnabled'
     | 'topPlacementPrice'
@@ -338,6 +341,10 @@ export async function updateEvent(
     patch.heroImageUrl !== undefined
       ? normalizeHeroImageUrl(patch.heroImageUrl)
       : undefined;
+  const siteIconUrl =
+    patch.siteIconUrl !== undefined
+      ? normalizeSiteIconUrl(patch.siteIconUrl)
+      : undefined;
   const siteNotes =
     patch.siteNotes !== undefined
       ? normalizeSiteNotes(patch.siteNotes)
@@ -366,6 +373,7 @@ export async function updateEvent(
       ...(links !== undefined ? { links } : {}),
       ...(siteDescription !== undefined ? { siteDescription } : {}),
       ...(heroImageUrl !== undefined ? { heroImageUrl } : {}),
+      ...(siteIconUrl !== undefined ? { siteIconUrl } : {}),
       ...(siteNotes !== undefined ? { siteNotes } : {}),
       ...(topPlacementEnabled !== undefined ? { topPlacementEnabled } : {}),
       ...(topPlacementPrice !== undefined ? { topPlacementPrice } : {}),

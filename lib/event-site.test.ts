@@ -4,8 +4,10 @@ import {
   MAX_SITE_NOTES,
   normalizeHeroImageUrl,
   normalizeSiteDescription,
+  normalizeSiteIconUrl,
   normalizeSiteNotes,
   parseHeroImageUrl,
+  parseSiteIconUrl,
   parseSiteNotes,
   parseSiteSettings,
   siteImageStoragePath,
@@ -131,16 +133,36 @@ describe('parseSiteNotes', () => {
   });
 });
 
+describe('normalizeSiteIconUrl / parseSiteIconUrl', () => {
+  it('未指定・空は null、https 以外は保存時に例外・読み取り時は null', () => {
+    expect(normalizeSiteIconUrl(undefined)).toBeNull();
+    expect(normalizeSiteIconUrl(null)).toBeNull();
+    expect(normalizeSiteIconUrl('  ')).toBeNull();
+    expect(normalizeSiteIconUrl('https://example.com/icon.png')).toBe(
+      'https://example.com/icon.png',
+    );
+    expect(() => normalizeSiteIconUrl('http://example.com/icon.png')).toThrow();
+    expect(() => normalizeSiteIconUrl(123)).toThrow();
+    expect(parseSiteIconUrl(undefined)).toBeNull();
+    expect(parseSiteIconUrl('http://example.com/icon.png')).toBeNull();
+    expect(parseSiteIconUrl('https://example.com/icon.png')).toBe(
+      'https://example.com/icon.png',
+    );
+  });
+});
+
 describe('parseSiteSettings', () => {
   it('falls back to defaults when fields are absent (pre-feature projects)', () => {
     expect(parseSiteSettings(undefined)).toEqual({
       siteDescription: '',
       heroImageUrl: null,
+      siteIconUrl: null,
       siteNotes: [],
     });
     expect(parseSiteSettings({})).toEqual({
       siteDescription: '',
       heroImageUrl: null,
+      siteIconUrl: null,
       siteNotes: [],
     });
   });
@@ -150,11 +172,13 @@ describe('parseSiteSettings', () => {
       parseSiteSettings({
         siteDescription: '紹介文',
         heroImageUrl: 'https://example.com/hero.jpg',
+        siteIconUrl: 'https://example.com/icon.png',
         siteNotes: [{ title: '題', body: '本文' }],
       }),
     ).toEqual({
       siteDescription: '紹介文',
       heroImageUrl: 'https://example.com/hero.jpg',
+      siteIconUrl: 'https://example.com/icon.png',
       siteNotes: [{ title: '題', body: '本文' }],
     });
   });

@@ -1,8 +1,8 @@
 // app/api/events/[eventId]/site-settings/route.ts
 // 特設サイト（本家上の公開ページ）の表示内容の取得・保存（管理人本人だけ）。
 // 保存先はプロジェクトドキュメントのトップレベル項目
-// （siteDescription / heroImageUrl / siteNotes / topPlacementEnabled /
-// topPlacementPrice）。
+// （siteDescription / heroImageUrl / siteIconUrl / siteNotes /
+// topPlacementEnabled / topPlacementPrice）。
 // 検証・正規化は lib/event-site.ts と lib/event.ts の純粋関数に寄せ、
 // updateEvent 経由で保存する（リンク等の既存項目と同じ経路）。
 import { NextResponse } from 'next/server';
@@ -11,6 +11,7 @@ import { updateEvent } from '@/lib/event-store';
 import {
   normalizeHeroImageUrl,
   normalizeSiteDescription,
+  normalizeSiteIconUrl,
   normalizeSiteNotes,
   type SiteSettings,
 } from '@/lib/event-site';
@@ -32,6 +33,7 @@ interface SiteSettingsResponse extends SiteSettings {
 function currentSettings(event: {
   siteDescription: string;
   heroImageUrl: string | null;
+  siteIconUrl: string | null;
   siteNotes: SiteSettings['siteNotes'];
   topPlacementEnabled: boolean;
   topPlacementPrice: number | null;
@@ -39,6 +41,7 @@ function currentSettings(event: {
   return {
     siteDescription: event.siteDescription,
     heroImageUrl: event.heroImageUrl,
+    siteIconUrl: event.siteIconUrl,
     siteNotes: event.siteNotes,
     topPlacementEnabled: event.topPlacementEnabled,
     topPlacementPrice: event.topPlacementPrice,
@@ -78,6 +81,7 @@ export async function PUT(
     settings = {
       siteDescription: normalizeSiteDescription(body.siteDescription),
       heroImageUrl: normalizeHeroImageUrl(body.heroImageUrl),
+      siteIconUrl: normalizeSiteIconUrl(body.siteIconUrl),
       siteNotes: normalizeSiteNotes(body.siteNotes),
       topPlacementEnabled: normalizeTopPlacementEnabled(
         body.topPlacementEnabled,

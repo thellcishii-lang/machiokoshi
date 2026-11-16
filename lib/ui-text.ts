@@ -1097,6 +1097,42 @@ export const REDEEM_TEXT = {
     zh: 'Instagram 链接',
     ko: 'Instagram URL',
   },
+  profileLinks: {
+    ja: 'リンク（最大3件）',
+    en: 'Links (up to 3)',
+    zh: '链接（最多3个）',
+    ko: '링크(최대 3개)',
+  },
+  profileLinksNote: {
+    ja: '公式サイトやSNSなど、お店のページに表示するリンクです。リンクを設定すると、Instagram のURLより優先して表示されます。',
+    en: 'Links shown on your shop page, such as your official site or social accounts. When links are set, they take priority over the Instagram URL.',
+    zh: '显示在店铺页面上的链接，如官方网站或社交账号。设置链接后，将优先于 Instagram 链接显示。',
+    ko: '공식 사이트나 SNS 등 매장 페이지에 표시되는 링크입니다. 링크를 설정하면 Instagram URL보다 우선 표시됩니다.',
+  },
+  profileLinkLabel: {
+    ja: '表示名',
+    en: 'Label',
+    zh: '显示名称',
+    ko: '표시 이름',
+  },
+  profileLinkLabelPlaceholder: {
+    ja: '例: 公式サイト',
+    en: 'e.g. Official site',
+    zh: '例：官方网站',
+    ko: '예: 공식 사이트',
+  },
+  profileLinkUrl: {
+    ja: 'URL',
+    en: 'URL',
+    zh: 'URL',
+    ko: 'URL',
+  },
+  profileLinkAdd: {
+    ja: 'リンクを追加',
+    en: 'Add a link',
+    zh: '添加链接',
+    ko: '링크 추가',
+  },
   profilePublished: {
     ja: '特設サイトとアプリに掲載する',
     en: 'Show this shop on the special site and in the app',
@@ -2426,6 +2462,18 @@ export const ADMIN_TEXT = {
     en: 'Image upload failed',
     zh: '图片上传失败',
     ko: '이미지 업로드에 실패했습니다',
+  },
+  siteIconLabel: {
+    ja: 'アイコン',
+    en: 'Icon',
+    zh: '图标',
+    ko: '아이콘',
+  },
+  siteIconNote: {
+    ja: '特設サイトのヘッダー（左上）に、プロジェクト名と並んで表示される正方形のアイコンです（JPEG / PNG / WebP、5MBまで）。未設定の場合は表示されません。',
+    en: 'A square icon shown next to the project name in the special site header (top left) (JPEG / PNG / WebP, up to 5MB). Nothing is shown when unset.',
+    zh: '显示在特设网站页眉（左上）项目名称旁的方形图标（JPEG / PNG / WebP，最大5MB）。未设置时不显示。',
+    ko: '특설 사이트 헤더(왼쪽 위)에 프로젝트 이름과 함께 표시되는 정사각형 아이콘입니다(JPEG / PNG / WebP, 최대 5MB). 미설정 시 표시되지 않습니다.',
   },
   siteNotesTitle: {
     ja: '追加事項',

@@ -3,6 +3,7 @@
 // プロジェクトドキュメント（events/{eventId}）のトップレベル項目として持つ:
 // - siteDescription: ヒーローに表示する紹介文（最大300字）
 // - heroImageUrl: ヒーロー画像の公開URL（未設定は null）
+// - siteIconUrl: ヘッダーに表示する正方形アイコンの公開URL（未設定は null）
 // - siteNotes: 追加事項（タイトル＋本文の組、最大5件）
 // ここは純粋な検証・正規化のみ。Firestore への読み書きは
 // lib/event-store.ts と API ルート側で行う。
@@ -20,6 +21,8 @@ export interface SiteNote {
 export interface SiteSettings {
   siteDescription: string;
   heroImageUrl: string | null;
+  /** ヘッダーに表示する正方形のプロジェクトアイコン。未設定は null */
+  siteIconUrl: string | null;
   siteNotes: SiteNote[];
 }
 
@@ -49,25 +52,45 @@ export function parseSiteDescription(value: unknown): string {
   return value.trim().slice(0, MAX_SITE_DESCRIPTION_LENGTH);
 }
 
-/** 保存時検証: ヒーロー画像URL。未指定・空は null（未設定）。 */
-export function normalizeHeroImageUrl(input: unknown): string | null {
+/** 保存時検証: 画像URL（ヒーロー画像・アイコン共通）。未指定・空は null。 */
+function normalizeImageUrl(input: unknown, label: string): string | null {
   if (input === undefined || input === null) return null;
   if (typeof input !== 'string') {
-    throw new Error('ヒーロー画像URLの形式が不正です');
+    throw new Error(`${label}の形式が不正です`);
   }
   const url = input.trim();
   if (!url) return null;
   if (!isHttpsUrl(url)) {
-    throw new Error('ヒーロー画像URLは https:// で始まる必要があります');
+    throw new Error(`${label}は https:// で始まる必要があります`);
   }
   return url;
 }
 
-/** 読み取り用: ヒーロー画像URL。https の文字列でなければ null に倒す。 */
-export function parseHeroImageUrl(value: unknown): string | null {
+/** 読み取り用: 画像URL。https の文字列でなければ null に倒す。 */
+function parseImageUrl(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const url = value.trim();
   return url && isHttpsUrl(url) ? url : null;
+}
+
+/** 保存時検証: ヒーロー画像URL。未指定・空は null（未設定）。 */
+export function normalizeHeroImageUrl(input: unknown): string | null {
+  return normalizeImageUrl(input, 'ヒーロー画像URL');
+}
+
+/** 読み取り用: ヒーロー画像URL。https の文字列でなければ null に倒す。 */
+export function parseHeroImageUrl(value: unknown): string | null {
+  return parseImageUrl(value);
+}
+
+/** 保存時検証: アイコン画像URL。未指定・空は null（未設定）。 */
+export function normalizeSiteIconUrl(input: unknown): string | null {
+  return normalizeImageUrl(input, 'アイコン画像URL');
+}
+
+/** 読み取り用: アイコン画像URL。https の文字列でなければ null に倒す。 */
+export function parseSiteIconUrl(value: unknown): string | null {
+  return parseImageUrl(value);
 }
 
 function readNoteFields(
@@ -140,6 +163,7 @@ export function parseSiteSettings(
   return {
     siteDescription: parseSiteDescription(source?.siteDescription),
     heroImageUrl: parseHeroImageUrl(source?.heroImageUrl),
+    siteIconUrl: parseSiteIconUrl(source?.siteIconUrl),
     siteNotes: parseSiteNotes(source?.siteNotes),
   };
 }

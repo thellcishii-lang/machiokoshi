@@ -23,6 +23,7 @@ function eventWith(status: EventConfig['status']): EventConfig {
     links: [],
     siteDescription: '',
     heroImageUrl: null,
+    siteIconUrl: null,
     siteNotes: [],
     topPlacementEnabled: false,
     topPlacementPrice: null,

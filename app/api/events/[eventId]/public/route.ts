@@ -31,6 +31,8 @@ export async function GET(
       // （未設定のプロジェクトでは '' / null / [] になる）
       siteDescription: event.siteDescription,
       heroImageUrl: event.heroImageUrl,
+      // ヘッダーに表示する正方形アイコン（未設定は null）
+      siteIconUrl: event.siteIconUrl,
       siteNotes: event.siteNotes,
       // トップ掲載（先頭5枠）課金の設定。本家は enabled が false の間は
       // 各店の topFeatured を無視し、true の間は優先表示に使う。

@@ -109,6 +109,50 @@ describe('PUT /api/events/[eventId]/shop-profile', () => {
     expect(body.profile.displayName).toBe('カレー堂');
   });
 
+  it('リンクは検証・正規化して保存し、クライアントの座標は渡らない', async () => {
+    mocks.updateShopProfile.mockImplementation(
+      async (_db: unknown, _eventId: string, _exhibitorId: string, profile: unknown) => ({
+        ok: true,
+        profile,
+      }),
+    );
+    const response = await callPut({
+      displayName: 'カレー堂',
+      links: [
+        { label: ' 公式サイト ', url: ' https://example.com/ ' },
+        { label: 'Instagram', url: 'https://instagram.com/shop' },
+      ],
+      // 座標はクライアントの値を一切使わない（サーバー側でのみ決める）
+      location: { lat: 35.85, lng: 139.32 },
+    });
+    expect(response.status).toBe(200);
+    expect(mocks.updateShopProfile).toHaveBeenCalledWith(
+      {},
+      EVENT_ID,
+      'shop-a',
+      expect.objectContaining({
+        links: [
+          { label: '公式サイト', url: 'https://example.com/' },
+          { label: 'Instagram', url: 'https://instagram.com/shop' },
+        ],
+        location: null,
+      }),
+    );
+    const body = await response.json();
+    expect(body.profile.links).toHaveLength(2);
+  });
+
+  it('検証エラー（リンク4件）は 400 で、保存しない', async () => {
+    const response = await callPut({
+      links: [1, 2, 3, 4].map((i) => ({
+        label: `リンク${i}`,
+        url: `https://example.com/${i}`,
+      })),
+    });
+    expect(response.status).toBe(400);
+    expect(mocks.updateShopProfile).not.toHaveBeenCalled();
+  });
+
   it('検証エラー（写真4枚）は 400 で、保存しない', async () => {
     const response = await callPut({
       photoUrls: [

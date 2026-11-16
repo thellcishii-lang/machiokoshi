@@ -87,6 +87,12 @@ export interface EventConfig {
   /** 特設サイトのヒーロー画像の公開URL。未設定は null。 */
   heroImageUrl: string | null;
   /**
+   * 特設サイトのヘッダーに表示する正方形のプロジェクトアイコンの
+   * 公開URL。未設定は null。導入前に作られたプロジェクトには項目自体が
+   * 無いため、読み取り時は null に倒す（検証・正規化は lib/event-site.ts）。
+   */
+  siteIconUrl: string | null;
+  /**
    * 特設サイトの追加事項（タイトル＋本文、最大5件）。管理人が特設サイト
    * 編集画面で設定する。未登録なら空配列。
    */
