@@ -307,6 +307,36 @@ export const UI_TEXT = {
     zh: '福利兑换券',
     ko: '특전 쿠폰',
   },
+  celebrationTitle: {
+    ja: 'やったーミッション達成！',
+    en: 'You did it! Mission complete!',
+    zh: '太棒了！任务达成！',
+    ko: '해냈어요! 미션 달성!',
+  },
+  celebrationFreeDishMessage: {
+    ja: '早速好きなお店を選んで食べに行こう！',
+    en: 'Pick your favorite shop and go enjoy your free dish!',
+    zh: '快选一家喜欢的店铺，去免费品尝吧！',
+    ko: '좋아하는 가게를 골라서 무료로 먹으러 가요!',
+  },
+  celebrationBenefitMessage: {
+    ja: '特典を貰おう！',
+    en: 'Go claim your benefit!',
+    zh: '来领取你的福利吧！',
+    ko: '특전을 받으러 가요!',
+  },
+  celebrationShowQrButton: {
+    ja: '特典QRを表示する',
+    en: 'Show the reward QR code',
+    zh: '显示福利二维码',
+    ko: '특전 QR 코드 보기',
+  },
+  celebrationClose: {
+    ja: '閉じる',
+    en: 'Close',
+    zh: '关闭',
+    ko: '닫기',
+  },
   reviewSectionTitle: {
     ja: '行ったお店への書き込み',
     en: 'Reviews for shops you visited',
