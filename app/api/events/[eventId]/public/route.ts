@@ -32,6 +32,11 @@ export async function GET(
       siteDescription: event.siteDescription,
       heroImageUrl: event.heroImageUrl,
       siteNotes: event.siteNotes,
+      // トップ掲載（先頭5枠）課金の設定。本家は enabled が false の間は
+      // 各店の topFeatured を無視し、true の間は優先表示に使う。
+      // 料金は店舗ページの申込表示にも使う（未設定は null）。
+      topPlacementEnabled: event.topPlacementEnabled,
+      topPlacementPrice: event.topPlacementPrice,
     },
   });
 }

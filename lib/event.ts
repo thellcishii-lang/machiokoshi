@@ -92,6 +92,20 @@ export interface EventConfig {
    */
   siteNotes: SiteNote[];
   /**
+   * 特設サイトのトップ掲載（先頭5枠）課金を有効にするか。管理人が
+   * 特設サイト編集画面で設定する。既定オフ。オンの間、参加店は
+   * topPlacementPrice の月額を払ってトップに優先表示できる
+   * （課金の実体は lib/event-placement.ts）。
+   * 導入前に作られたプロジェクトには項目自体が無いため、読み取り時は
+   * オフに倒す。
+   */
+  topPlacementEnabled: boolean;
+  /**
+   * トップ掲載の月額料金（円）。未設定は null。設定する場合は
+   * TOP_PLACEMENT_PRICE_MIN〜TOP_PLACEMENT_PRICE_MAX の整数。
+   */
+  topPlacementPrice: number | null;
+  /**
    * クーポン上限（プロジェクト全体の件数）。購読者上限と同じく契約枠の軸なので、
    * 変更は運営側のみ。既定は MAX_COUPONS_PER_EVENT。
    */
@@ -362,6 +376,59 @@ export function parseStampGoalCount(value: unknown): number {
   return isValidStampGoalCount(value)
     ? (value as number)
     : DEFAULT_STAMP_GOAL_COUNT;
+}
+
+/** トップ掲載の月額料金の下限・上限（円）。 */
+export const TOP_PLACEMENT_PRICE_MIN = 100;
+export const TOP_PLACEMENT_PRICE_MAX = 1_000_000;
+
+/** トップ掲載の月額料金として有効な値かどうか（100〜1,000,000 の整数）。 */
+export function isValidTopPlacementPrice(value: unknown): boolean {
+  return (
+    typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= TOP_PLACEMENT_PRICE_MIN &&
+    value <= TOP_PLACEMENT_PRICE_MAX
+  );
+}
+
+/**
+ * 保存済みのトップ掲載料金を防御的に読む（読み取り用。throw しない）。
+ * 未設定・不正な値は null（未設定）に倒す。
+ */
+export function parseTopPlacementPrice(value: unknown): number | null {
+  return isValidTopPlacementPrice(value) ? (value as number) : null;
+}
+
+/**
+ * トップ掲載料金の入力を検証して正規化する（書き込み用。不正なら throw）。
+ * 未指定・null は未設定（null）として扱う。
+ */
+export function normalizeTopPlacementPrice(input: unknown): number | null {
+  if (input === undefined || input === null) return null;
+  if (!isValidTopPlacementPrice(input)) {
+    throw new Error(
+      `トップ掲載の料金は${TOP_PLACEMENT_PRICE_MIN}円から${TOP_PLACEMENT_PRICE_MAX}円の整数で指定してください`,
+    );
+  }
+  return input as number;
+}
+
+/** 保存済みのトップ掲載 ON/OFF を防御的に読む（読み取り用）。true のみ有効。 */
+export function parseTopPlacementEnabled(value: unknown): boolean {
+  return value === true;
+}
+
+/**
+ * トップ掲載 ON/OFF の入力を検証して正規化する（書き込み用）。
+ * 未指定はオフ。それ以外の型は throw。
+ */
+export function normalizeTopPlacementEnabled(input: unknown): boolean {
+  if (input === undefined || input === null) return false;
+  if (typeof input !== 'boolean') {
+    throw new Error('トップ掲載の設定形式が不正です');
+  }
+  return input;
 }
 
 /** ランキングの最低レビュー件数として有効な値かどうか（1〜20 の整数）。 */

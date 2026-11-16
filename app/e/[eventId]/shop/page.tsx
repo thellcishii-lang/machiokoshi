@@ -47,6 +47,15 @@ interface ShopProfile {
   published: boolean;
 }
 
+interface TopPlacementState {
+  enabled: boolean;
+  price: number | null;
+  available: boolean;
+  status: string | null;
+  featured: boolean;
+  monthlyAmount: number | null;
+}
+
 const EMPTY_PROFILE: ShopProfile = {
   displayName: '',
   address: '',
@@ -144,6 +153,9 @@ export default function ExhibitorShopPage() {
   const [exhibitor, setExhibitor] = useState<Exhibitor | null>(null);
   const [exhibitorError, setExhibitorError] = useState('');
   const [profile, setProfile] = useState<ShopProfile>(EMPTY_PROFILE);
+  const [placement, setPlacement] = useState<TopPlacementState | null>(null);
+  const [placementBusy, setPlacementBusy] = useState(false);
+  const [placementMessage, setPlacementMessage] = useState('');
   const [message, setMessage] = useState('');
   const [messageOk, setMessageOk] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -220,6 +232,15 @@ export default function ExhibitorShopPage() {
         setExhibitorError('');
         const data = await callApi(`/api/events/${eventId}/shop-profile`);
         if (data.profile) setProfile({ ...EMPTY_PROFILE, ...data.profile });
+        // トップ掲載の状態は取れなくても画面は出す（カードを出さないだけ）
+        try {
+          const placementData = await callApi(
+            `/api/events/${eventId}/top-placement`,
+          );
+          setPlacement(placementData as TopPlacementState);
+        } catch {
+          setPlacement(null);
+        }
       } catch (e) {
         setExhibitor(null);
         setExhibitorError(
@@ -230,6 +251,63 @@ export default function ExhibitorShopPage() {
     // locale は初期言語の確定にだけ使う
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, eventId, callApi]);
+
+  // Stripe Checkout から戻ってきたときの結果表示（成功／キャンセル）。
+  // 掲載の確定は Webhook 経由のため、成功時は「受付済み」の案内にする。
+  useEffect(() => {
+    try {
+      const result = new URLSearchParams(window.location.search).get('placement');
+      if (result === 'success') {
+        setPlacementMessage(redeemText(locale, 'topPlacementSubscribeMessage'));
+      } else if (result === 'canceled') {
+        setPlacementMessage(redeemText(locale, 'topPlacementCheckoutCanceled'));
+      }
+    } catch {
+      // 読めなければ案内なしで続行する
+    }
+    // 初回マウント時だけ（言語は初期値でよい）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handlePlacementSubscribe = async () => {
+    setPlacementBusy(true);
+    setPlacementMessage('');
+    try {
+      const data = await callApi(`/api/events/${eventId}/top-placement/checkout`, {
+        method: 'POST',
+      });
+      if (typeof data.checkoutUrl !== 'string') throw new Error('no checkout url');
+      window.location.href = data.checkoutUrl;
+    } catch (e) {
+      setPlacementMessage(
+        e instanceof Error
+          ? e.message
+          : redeemText(locale, 'topPlacementSubscribeFailed'),
+      );
+      setPlacementBusy(false);
+    }
+  };
+
+  const handlePlacementCancel = async () => {
+    setPlacementBusy(true);
+    setPlacementMessage('');
+    try {
+      await callApi(`/api/events/${eventId}/top-placement/cancel`, {
+        method: 'POST',
+      });
+      const placementData = await callApi(`/api/events/${eventId}/top-placement`);
+      setPlacement(placementData as TopPlacementState);
+      setPlacementMessage(redeemText(locale, 'topPlacementCancelMessage'));
+    } catch (e) {
+      setPlacementMessage(
+        e instanceof Error
+          ? e.message
+          : redeemText(locale, 'topPlacementCancelFailed'),
+      );
+    } finally {
+      setPlacementBusy(false);
+    }
+  };
 
   const handleLocaleChange = async (next: Locale) => {
     setLocale(next);
@@ -744,6 +822,71 @@ export default function ExhibitorShopPage() {
               </p>
             )}
           </section>
+
+          {placement && (placement.featured || placement.available) && (
+            <section style={{ ...cardStyle, padding: 16, marginTop: 16 }}>
+              <h2 style={{ fontSize: 16.5, fontWeight: 800, margin: 0 }}>
+                {redeemText(locale, 'topPlacementTitle')}
+              </h2>
+              {placement.featured ? (
+                <>
+                  <p style={{ fontSize: 13.5, color: '#334155', marginTop: 8 }}>
+                    {placement.status === 'past_due'
+                      ? redeemText(locale, 'topPlacementPastDueNote')
+                      : redeemText(locale, 'topPlacementFeaturedNote')}
+                  </p>
+                  <button
+                    onClick={() => void handlePlacementCancel()}
+                    disabled={placementBusy}
+                    style={{
+                      marginTop: 12,
+                      padding: '9px 16px',
+                      fontSize: 13.5,
+                      fontWeight: 700,
+                      borderRadius: 10,
+                      border: '1px solid #fca5a5',
+                      backgroundColor: '#ffffff',
+                      color: '#b91c1c',
+                      cursor: 'pointer',
+                      opacity: placementBusy ? 0.6 : 1,
+                    }}
+                  >
+                    {redeemText(locale, 'topPlacementCancelButton')}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p style={{ fontSize: 13.5, color: '#334155', marginTop: 8 }}>
+                    {redeemText(locale, 'topPlacementNote')}
+                  </p>
+                  {placement.price !== null && (
+                    <p style={{ fontSize: 15, fontWeight: 800, marginTop: 8 }}>
+                      {redeemText(locale, 'topPlacementPrice', {
+                        price: placement.price.toLocaleString('ja-JP'),
+                      })}
+                    </p>
+                  )}
+                  <button
+                    onClick={() => void handlePlacementSubscribe()}
+                    disabled={placementBusy}
+                    style={{ ...primaryButtonStyle, marginTop: 12, opacity: placementBusy ? 0.6 : 1 }}
+                  >
+                    {redeemText(locale, 'topPlacementSubscribeButton')}
+                  </button>
+                </>
+              )}
+              {placementMessage && (
+                <p style={{ fontSize: 13.5, fontWeight: 600, color: '#334155', marginTop: 12 }}>
+                  {placementMessage}
+                </p>
+              )}
+            </section>
+          )}
+          {!placement?.featured && !placement?.available && placementMessage && (
+            <p style={{ fontSize: 13.5, fontWeight: 600, color: '#334155', marginTop: 16 }}>
+              {placementMessage}
+            </p>
+          )}
         </>
       )}
       <PoweredByFooter />

@@ -50,6 +50,12 @@ export interface PublicShop {
   /** 登録名（管理上の名前） */
   name: string;
   profile: ShopProfile;
+  /**
+   * 特設サイトのトップ掲載（先頭5枠）の対象かどうか。参加店ドキュメントの
+   * トップレベル項目 `topFeatured` が正で、課金側（lib/event-placement.ts）
+   * が掲載中と判断している間だけ true。未設定の旧ドキュメントは false。
+   */
+  topFeatured: boolean;
 }
 
 export function emptyShopProfile(): ShopProfile {
@@ -113,10 +119,16 @@ export function parseShopProfile(value: unknown): ShopProfile {
 export function toPublicShop(
   exhibitor: { id: string; name: string },
   rawProfile: unknown,
+  topFeatured?: unknown,
 ): PublicShop {
   const profile = parseShopProfile(rawProfile);
   if (!profile.displayName) profile.displayName = exhibitor.name;
-  return { exhibitorId: exhibitor.id, name: exhibitor.name, profile };
+  return {
+    exhibitorId: exhibitor.id,
+    name: exhibitor.name,
+    profile,
+    topFeatured: topFeatured === true,
+  };
 }
 
 // ─── 純粋関数: 書き込み検証 ───
@@ -307,6 +319,7 @@ export async function listPublicShops(
       shop: toPublicShop(
         { id: doc.id, name: String(doc.data().name ?? '') },
         doc.data().profile,
+        doc.data().topFeatured,
       ),
       billingSuspended: doc.data().billingSuspended,
     }))
@@ -331,5 +344,29 @@ export async function setShopBillingSuspended(
   const snap = await ref.get();
   if (!snap.exists) return false;
   await ref.update({ billingSuspended: suspended });
+  return true;
+}
+
+// ─── トップ掲載フラグ（トップ掲載課金） ───
+//
+// billingSuspended と同じ考え方で、参加店ドキュメントのトップレベル項目
+// `topFeatured` で管理する（プロフィール保存で消えたり店が勝手に
+// 付け替えたりできないように）。付け替えは課金側
+// （lib/event-placement.ts の Webhook 処理・解約処理）だけが行う。
+
+/**
+ * トップ掲載フラグの付け替え。プロフィールには触れない。
+ * 店が無ければ false。
+ */
+export async function setShopTopFeatured(
+  db: Firestore,
+  eventId: string,
+  exhibitorId: string,
+  featured: boolean,
+): Promise<boolean> {
+  const ref = exhibitorRef(db, eventId, exhibitorId);
+  const snap = await ref.get();
+  if (!snap.exists) return false;
+  await ref.update({ topFeatured: featured });
   return true;
 }
