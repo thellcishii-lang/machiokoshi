@@ -104,7 +104,7 @@ const inputStyle: React.CSSProperties = {
   width: '100%',
   padding: '11px 12px',
   marginTop: 6,
-  border: '1px solid #D9D4EC',
+  border: '1px solid #E8DCC4',
   borderRadius: 12,
   fontSize: 14,
   backgroundColor: '#ffffff',
@@ -122,12 +122,12 @@ const primaryButtonStyle: React.CSSProperties = {
   padding: '12px 22px',
   fontWeight: 700,
   fontSize: 15,
-  backgroundColor: '#6D28D9',
+  backgroundColor: '#8B5E34',
   color: '#ffffff',
   border: 'none',
   borderRadius: 12,
   cursor: 'pointer',
-  boxShadow: '0 4px 12px rgba(109, 40, 217, 0.25)',
+  boxShadow: '0 4px 12px rgba(139, 94, 52, 0.25)',
 };
 
 const secondaryButtonStyle: React.CSSProperties = {
@@ -135,7 +135,7 @@ const secondaryButtonStyle: React.CSSProperties = {
   fontSize: 13,
   fontWeight: 600,
   borderRadius: 12,
-  border: '1px solid #D9D4EC',
+  border: '1px solid #E8DCC4',
   backgroundColor: '#ffffff',
   color: '#26233B',
   cursor: 'pointer',
@@ -574,8 +574,8 @@ export default function EventBillingAdminPage() {
                     <code
                       style={{
                         fontSize: 12.5,
-                        backgroundColor: '#f5f3ff',
-                        border: '1px solid #D9D4EC',
+                        backgroundColor: '#FBF6EA',
+                        border: '1px solid #E8DCC4',
                         borderRadius: 8,
                         padding: '8px 10px',
                         wordBreak: 'break-all',
@@ -751,8 +751,8 @@ export default function EventBillingAdminPage() {
                         <code
                           style={{
                             fontSize: 12.5,
-                            backgroundColor: '#f5f3ff',
-                            border: '1px solid #D9D4EC',
+                            backgroundColor: '#FBF6EA',
+                            border: '1px solid #E8DCC4',
                             borderRadius: 8,
                             padding: '8px 10px',
                             wordBreak: 'break-all',

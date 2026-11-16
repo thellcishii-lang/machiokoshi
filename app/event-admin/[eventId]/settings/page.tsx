@@ -1,7 +1,7 @@
 'use client';
 
 // app/event-admin/[eventId]/settings/page.tsx
-// Push-taro EVENT 主催者向けの設定画面。
+// Push-taro 町おこし 主催者向けの設定画面。
 // 来場者登録用QRコードの表示・ダウンロード、案内PDFの管理
 // （アップロード／一覧／削除、最大5件）と、主催者リンクの管理
 // （タイトル＋URL、最大3件）を行う。
@@ -46,7 +46,7 @@ interface InfoPdf {
   url: string;
 }
 
-const VIOLET = '#6D28D9';
+const VIOLET = '#8B5E34';
 
 const containerStyle: React.CSSProperties = {
   padding: '20px 16px 48px',
@@ -71,7 +71,7 @@ const inputStyle: React.CSSProperties = {
   width: '100%',
   padding: '11px 12px',
   marginTop: 6,
-  border: '1px solid #D9D4EC',
+  border: '1px solid #E8DCC4',
   borderRadius: 12,
   fontSize: 14,
   backgroundColor: '#ffffff',
@@ -94,7 +94,7 @@ const primaryButtonStyle: React.CSSProperties = {
   border: 'none',
   borderRadius: 12,
   cursor: 'pointer',
-  boxShadow: '0 4px 12px rgba(109, 40, 217, 0.25)',
+  boxShadow: '0 4px 12px rgba(139, 94, 52, 0.25)',
 };
 
 const dangerButtonStyle: React.CSSProperties = {
@@ -468,8 +468,8 @@ export default function EventSettingsAdminPage() {
           <div
             {...pdfDropzone.getRootProps()}
             style={{
-              border: `2px dashed ${pdfDropzone.isDragActive ? '#6D28D9' : '#c4b5fd'}`,
-              backgroundColor: pdfDropzone.isDragActive ? '#f5f3ff' : '#ffffff',
+              border: `2px dashed ${pdfDropzone.isDragActive ? '#8B5E34' : '#D9BE8C'}`,
+              backgroundColor: pdfDropzone.isDragActive ? '#FBF6EA' : '#ffffff',
               borderRadius: 16,
               padding: 24,
               marginTop: 12,

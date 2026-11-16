@@ -60,7 +60,7 @@ const EMPTY_PROFILE: ShopProfile = {
 
 const PHOTO_MAX = 3;
 
-const VIOLET = '#6D28D9';
+const VIOLET = '#8B5E34';
 
 // モックの言語セグメントは短い表記（EN など）。保存・送信は従来どおり locale で行う。
 const PILL_LABELS: Record<Locale, string> = {

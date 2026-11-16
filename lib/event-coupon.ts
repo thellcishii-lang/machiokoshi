@@ -1,5 +1,5 @@
 // lib/event-coupon.ts
-// Push-taro EVENT のクーポン基盤（events/{eventId} 配下）。
+// Push-taro 町おこし のクーポン基盤（events/{eventId} 配下）。
 //
 // - exhibitors/{exhibitorId}: 出店者（会社）。ログインはイベント専用の
 //   アクセスコード方式（lib/exhibitor-access.ts）。ドキュメントにメール

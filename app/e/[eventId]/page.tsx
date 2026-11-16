@@ -1,7 +1,7 @@
 'use client';
 
 // app/e/[eventId]/page.tsx
-// Push-taro EVENT の来場者登録画面（QRコードの着地先）。
+// Push-taro 町おこし の来場者登録画面（QRコードの着地先）。
 // 流れ: プロジェクト情報の確認 → 電話番号のSMS認証 → 通知許可とFCMトークン取得 → 登録API。
 // 電話番号認証の作法は本家の登録画面（app/subscribe）に合わせている。
 // 画面の固定文は4言語辞書（lib/ui-text.ts）で切り替える。初期表示は
@@ -160,12 +160,12 @@ function normalizePhoneNumber(value: string): string {
   return compact;
 }
 
-const VIOLET = '#6D28D9';
-const VIOLET_BRIGHT = '#7C3AED';
+const VIOLET = '#8B5E34';
+const VIOLET_BRIGHT = '#B07B45';
 const CLAIM_BLUE = '#2563eb';
 const INK = '#17122b';
-const HERO_GRADIENT = 'linear-gradient(135deg, #e7dcfd, #d2c0f8)';
-const CARD_GRADIENT = 'linear-gradient(180deg, #f3efff, #e9e2fd)';
+const HERO_GRADIENT = 'linear-gradient(135deg, #F1E4CB, #E7D3AC)';
+const CARD_GRADIENT = 'linear-gradient(180deg, #FBF6EA, #F3E8D2)';
 
 // モックの言語ピルは短い表記（EN など）。選択の保存・送信は従来どおり locale で行う。
 const PILL_LABELS: Record<Locale, string> = {
@@ -238,7 +238,7 @@ function PinLogo() {
         alignItems: 'center',
         justifyContent: 'center',
         flexShrink: 0,
-        boxShadow: '0 3px 8px rgba(109, 40, 217, 0.35)',
+        boxShadow: '0 3px 8px rgba(139, 94, 52, 0.35)',
       }}
     >
       <svg width="25" height="25" viewBox="0 0 24 24">
@@ -660,7 +660,7 @@ function ReviewShopCard({
                     fontSize: 13,
                     backgroundColor: '#ffffff',
                     color: VIOLET,
-                    border: '1px solid #ddd6fe',
+                    border: '1px solid #E7D3AC',
                     borderRadius: 10,
                     cursor: 'pointer',
                   }}
@@ -1246,7 +1246,7 @@ export default function EventVisitorPage() {
       <main style={containerStyle}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <PinLogo />
-          <p style={{ fontSize: 19, fontWeight: 900, color: INK, margin: 0 }}>Push-taro EVENT</p>
+          <p style={{ fontSize: 19, fontWeight: 900, color: INK, margin: 0 }}>Push-taro 町おこし</p>
         </div>
         <h1 style={{ fontSize: 20, fontWeight: 800, marginTop: 24 }}>{uiText(locale, 'notFoundTitle')}</h1>
         <p style={{ fontSize: 14 }}>{uiText(locale, 'notFoundBody')}</p>
@@ -1297,7 +1297,7 @@ export default function EventVisitorPage() {
                 lineHeight: 1.15,
               }}
             >
-              Push-taro EVENT
+              Push-taro 町おこし
             </p>
             <p style={{ fontSize: 12.5, color: '#475569', margin: '2px 0 0' }}>
               {uiText(locale, 'visitorPageLabel')}
@@ -1313,7 +1313,7 @@ export default function EventVisitorPage() {
         >
           <path
             d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58ZM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6Z"
-            fill="#3f3d56"
+            fill="#4A3E30"
           />
         </svg>
       </div>
@@ -1324,7 +1324,7 @@ export default function EventVisitorPage() {
           borderRadius: 18,
           padding: '18px 16px',
           marginTop: 14,
-          boxShadow: '0 4px 14px rgba(109, 40, 217, 0.18)',
+          boxShadow: '0 4px 14px rgba(139, 94, 52, 0.18)',
         }}
       >
         <h1 style={{ fontSize: 23, fontWeight: 800, margin: 0, color: INK }}>{event.name}</h1>
@@ -1767,8 +1767,8 @@ export default function EventVisitorPage() {
                       : {
                           marginTop: 12,
                           fontSize: 14,
-                          backgroundColor: '#f5f3ff',
-                          border: '1px solid #ddd6fe',
+                          backgroundColor: '#FBF6EA',
+                          border: '1px solid #E7D3AC',
                           borderRadius: 10,
                           padding: '9px 12px',
                         }
@@ -1846,11 +1846,11 @@ export default function EventVisitorPage() {
                     key={claim.claimId}
                     style={{
                       background: CARD_GRADIENT,
-                      border: '1px solid #ddd6fe',
+                      border: '1px solid #E7D3AC',
                       borderRadius: 16,
                       padding: 16,
                       marginTop: 12,
-                      boxShadow: '0 2px 8px rgba(109, 40, 217, 0.12)',
+                      boxShadow: '0 2px 8px rgba(139, 94, 52, 0.12)',
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -1993,7 +1993,7 @@ export default function EventVisitorPage() {
                           border: stamp
                             ? `2px solid ${VIOLET}`
                             : '2px dashed #cbd5e1',
-                          backgroundColor: stamp ? '#f5f3ff' : '#ffffff',
+                          backgroundColor: stamp ? '#FBF6EA' : '#ffffff',
                           borderRadius: 12,
                           minHeight: 62,
                           padding: '8px 6px',
@@ -2083,11 +2083,11 @@ export default function EventVisitorPage() {
                     key={freeCoupon.id}
                     style={{
                       background: CARD_GRADIENT,
-                      border: '1px solid #ddd6fe',
+                      border: '1px solid #E7D3AC',
                       borderRadius: 16,
                       padding: 16,
                       marginTop: 12,
-                      boxShadow: '0 2px 8px rgba(109, 40, 217, 0.12)',
+                      boxShadow: '0 2px 8px rgba(139, 94, 52, 0.12)',
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -2279,8 +2279,8 @@ export default function EventVisitorPage() {
                           marginTop: 10,
                           padding: '11px 12px',
                           borderRadius: 12,
-                          border: '1px solid #ddd6fe',
-                          backgroundColor: '#f5f3ff',
+                          border: '1px solid #E7D3AC',
+                          backgroundColor: '#FBF6EA',
                           fontWeight: 700,
                           fontSize: 14,
                           color: VIOLET,
@@ -2360,8 +2360,8 @@ export default function EventVisitorPage() {
               style={{
                 marginTop: 10,
                 fontSize: 14,
-                backgroundColor: '#f5f3ff',
-                border: '1px solid #ddd6fe',
+                backgroundColor: '#FBF6EA',
+                border: '1px solid #E7D3AC',
                 borderRadius: 10,
                 padding: '9px 12px',
               }}
@@ -2518,7 +2518,7 @@ export default function EventVisitorPage() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: 12,
-                boxShadow: '0 8px 22px rgba(109, 40, 217, 0.28)',
+                boxShadow: '0 8px 22px rgba(139, 94, 52, 0.28)',
               }}
             >
               <div

@@ -119,7 +119,7 @@ const itemCurrentStyle: React.CSSProperties = {
   ...itemBaseStyle,
   backgroundColor: ADMIN_VIOLET,
   color: '#ffffff',
-  boxShadow: '0 4px 12px rgba(109, 40, 217, 0.30)',
+  boxShadow: '0 4px 12px rgba(139, 94, 52, 0.30)',
 };
 
 const cardNavStyle: React.CSSProperties = {
