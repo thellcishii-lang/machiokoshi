@@ -46,6 +46,8 @@ const EDITABLE_FIELDS: Array<keyof UpdateEventInput> = [
   'defaultLocale',
   'admissionQrEnabled',
   'stampGoalCount',
+  'stampRewardType',
+  'stampBenefitText',
   'rankingMinReviews',
   'links',
   // subscriberCap は含めない: 料金（契約枠）の軸のため、変更は運営側のみ

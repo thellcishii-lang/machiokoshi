@@ -55,6 +55,9 @@ export async function POST(
     goalCount: result.goalCount,
     completed: result.completed,
     freeCouponId: result.freeCouponId,
+    // 達成時の完了メッセージの出し分け用（発行クーポンの特典スナップショット）
+    rewardType: result.rewardType,
+    benefitText: result.benefitText,
   });
 }
 

@@ -35,6 +35,22 @@ export const SHOP_PROFILE_LIMITS = {
   description: 1000,
 } as const;
 
+export const SHOP_FREE_DISH_LIMITS = {
+  name: 50,
+  description: 200,
+} as const;
+
+/**
+ * スタンプ達成で無料になる自店の一品（特典の種類が「1軒無料」の
+ * プロジェクトで意味を持つ）。店が店舗専用ページで登録し、特設サイトの
+ * 店舗ページ等に写真付きで出す。未登録は null。
+ */
+export interface ShopFreeDish {
+  name: string;
+  description: string;
+  photoUrl: string | null;
+}
+
 /** 店舗リンク1件（表示名＋URL）。特設サイトの店舗ページに並べて表示する。 */
 export interface ShopLink {
   label: string;
@@ -70,6 +86,8 @@ export interface ShopProfile {
   links: ShopLink[];
   /** 住所から求めた座標。未取得・取得失敗は null */
   location: ShopLocation | null;
+  /** 達成で無料になる自店の一品。未登録は null */
+  freeDish: ShopFreeDish | null;
   /** 掲載するかどうか。既定は掲載する（true） */
   published: boolean;
 }
@@ -101,6 +119,7 @@ export function emptyShopProfile(): ShopProfile {
     instagramUrl: '',
     links: [],
     location: null,
+    freeDish: null,
     published: true,
   };
 }
@@ -144,6 +163,29 @@ function readShopLinks(value: unknown): ShopLink[] {
   return links;
 }
 
+/**
+ * 読み取り用: 無料の一品。名前が無いものは「未登録」として null に倒す
+ * （名前なしでは表示できないため）。写真は https のときだけ採用する。
+ */
+function readFreeDish(value: unknown): ShopFreeDish | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const record = value as Record<string, unknown>;
+  const name =
+    typeof record.name === 'string'
+      ? record.name.trim().slice(0, SHOP_FREE_DISH_LIMITS.name)
+      : '';
+  if (!name) return null;
+  const description =
+    typeof record.description === 'string'
+      ? record.description.trim().slice(0, SHOP_FREE_DISH_LIMITS.description)
+      : '';
+  const photoUrl =
+    typeof record.photoUrl === 'string' && isHttpsUrl(record.photoUrl)
+      ? record.photoUrl
+      : null;
+  return { name, description, photoUrl };
+}
+
 /** 読み取り用: 座標。数値の組で範囲内なら採用し、それ以外は null に倒す。 */
 function readShopLocation(value: unknown): ShopLocation | null {
   if (typeof value !== 'object' || value === null) return null;
@@ -179,6 +221,7 @@ export function parseShopProfile(value: unknown): ShopProfile {
     instagramUrl: readInstagramUrl(source.instagramUrl),
     links: readShopLinks(source.links),
     location: readShopLocation(source.location),
+    freeDish: readFreeDish(source.freeDish),
     published: source.published !== false,
   };
 }
@@ -309,6 +352,57 @@ function validateShopLinks(
 }
 
 /**
+ * 保存時検証: 無料の一品。
+ * - 未指定・null・全項目が空なら未登録（null）
+ * - 説明や写真だけあって名前が無いものはエラー（名前なしでは表示できない）
+ * - 名前は最大50文字、説明は最大200文字、写真は https のみ
+ */
+function validateFreeDish(
+  raw: unknown,
+): { ok: true; value: ShopFreeDish | null } | { ok: false; error: string } {
+  if (raw === undefined || raw === null) return { ok: true, value: null };
+  if (typeof raw !== 'object') {
+    return { ok: false, error: '無料メニューの形式が不正です' };
+  }
+  const record = raw as Record<string, unknown>;
+  const nameRaw = record.name === undefined ? '' : record.name;
+  const descriptionRaw = record.description === undefined ? '' : record.description;
+  const photoRaw = record.photoUrl === undefined ? null : record.photoUrl;
+  if (typeof nameRaw !== 'string' || typeof descriptionRaw !== 'string') {
+    return { ok: false, error: '無料メニューの形式が不正です' };
+  }
+  if (photoRaw !== null && typeof photoRaw !== 'string') {
+    return { ok: false, error: '無料メニューの形式が不正です' };
+  }
+  const name = nameRaw.trim();
+  const description = descriptionRaw.trim();
+  const photoUrl = typeof photoRaw === 'string' ? photoRaw.trim() : null;
+  if (!name && !description && !photoUrl) return { ok: true, value: null };
+  if (!name) {
+    return { ok: false, error: '無料メニューの名前を入力してください' };
+  }
+  if (name.length > SHOP_FREE_DISH_LIMITS.name) {
+    return {
+      ok: false,
+      error: `無料メニューの名前は${SHOP_FREE_DISH_LIMITS.name}文字以内で入力してください`,
+    };
+  }
+  if (description.length > SHOP_FREE_DISH_LIMITS.description) {
+    return {
+      ok: false,
+      error: `無料メニューの説明は${SHOP_FREE_DISH_LIMITS.description}文字以内で入力してください`,
+    };
+  }
+  if (photoUrl && !isHttpsUrl(photoUrl)) {
+    return {
+      ok: false,
+      error: '無料メニューの写真は https:// で始まる必要があります',
+    };
+  }
+  return { ok: true, value: { name, description, photoUrl: photoUrl || null } };
+}
+
+/**
  * 店舗プロフィールの保存入力を検証して正規化する（書き込み用）。
  * 文字項目は任意（空でよい）で上限文字数まで。写真は最大3枚・https
  * のみ。Instagram URL は https のみ（空は可）。リンクは最大3件。
@@ -371,6 +465,9 @@ export function validateShopProfileInput(
   const links = validateShopLinks(source.links);
   if (!links.ok) return links;
 
+  const freeDish = validateFreeDish(source.freeDish);
+  if (!freeDish.ok) return freeDish;
+
   if (source.published !== undefined && typeof source.published !== 'boolean') {
     return { ok: false, error: '掲載設定の形式が不正です' };
   }
@@ -384,6 +481,7 @@ export function validateShopProfileInput(
       links: links.value,
       // 座標はサーバー側でのみ決める（クライアントの値は無視する）
       location: null,
+      freeDish: freeDish.value,
       published: source.published !== false,
     },
   };
@@ -396,6 +494,18 @@ export function shopPhotoStoragePath(
   fileName: string,
 ): string {
   return `events/${eventId}/shop-photos/${exhibitorId}/${fileName}`;
+}
+
+/**
+ * 無料の一品の写真の保存先パス。店舗写真と同じ公開読み取りルールの
+ * 範囲に収まるよう、同じディレクトリに `free-dish-` 接頭辞で置く。
+ */
+export function shopFreeDishPhotoStoragePath(
+  eventId: string,
+  exhibitorId: string,
+  fileName: string,
+): string {
+  return `events/${eventId}/shop-photos/${exhibitorId}/free-dish-${fileName}`;
 }
 
 // ─── 課金による掲載停止（店舗課金オプション） ───

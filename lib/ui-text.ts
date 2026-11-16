@@ -295,6 +295,18 @@ export const UI_TEXT = {
     zh: '已使用（{shop}）',
     ko: '사용 완료({shop})',
   },
+  stampRemainingBenefit: {
+    ja: 'あと{count}個で特典「{benefit}」がもらえます！',
+    en: '{count} more stamp(s) to earn your benefit: “{benefit}”!',
+    zh: '再集{count}个，即可获得福利“{benefit}”！',
+    ko: '{count}개 더 모으면 특전 "{benefit}"을(를) 받을 수 있어요!',
+  },
+  benefitCouponTitle: {
+    ja: '特典クーポン',
+    en: 'Benefit coupon',
+    zh: '福利兑换券',
+    ko: '특전 쿠폰',
+  },
   reviewSectionTitle: {
     ja: '行ったお店への書き込み',
     en: 'Reviews for shops you visited',
@@ -899,6 +911,12 @@ export const REDEEM_TEXT = {
     zh: '达成目标！已发放免费兑换券',
     ko: '달성했습니다! 무료 쿠폰이 발급되었습니다',
   },
+  stampCompletedBenefit: {
+    ja: '達成です！特典クーポンを発行しました',
+    en: 'Goal reached! A benefit coupon has been issued.',
+    zh: '达成目标！已发放福利兑换券',
+    ko: '달성했습니다! 특전 쿠폰이 발급되었습니다',
+  },
   freeRedeemDone: {
     ja: '無料クーポンを使用しました。',
     en: 'Free coupon redeemed.',
@@ -1060,6 +1078,30 @@ export const REDEEM_TEXT = {
     en: 'About the dish',
     zh: '菜品说明',
     ko: '메뉴 설명',
+  },
+  profileFreeDishTitle: {
+    ja: '達成で無料になる一品',
+    en: 'Your free dish for goal achievers',
+    zh: '达成目标可免费兑换的一品',
+    ko: '달성 시 무료가 되는 메뉴',
+  },
+  profileFreeDishNote: {
+    ja: 'スタンプを集めきったお客さんが、このお店で無料で食べられる一品です。特設サイトの店舗ページに写真付きで紹介されます（特典の種類が「1軒無料」のプロジェクトで意味を持ちます）。',
+    en: 'The dish a visitor who completes the stamp rally can eat free at your shop. It is showcased with a photo on your shop page on the special site (relevant when the project reward type is “one free dish”).',
+    zh: '集满印章的顾客可在本店免费品尝的一品。将附照片展示在特设网站的店铺页面上（在奖励类型为"一份免费"的项目中有效）。',
+    ko: '스탬프를 다 모은 고객이 이 매장에서 무료로 먹을 수 있는 메뉴입니다. 특설 사이트의 매장 페이지에 사진과 함께 소개됩니다(특전 종류가 "1회 무료"인 프로젝트에서 의미가 있습니다).',
+  },
+  profileFreeDishName: {
+    ja: '無料メニューの名前',
+    en: 'Free dish name',
+    zh: '免费菜品名称',
+    ko: '무료 메뉴 이름',
+  },
+  profileFreeDishDescription: {
+    ja: '無料メニューの説明',
+    en: 'About the free dish',
+    zh: '免费菜品说明',
+    ko: '무료 메뉴 설명',
   },
   profileDescription: {
     ja: 'お店の紹介',
@@ -2618,6 +2660,48 @@ export const ADMIN_TEXT = {
     en: 'Failed to save stamp settings',
     zh: '盖章设置保存失败',
     ko: '스탬프 설정 저장에 실패했습니다',
+  },
+  stampRewardTypeLabel: {
+    ja: '達成特典の種類',
+    en: 'Reward type',
+    zh: '达成奖励类型',
+    ko: '달성 특전 종류',
+  },
+  stampRewardFreeDishOption: {
+    ja: '1軒無料（好きなお店で1回無料）',
+    en: 'One free dish (one dish free at any shop)',
+    zh: '一份免费（任意一家店铺免费兑换一份）',
+    ko: '1회 무료(좋아하는 가게에서 한 번 무료)',
+  },
+  stampRewardBenefitOption: {
+    ja: '特典（内容を自由に設定）',
+    en: 'Benefit (custom text)',
+    zh: '福利（内容可自由设置）',
+    ko: '특전(내용 자유 설정)',
+  },
+  stampBenefitTextLabel: {
+    ja: '特典の内容',
+    en: 'Benefit details',
+    zh: '福利内容',
+    ko: '특전 내용',
+  },
+  stampBenefitTextPlaceholder: {
+    ja: '例: 特製グッズをプレゼント',
+    en: 'e.g. A special gift',
+    zh: '例：赠送特制周边',
+    ko: '예: 특제 굿즈 선물',
+  },
+  stampBenefitRequired: {
+    ja: '特典を選ぶ場合は、特典の内容を入力してください',
+    en: 'Enter the benefit details when the benefit type is selected.',
+    zh: '选择福利时，请填写福利内容。',
+    ko: '특전을 선택하는 경우 특전 내용을 입력해 주세요.',
+  },
+  stampRewardNote: {
+    ja: '「特典」を選ぶと、達成したお客さんには無料クーポンの代わりに、ここで設定した内容の特典クーポンが発行されます。発行済みのクーポンは、後から設定を変えても変わりません。',
+    en: 'With “Benefit”, visitors who reach the goal receive a benefit coupon with the text set here instead of a free dish coupon. Coupons already issued do not change when the setting changes.',
+    zh: '选择"福利"后，达成目标的顾客将获得此处所设内容的福利兑换券，而不是免费兑换券。已发放的兑换券不会因之后修改设置而改变。',
+    ko: '"특전"을 선택하면 달성한 고객에게 무료 쿠폰 대신 여기서 설정한 내용의 특전 쿠폰이 발급됩니다. 이미 발급된 쿠폰은 나중에 설정을 바꿔도 변하지 않습니다.',
   },
   rankingSettingsTitle: {
     ja: 'ランキング設定',

@@ -22,14 +22,19 @@ import {
   isValidRankingMinReviews,
   isValidStampGoalCount,
   normalizeEventLinks,
+  normalizeStampBenefitText,
+  normalizeStampRewardType,
   normalizeTopPlacementEnabled,
   normalizeTopPlacementPrice,
   parseEventLinks,
   parseRankingMinReviews,
+  parseStampBenefitText,
   parseStampGoalCount,
+  parseStampRewardType,
   parseTopPlacementEnabled,
   parseTopPlacementPrice,
   receivesCapsPropagation,
+  validateStampRewardSettings,
 } from './event';
 import {
   normalizeGourmetDefinition,
@@ -63,6 +68,9 @@ function toEventConfig(id: string, data: FirebaseFirestore.DocumentData): EventC
     admissionQrEnabled: data.admissionQrEnabled === true,
     // スタンプ達成個数も導入前のイベントには項目が無いため既定値に倒す
     stampGoalCount: parseStampGoalCount(data.stampGoalCount),
+    // 達成特典の種類・内容も同様に既定値（従来の「1軒無料」・空）に倒す
+    stampRewardType: parseStampRewardType(data.stampRewardType),
+    stampBenefitText: parseStampBenefitText(data.stampBenefitText),
     // ランキングの最低レビュー件数も同様に既定値に倒す
     rankingMinReviews: parseRankingMinReviews(data.rankingMinReviews),
     // 主催者リンクは導入前のイベントには項目自体が無い
@@ -105,6 +113,10 @@ export async function createEvent(input: CreateEventInput): Promise<EventConfig>
   ) {
     throw new Error('ランキングの最低レビュー件数は1〜20の整数で指定してください');
   }
+  // 達成特典は種類と内容を正規化し、組み合わせ（benefit なら内容必須）まで検証する
+  const stampRewardType = normalizeStampRewardType(input.stampRewardType);
+  const stampBenefitText = normalizeStampBenefitText(input.stampBenefitText);
+  validateStampRewardSettings(stampRewardType, stampBenefitText);
 
   const ref = db.collection(EVENTS_COLLECTION).doc();
   const data: EventDocData = {
@@ -118,6 +130,8 @@ export async function createEvent(input: CreateEventInput): Promise<EventConfig>
     defaultLocale: input.defaultLocale ?? DEFAULT_LOCALE,
     admissionQrEnabled: input.admissionQrEnabled ?? false,
     stampGoalCount: input.stampGoalCount ?? DEFAULT_STAMP_GOAL_COUNT,
+    stampRewardType,
+    stampBenefitText,
     rankingMinReviews: input.rankingMinReviews ?? DEFAULT_RANKING_MIN_REVIEWS,
     links: normalizeEventLinks(input.links),
     // 特設サイトの表示内容は作成時点では未設定（編集画面で後から設定する）
@@ -289,6 +303,8 @@ export type UpdateEventInput = Partial<
     | 'defaultLocale'
     | 'admissionQrEnabled'
     | 'stampGoalCount'
+    | 'stampRewardType'
+    | 'stampBenefitText'
     | 'rankingMinReviews'
     | 'links'
     | 'siteDescription'
@@ -334,6 +350,27 @@ export async function updateEvent(
     !isValidRankingMinReviews(patch.rankingMinReviews)
   ) {
     throw new Error('ランキングの最低レビュー件数は1〜20の整数で指定してください');
+  }
+  // 達成特典は種類と内容を正規化する。組み合わせ（benefit なら内容必須）は
+  // 片方だけの更新でも保存済みのもう片方と突き合わせて検証する。
+  const stampRewardType =
+    patch.stampRewardType !== undefined
+      ? normalizeStampRewardType(patch.stampRewardType)
+      : undefined;
+  const stampBenefitText =
+    patch.stampBenefitText !== undefined
+      ? normalizeStampBenefitText(patch.stampBenefitText)
+      : undefined;
+  if (stampRewardType !== undefined || stampBenefitText !== undefined) {
+    let mergedType = stampRewardType;
+    let mergedText = stampBenefitText;
+    if (mergedType === undefined || mergedText === undefined) {
+      const current = await getEvent(eventId);
+      if (!current) throw new Error('イベントが見つかりません');
+      mergedType = mergedType ?? current.stampRewardType;
+      mergedText = mergedText ?? current.stampBenefitText;
+    }
+    validateStampRewardSettings(mergedType, mergedText);
   }
   // 主催者リンクは検証してから正規化した形で保存する
   const links =
@@ -384,6 +421,8 @@ export async function updateEvent(
     .doc(eventId)
     .update({
       ...patch,
+      ...(stampRewardType !== undefined ? { stampRewardType } : {}),
+      ...(stampBenefitText !== undefined ? { stampBenefitText } : {}),
       ...(links !== undefined ? { links } : {}),
       ...(siteDescription !== undefined ? { siteDescription } : {}),
       ...(gourmetDefinition !== undefined ? { gourmetDefinition } : {}),

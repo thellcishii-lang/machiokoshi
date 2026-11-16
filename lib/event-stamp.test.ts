@@ -4,6 +4,7 @@
 // lib をモックして検証する。
 import { describe, expect, it } from 'vitest';
 import {
+  buildStampRewardSnapshot,
   evaluateStampCancel,
   isRoundCompleted,
   resolveCurrentRound,
@@ -86,5 +87,39 @@ describe('evaluateStampCancel', () => {
         today,
       ),
     ).toEqual({ allowed: false, reason: 'not-today' });
+  });
+});
+
+describe('buildStampRewardSnapshot（発行クーポンへの特典スナップショット）', () => {
+  it('free-dish では従来どおりの種別で、内容は空（設定に残る文面は写さない）', () => {
+    expect(
+      buildStampRewardSnapshot({
+        stampRewardType: 'free-dish',
+        stampBenefitText: '前に特典で使っていた文面',
+      }),
+    ).toEqual({ rewardType: 'free-dish', benefitText: '' });
+  });
+  it('benefit では種類と内容をそのまま写す', () => {
+    expect(
+      buildStampRewardSnapshot({
+        stampRewardType: 'benefit',
+        stampBenefitText: '特製グッズをプレゼント',
+      }),
+    ).toEqual({ rewardType: 'benefit', benefitText: '特製グッズをプレゼント' });
+  });
+  it('発行後に設定を変えても、作成済みスナップショットは変わらない', () => {
+    const issued = buildStampRewardSnapshot({
+      stampRewardType: 'benefit',
+      stampBenefitText: '発行時点の特典',
+    });
+    // 設定変更を模して別オブジェクトを作っても issued は不変
+    buildStampRewardSnapshot({
+      stampRewardType: 'free-dish',
+      stampBenefitText: '',
+    });
+    expect(issued).toEqual({
+      rewardType: 'benefit',
+      benefitText: '発行時点の特典',
+    });
   });
 });

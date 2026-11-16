@@ -19,6 +19,8 @@ function eventWith(status: EventConfig['status']): EventConfig {
     defaultLocale: 'ja',
     admissionQrEnabled: false,
     stampGoalCount: 5,
+    stampRewardType: 'free-dish',
+    stampBenefitText: '',
     rankingMinReviews: 3,
     links: [],
     siteDescription: '',

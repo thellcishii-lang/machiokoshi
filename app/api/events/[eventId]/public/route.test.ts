@@ -34,6 +34,8 @@ function eventWith(partial: Record<string, unknown>) {
     siteNotes: [],
     topPlacementEnabled: false,
     topPlacementPrice: null,
+    stampRewardType: 'free-dish',
+    stampBenefitText: '',
     ...partial,
   };
 }
@@ -90,6 +92,29 @@ describe('GET /api/events/[eventId]/public', () => {
     });
     const unsetData = await unset.json();
     expect(unsetData.event.themeColor).toBeNull();
+  });
+
+  it('stampRewardType と stampBenefitText を event の中に含めて返す', async () => {
+    mocks.getEvent.mockResolvedValue(
+      eventWith({
+        stampRewardType: 'benefit',
+        stampBenefitText: '特製グッズをプレゼント',
+      }),
+    );
+    const response = await GET(new Request('http://localhost'), {
+      params: Promise.resolve({ eventId: EVENT_ID }),
+    });
+    const data = await response.json();
+    expect(data.event.stampRewardType).toBe('benefit');
+    expect(data.event.stampBenefitText).toBe('特製グッズをプレゼント');
+
+    mocks.getEvent.mockResolvedValue(eventWith({}));
+    const unset = await GET(new Request('http://localhost'), {
+      params: Promise.resolve({ eventId: EVENT_ID }),
+    });
+    const unsetData = await unset.json();
+    expect(unsetData.event.stampRewardType).toBe('free-dish');
+    expect(unsetData.event.stampBenefitText).toBe('');
   });
 
   it('未設定のプロジェクトでは siteIconUrl は null', async () => {
