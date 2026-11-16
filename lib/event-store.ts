@@ -27,6 +27,12 @@ import {
   parseStampGoalCount,
   receivesCapsPropagation,
 } from './event';
+import {
+  normalizeHeroImageUrl,
+  normalizeSiteDescription,
+  normalizeSiteNotes,
+  parseSiteSettings,
+} from './event-site';
 
 const EVENTS_COLLECTION = 'events';
 
@@ -54,6 +60,8 @@ function toEventConfig(id: string, data: FirebaseFirestore.DocumentData): EventC
     rankingMinReviews: parseRankingMinReviews(data.rankingMinReviews),
     // 主催者リンクは導入前のイベントには項目自体が無い
     links: parseEventLinks(data.links),
+    // 特設サイトの表示内容も導入前のイベントには項目自体が無いため既定値に倒す
+    ...parseSiteSettings(data),
     couponCap: data.couponCap ?? MAX_COUPONS_PER_EVENT,
     backupRetentionDays: data.backupRetentionDays ?? DEFAULT_BACKUP_RETENTION_DAYS,
     status: data.status,
@@ -102,6 +110,10 @@ export async function createEvent(input: CreateEventInput): Promise<EventConfig>
     stampGoalCount: input.stampGoalCount ?? DEFAULT_STAMP_GOAL_COUNT,
     rankingMinReviews: input.rankingMinReviews ?? DEFAULT_RANKING_MIN_REVIEWS,
     links: normalizeEventLinks(input.links),
+    // 特設サイトの表示内容は作成時点では未設定（編集画面で後から設定する）
+    siteDescription: '',
+    heroImageUrl: null,
+    siteNotes: [],
     couponCap: input.couponCap ?? MAX_COUPONS_PER_EVENT,
     backupRetentionDays:
       input.backupRetentionDays ?? DEFAULT_BACKUP_RETENTION_DAYS,
@@ -263,6 +275,9 @@ export type UpdateEventInput = Partial<
     | 'stampGoalCount'
     | 'rankingMinReviews'
     | 'links'
+    | 'siteDescription'
+    | 'heroImageUrl'
+    | 'siteNotes'
     | 'couponCap'
     | 'backupRetentionDays'
     | 'status'
@@ -302,6 +317,19 @@ export async function updateEvent(
   // 主催者リンクは検証してから正規化した形で保存する
   const links =
     patch.links !== undefined ? normalizeEventLinks(patch.links) : undefined;
+  // 特設サイトの表示内容も検証・正規化してから保存する
+  const siteDescription =
+    patch.siteDescription !== undefined
+      ? normalizeSiteDescription(patch.siteDescription)
+      : undefined;
+  const heroImageUrl =
+    patch.heroImageUrl !== undefined
+      ? normalizeHeroImageUrl(patch.heroImageUrl)
+      : undefined;
+  const siteNotes =
+    patch.siteNotes !== undefined
+      ? normalizeSiteNotes(patch.siteNotes)
+      : undefined;
   if (
     patch.startDate !== undefined &&
     patch.endDate !== undefined &&
@@ -315,6 +343,9 @@ export async function updateEvent(
     .update({
       ...patch,
       ...(links !== undefined ? { links } : {}),
+      ...(siteDescription !== undefined ? { siteDescription } : {}),
+      ...(heroImageUrl !== undefined ? { heroImageUrl } : {}),
+      ...(siteNotes !== undefined ? { siteNotes } : {}),
       updatedAt: FieldValue.serverTimestamp(),
     });
 }

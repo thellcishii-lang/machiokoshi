@@ -1,0 +1,488 @@
+'use client';
+
+// app/event-admin/[eventId]/site/page.tsx
+// Push-taro 町おこし 管理人向けの特設サイト編集画面。
+// 本家（push-taro.com）上の特設サイトに表示される、プロジェクトごとの
+// 紹介文・ヒーロー画像・追加事項（タイトル＋本文、最大5件）を編集する。
+// 保存先はプロジェクトドキュメントのトップレベル項目で、読み書きは
+// /api/events/{eventId}/site-settings、画像アップロードは
+// /api/events/{eventId}/site-image 経由。
+// 画面の固定文は4言語辞書（lib/ui-text.ts の ADMIN_TEXT）。
+// 見た目は設定画面と共通（AdminShell + カード + フォーム直下フィードバック）。
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useParams } from 'next/navigation';
+import {
+  User,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut,
+} from 'firebase/auth';
+import { auth } from '@/lib/firebase-client';
+import { AdminLanguageSelect, useAdminLocale } from '@/components/AdminLocale';
+import {
+  ADMIN_CARD_BORDER,
+  ADMIN_CARD_SHADOW,
+  ADMIN_PAGE_BG,
+  AdminBrandBar,
+  ButtonSpinner,
+  adminButtonContentStyle,
+  adminErrorTextStyle,
+  adminFeedbackStyle,
+  adminPageTitleStyle,
+} from '@/components/AdminBrand';
+import { adminText, uiText } from '@/lib/ui-text';
+import { AdminShell } from '@/components/AdminShell';
+import { CapWarningBanner } from '@/components/CapWarningBanner';
+import { AdminNav } from '../AdminNav';
+import { specialSiteUrl } from '@/lib/special-site';
+import {
+  MAX_SITE_DESCRIPTION_LENGTH,
+  MAX_SITE_NOTE_BODY_LENGTH,
+  MAX_SITE_NOTE_TITLE_LENGTH,
+  MAX_SITE_NOTES,
+  type SiteNote,
+} from '@/lib/event-site';
+
+const VIOLET = '#8B5E34';
+
+const containerStyle: React.CSSProperties = {
+  padding: '20px 16px 48px',
+  maxWidth: 880,
+  margin: '0 auto',
+  fontFamily: 'sans-serif',
+  backgroundColor: ADMIN_PAGE_BG,
+  minHeight: '100vh',
+  boxSizing: 'border-box',
+  color: '#0f172a',
+};
+
+const cardStyle: React.CSSProperties = {
+  backgroundColor: '#ffffff',
+  border: `1px solid ${ADMIN_CARD_BORDER}`,
+  borderRadius: 18,
+  boxShadow: ADMIN_CARD_SHADOW,
+};
+
+const inputStyle: React.CSSProperties = {
+  display: 'block',
+  width: '100%',
+  padding: '11px 12px',
+  marginTop: 6,
+  border: '1px solid #E8DCC4',
+  borderRadius: 12,
+  fontSize: 14,
+  backgroundColor: '#ffffff',
+  boxSizing: 'border-box',
+};
+
+const labelStyle: React.CSSProperties = {
+  display: 'block',
+  fontSize: 13,
+  fontWeight: 600,
+  marginBottom: 12,
+};
+
+const primaryButtonStyle: React.CSSProperties = {
+  padding: '12px 22px',
+  fontWeight: 700,
+  fontSize: 15,
+  backgroundColor: VIOLET,
+  color: '#ffffff',
+  border: 'none',
+  borderRadius: 12,
+  cursor: 'pointer',
+  boxShadow: '0 4px 12px rgba(139, 94, 52, 0.25)',
+};
+
+const secondaryButtonStyle: React.CSSProperties = {
+  padding: '9px 18px',
+  fontSize: 13.5,
+  fontWeight: 700,
+  borderRadius: 12,
+  border: `1px solid ${VIOLET}`,
+  backgroundColor: '#ffffff',
+  color: VIOLET,
+  cursor: 'pointer',
+};
+
+const dangerButtonStyle: React.CSSProperties = {
+  padding: '7px 16px',
+  fontSize: 13,
+  fontWeight: 600,
+  borderRadius: 12,
+  border: '1px solid #fca5a5',
+  backgroundColor: '#ffffff',
+  color: '#b91c1c',
+  cursor: 'pointer',
+};
+
+const sectionTitleStyle: React.CSSProperties = {
+  fontSize: 18,
+  fontWeight: 800,
+  margin: 0,
+};
+
+const noteTextStyle: React.CSSProperties = {
+  fontSize: 12.5,
+  color: '#64748b',
+  marginTop: 5,
+};
+
+export default function SiteEditAdminPage() {
+  const params = useParams<{ eventId: string }>();
+  const eventId = params.eventId;
+  const [user, setUser] = useState<User | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [locale, setLocale] = useAdminLocale();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loginMessage, setLoginMessage] = useState('');
+  const [loginBusy, setLoginBusy] = useState(false);
+  const [eventName, setEventName] = useState('');
+  const [loadMessage, setLoadMessage] = useState('');
+  const [description, setDescription] = useState('');
+  const [heroImageUrl, setHeroImageUrl] = useState<string | null>(null);
+  const [notes, setNotes] = useState<SiteNote[]>([{ title: '', body: '' }]);
+  const [uploading, setUploading] = useState(false);
+  const [imageMessage, setImageMessage] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState('');
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      setAuthReady(true);
+    });
+    return unsub;
+  }, []);
+
+  const callApi = useCallback(
+    async (path: string, init?: RequestInit) => {
+      if (!user) throw new Error(adminText(locale, 'loginRequired'));
+      const idToken = await user.getIdToken();
+      const res = await fetch(path, {
+        ...init,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+          ...(init?.headers ?? {}),
+        },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok)
+        throw new Error(data.error ?? adminText(locale, 'apiError', { status: String(res.status) }));
+      return data;
+    },
+    [user, locale],
+  );
+
+  const loadSettings = useCallback(async () => {
+    if (!user) return;
+    try {
+      const [eventData, siteData] = await Promise.all([
+        callApi(`/api/events/${eventId}`).catch(() => null),
+        callApi(`/api/events/${eventId}/site-settings`),
+      ]);
+      if (typeof eventData?.event?.name === 'string') {
+        setEventName(eventData.event.name);
+      }
+      setDescription(
+        typeof siteData.siteDescription === 'string' ? siteData.siteDescription : '',
+      );
+      setHeroImageUrl(
+        typeof siteData.heroImageUrl === 'string' ? siteData.heroImageUrl : null,
+      );
+      const loadedNotes: SiteNote[] = Array.isArray(siteData.siteNotes)
+        ? siteData.siteNotes
+        : [];
+      setNotes(loadedNotes.length > 0 ? loadedNotes : [{ title: '', body: '' }]);
+      setLoadMessage('');
+    } catch (e) {
+      setLoadMessage(e instanceof Error ? e.message : adminText(locale, 'loadFailed'));
+    }
+  }, [user, eventId, callApi, locale]);
+
+  useEffect(() => {
+    if (user) void loadSettings();
+  }, [user, loadSettings]);
+
+  const handleLogin = async () => {
+    setLoginBusy(true);
+    setLoginMessage('');
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch {
+      setLoginMessage(adminText(locale, 'loginFailed'));
+    } finally {
+      setLoginBusy(false);
+    }
+  };
+
+  const handleImageSelected = async (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file || !user) return;
+    setUploading(true);
+    setImageMessage('');
+    try {
+      const idToken = await user.getIdToken();
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch(`/api/events/${eventId}/site-image`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${idToken}` },
+        body: form,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error ?? adminText(locale, 'heroImageUploadFailed'));
+      }
+      // URL はフォーム状態にだけ入れる。公開ページへの反映は「保存する」時点。
+      setHeroImageUrl(data.url as string);
+    } catch (e) {
+      setImageMessage(
+        e instanceof Error ? e.message : adminText(locale, 'heroImageUploadFailed'),
+      );
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const updateNote = (index: number, field: keyof SiteNote, value: string) => {
+    setNotes((current) =>
+      current.map((note, i) => (i === index ? { ...note, [field]: value } : note)),
+    );
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveMessage('');
+    try {
+      const data = await callApi(`/api/events/${eventId}/site-settings`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          siteDescription: description,
+          heroImageUrl,
+          siteNotes: notes,
+        }),
+      });
+      // サーバー側で正規化された値（空行の除去など）をそのまま表示に戻す
+      if (typeof data.siteDescription === 'string') {
+        setDescription(data.siteDescription);
+      }
+      setHeroImageUrl(
+        typeof data.heroImageUrl === 'string' ? data.heroImageUrl : null,
+      );
+      const savedNotes: SiteNote[] = Array.isArray(data.siteNotes)
+        ? data.siteNotes
+        : [];
+      setNotes(savedNotes.length > 0 ? savedNotes : [{ title: '', body: '' }]);
+      setSaveMessage(adminText(locale, 'savedMessage'));
+    } catch (e) {
+      setSaveMessage(
+        e instanceof Error ? e.message : adminText(locale, 'siteSaveFailed'),
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!authReady) return <main style={containerStyle}>{uiText(locale, 'loading')}</main>;
+
+  if (!user) {
+    return (
+      <main style={{ ...containerStyle, maxWidth: 480 }}>
+        <AdminBrandBar right={<AdminLanguageSelect locale={locale} onChange={setLocale} />} />
+        <section style={{ ...cardStyle, padding: 24, marginTop: 16 }}>
+          <h1 style={{ fontSize: 18, fontWeight: 800, margin: '0 0 16px' }}>{adminText(locale, 'adminLoginTitle')}</h1>
+          <label style={labelStyle}>
+            {adminText(locale, 'emailLabel')}
+            <input style={inputStyle} type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          </label>
+          <label style={labelStyle}>
+            {adminText(locale, 'passwordLabel')}
+            <input style={inputStyle} type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          </label>
+          <button onClick={handleLogin} disabled={loginBusy} style={{ ...primaryButtonStyle, width: '100%' }}>
+            <span style={adminButtonContentStyle}>
+              {loginBusy && <ButtonSpinner />}
+              {adminText(locale, 'loginButton')}
+            </span>
+          </button>
+          {loginMessage && <p style={{ color: '#b91c1c', marginTop: 12, fontSize: 14 }}>{loginMessage}</p>}
+        </section>
+      </main>
+    );
+  }
+
+  return (
+    <AdminShell
+      locale={locale}
+      email={user.email}
+      onLogout={() => void signOut(auth)}
+      languageSelect={<AdminLanguageSelect locale={locale} onChange={setLocale} />}
+      nav={<AdminNav eventId={eventId} eventName={eventName} current="⑧" locale={locale} />}
+    >
+      <h1 style={adminPageTitleStyle}>{adminText(locale, 'siteEditPageTitle')}</h1>
+      <CapWarningBanner locale={locale} />
+      <p style={{ fontSize: 13, color: '#475569', marginTop: 8 }}>
+        {adminText(locale, 'siteEditNote')}{' '}
+        <a
+          href={specialSiteUrl(eventId)}
+          target="_blank"
+          rel="noreferrer"
+          style={{ color: VIOLET, fontWeight: 700 }}
+        >
+          {adminText(locale, 'specialSiteOpen')} ↗
+        </a>
+      </p>
+      {loadMessage && <p style={adminErrorTextStyle}>{loadMessage}</p>}
+
+      <section style={{ marginTop: 22 }}>
+        <h2 style={sectionTitleStyle}>{adminText(locale, 'siteDescriptionLabel')}</h2>
+        <p style={noteTextStyle}>{adminText(locale, 'siteDescriptionNote')}</p>
+        <div style={{ ...cardStyle, marginTop: 12, padding: 24 }}>
+          <textarea
+            style={{ ...inputStyle, marginTop: 0, minHeight: 110, resize: 'vertical' }}
+            value={description}
+            maxLength={MAX_SITE_DESCRIPTION_LENGTH}
+            placeholder={adminText(locale, 'siteDescriptionPlaceholder')}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+          <div style={{ fontSize: 12, color: '#64748b', marginTop: 6, textAlign: 'right' }}>
+            {adminText(locale, 'siteCharCount', {
+              count: String(description.length),
+              max: String(MAX_SITE_DESCRIPTION_LENGTH),
+            })}
+          </div>
+        </div>
+      </section>
+
+      <section style={{ marginTop: 32 }}>
+        <h2 style={sectionTitleStyle}>{adminText(locale, 'heroImageLabel')}</h2>
+        <p style={noteTextStyle}>{adminText(locale, 'heroImageNote')}</p>
+        <div style={{ ...cardStyle, marginTop: 12, padding: 24 }}>
+          {heroImageUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={heroImageUrl}
+              alt={adminText(locale, 'heroImageLabel')}
+              style={{
+                display: 'block',
+                width: '100%',
+                maxHeight: 320,
+                objectFit: 'cover',
+                borderRadius: 12,
+                marginBottom: 16,
+              }}
+            />
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            style={{ display: 'none' }}
+            onChange={(e) => void handleImageSelected(e.target.files)}
+          />
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              style={secondaryButtonStyle}
+            >
+              <span style={adminButtonContentStyle}>
+                {uploading && <ButtonSpinner />}
+                {uploading
+                  ? adminText(locale, 'heroImageUploading')
+                  : heroImageUrl
+                    ? adminText(locale, 'heroImageReplaceButton')
+                    : adminText(locale, 'heroImageUploadButton')}
+              </span>
+            </button>
+            {heroImageUrl && (
+              <button
+                onClick={() => setHeroImageUrl(null)}
+                disabled={uploading}
+                style={dangerButtonStyle}
+              >
+                {adminText(locale, 'heroImageRemoveButton')}
+              </button>
+            )}
+          </div>
+          {imageMessage && <p style={adminFeedbackStyle}>{imageMessage}</p>}
+        </div>
+      </section>
+
+      <section style={{ marginTop: 32 }}>
+        <h2 style={sectionTitleStyle}>{adminText(locale, 'siteNotesTitle')}</h2>
+        <p style={noteTextStyle}>{adminText(locale, 'siteNotesNote')}</p>
+        <div style={{ ...cardStyle, marginTop: 12, padding: 24 }}>
+          {notes.map((note, i) => (
+            <div
+              key={i}
+              style={{
+                borderTop: i > 0 ? '1px solid #E8DCC4' : undefined,
+                paddingTop: i > 0 ? 18 : 0,
+                marginTop: i > 0 ? 18 : 0,
+              }}
+            >
+              <label style={labelStyle}>
+                {adminText(locale, 'siteNoteTitleLabel')}
+                <input
+                  style={inputStyle}
+                  value={note.title}
+                  maxLength={MAX_SITE_NOTE_TITLE_LENGTH}
+                  onChange={(e) => updateNote(i, 'title', e.target.value)}
+                />
+              </label>
+              <label style={{ ...labelStyle, marginBottom: 0 }}>
+                {adminText(locale, 'siteNoteBodyLabel')}
+                <textarea
+                  style={{ ...inputStyle, minHeight: 76, resize: 'vertical' }}
+                  value={note.body}
+                  maxLength={MAX_SITE_NOTE_BODY_LENGTH}
+                  onChange={(e) => updateNote(i, 'body', e.target.value)}
+                />
+              </label>
+              {notes.length > 1 && (
+                <button
+                  onClick={() =>
+                    setNotes((current) => current.filter((_, j) => j !== i))
+                  }
+                  style={{ ...dangerButtonStyle, marginTop: 10 }}
+                >
+                  {adminText(locale, 'deleteButton')}
+                </button>
+              )}
+            </div>
+          ))}
+          {notes.length < MAX_SITE_NOTES && (
+            <button
+              onClick={() =>
+                setNotes((current) => [...current, { title: '', body: '' }])
+              }
+              style={{ ...secondaryButtonStyle, marginTop: 18 }}
+            >
+              {adminText(locale, 'siteNoteAddButton')}
+            </button>
+          )}
+        </div>
+      </section>
+
+      <div style={{ marginTop: 28 }}>
+        <button
+          onClick={() => void handleSave()}
+          disabled={saving}
+          style={primaryButtonStyle}
+        >
+          <span style={adminButtonContentStyle}>
+            {saving && <ButtonSpinner />}
+            {adminText(locale, 'saveButton')}
+          </span>
+        </button>
+        {saveMessage && <p style={adminFeedbackStyle}>{saveMessage}</p>}
+      </div>
+    </AdminShell>
+  );
+}

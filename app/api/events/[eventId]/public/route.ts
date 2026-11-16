@@ -27,6 +27,11 @@ export async function GET(
       admissionQrEnabled: event.admissionQrEnabled,
       // 主催者リンク（最大3件、タイトル付きで来場者画面に表示する）
       links: event.links,
+      // 特設サイト（本家）の表示内容。読み取り時に正規化済みの値を返す
+      // （未設定のプロジェクトでは '' / null / [] になる）
+      siteDescription: event.siteDescription,
+      heroImageUrl: event.heroImageUrl,
+      siteNotes: event.siteNotes,
     },
   });
 }

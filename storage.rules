@@ -44,6 +44,13 @@ service firebase.storage {
     match /events/{eventId}/shop-photos/{exhibitorId}/{fileName} {
       allow read: if true;
     }
+    // 特設サイトのヒーロー画像（events/{eventId}/site-images/...）:
+    // 店舗写真と同じ扱い。アップロードは API 経由で Admin SDK が
+    // 行うため、クライアントからの書き込みは許可しない。
+    // 本家の特設サイトで表示するため、読み取りは公開する。
+    match /events/{eventId}/site-images/{fileName} {
+      allow read: if true;
+    }
     // 投稿写真（events/{eventId}/social-photos/...）:
     // Instagram 投稿キュー用の写真。アップロードは API 経由で
     // Admin SDK が行うため、クライアントからの書き込みは許可しない。

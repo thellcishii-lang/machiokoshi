@@ -93,6 +93,13 @@ const billingIcon = (
   </NavIcon>
 );
 
+const siteEditIcon = (
+  <NavIcon>
+    <path d="M12 20h9" />
+    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
+  </NavIcon>
+);
+
 const externalIcon = (
   <NavIcon>
     <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
@@ -196,6 +203,10 @@ export function AdminNav({
           // 課金は別料金オプション。ナビは常時出し、オプション OFF の
           // 契約では課金ページ側で案内文を出す（API が 404 を返す）。
           { key: '⑦', href: `/event-admin/${eventId}/billing`, label: adminText(locale, 'navBilling'), icon: billingIcon },
+          // 特設サイト編集は公開ページの表示内容（紹介文・ヒーロー画像・
+          // 追加事項）を編集する画面。下の外部リンク（公開ページそのもの）
+          // とは別物なので、並べて置く。
+          { key: '⑧', href: `/event-admin/${eventId}/site`, label: adminText(locale, 'navSiteEdit'), icon: siteEditIcon },
           // 特設サイトは本家（push-taro.com）上の公開ページ。宣伝に使う
           // URL へすぐ飛べるよう、末尾に外部リンクとして置く。
           {

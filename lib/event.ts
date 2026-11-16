@@ -8,6 +8,7 @@
 //   15分間隔のスケジューラがプロジェクト単独で拾って実行する前提の判定関数を用意する。
 
 import type { Locale } from './i18n';
+import type { SiteNote } from './event-site';
 
 /** 日次リセットの方式。プロジェクトごとに選択する。 */
 export type EventResetMode =
@@ -76,6 +77,20 @@ export interface EventConfig {
    * 導入前に作られたプロジェクトには項目自体が無いため、読み取り時は空配列に倒す。
    */
   links: EventLink[];
+  /**
+   * 特設サイト（本家上の公開ページ）の紹介文（最大300字）。管理人が
+   * 特設サイト編集画面で設定し、ヒーローに表示される。未設定は空文字。
+   * 導入前に作られたプロジェクトには項目自体が無いため、読み取り時は
+   * 空文字に倒す（検証・正規化は lib/event-site.ts）。
+   */
+  siteDescription: string;
+  /** 特設サイトのヒーロー画像の公開URL。未設定は null。 */
+  heroImageUrl: string | null;
+  /**
+   * 特設サイトの追加事項（タイトル＋本文、最大5件）。管理人が特設サイト
+   * 編集画面で設定する。未登録なら空配列。
+   */
+  siteNotes: SiteNote[];
   /**
    * クーポン上限（プロジェクト全体の件数）。購読者上限と同じく契約枠の軸なので、
    * 変更は運営側のみ。既定は MAX_COUPONS_PER_EVENT。
