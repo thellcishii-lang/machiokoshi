@@ -22,7 +22,7 @@ const sidebarLinkRowStyle: React.CSSProperties = {
   padding: '8px 4px',
   fontSize: 13.5,
   fontWeight: 600,
-  color: '#3F3D56',
+  color: '#4A3E30',
   background: 'none',
   border: 'none',
   cursor: 'pointer',
@@ -33,9 +33,9 @@ const logoutPillStyle: React.CSSProperties = {
   fontSize: 13,
   fontWeight: 600,
   borderRadius: 999,
-  border: '1px solid #E3DEF2',
+  border: '1px solid #E8DCC4',
   backgroundColor: '#ffffff',
-  color: '#3F3D56',
+  color: '#4A3E30',
   cursor: 'pointer',
   whiteSpace: 'nowrap',
 };
@@ -148,20 +148,20 @@ export function AdminShell({
               style={{
                 fontSize: 19,
                 fontWeight: 800,
-                color: '#17132B',
+                color: '#2E2015',
                 letterSpacing: -0.3,
                 lineHeight: 1.12,
               }}
             >
               Push-taro
               <br />
-              EVENT
+              町おこし
             </div>
             <div
               style={{
                 fontSize: 9,
                 fontWeight: 600,
-                color: '#8A84A6',
+                color: '#8A7A63',
                 letterSpacing: 2.4,
                 marginTop: 3,
               }}
@@ -177,7 +177,7 @@ export function AdminShell({
               style={{
                 fontSize: 12,
                 fontWeight: 600,
-                color: '#8A84A6',
+                color: '#8A7A63',
                 margin: '26px 6px 0',
               }}
             >
@@ -216,7 +216,7 @@ export function AdminShell({
             >
               {avatarInitials(email)}
             </span>
-            <span style={{ ...userEmailStyle, color: '#3F3D56' }}>{email}</span>
+            <span style={{ ...userEmailStyle, color: '#4A3E30' }}>{email}</span>
           </div>
           <div
             style={{
@@ -248,7 +248,7 @@ export function AdminShell({
                   alignItems: 'center',
                   gap: 6,
                   color: ADMIN_VIOLET,
-                  border: '1px solid #C4B5FD',
+                  border: '1px solid #D9BE8C',
                   fontWeight: 700,
                 }}
               >
@@ -269,9 +269,9 @@ export function AdminShell({
               style={{
                 marginTop: 12,
                 backgroundColor: '#ffffff',
-                border: '1px solid #EAE7F5',
+                border: '1px solid #E8DCC4',
                 borderRadius: 18,
-                boxShadow: '0 2px 12px rgba(60, 30, 120, 0.07)',
+                boxShadow: '0 2px 12px rgba(101, 67, 33, 0.07)',
                 padding: '12px 14px',
                 display: 'flex',
                 gap: 8,

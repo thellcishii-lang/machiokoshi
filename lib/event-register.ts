@@ -1,5 +1,5 @@
 // lib/event-register.ts
-// Push-taro EVENT の来場者登録（events/{eventId} 配下への配置）。
+// Push-taro 町おこし の来場者登録（events/{eventId} 配下への配置）。
 //
 // - 本人確認は Firebase Phone Auth（SMS認証）。電話番号がその人の識別キーになる
 //   （再登録によるクーポンの二重取得を防ぐため）。

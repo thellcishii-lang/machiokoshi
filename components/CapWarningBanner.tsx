@@ -38,7 +38,7 @@ const bannerStyle: React.CSSProperties = {
   backgroundColor: '#fffbeb',
   border: '1px solid #f59e0b',
   borderRadius: 16,
-  boxShadow: '0 2px 12px rgba(60, 30, 120, 0.07)',
+  boxShadow: '0 2px 12px rgba(101, 67, 33, 0.07)',
   color: '#92400e',
 };
 

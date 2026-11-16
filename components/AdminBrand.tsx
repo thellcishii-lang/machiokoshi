@@ -4,11 +4,11 @@
 // 「Push-taro 町おこし / ORGANIZER CONSOLE」の2段表記を全管理画面で揃える。
 import type { ReactNode } from 'react';
 
-export const ADMIN_VIOLET = '#6D28D9';
-export const ADMIN_PAGE_BG = '#EEECF6';
-export const ADMIN_CARD_BORDER = '#EAE7F5';
-export const ADMIN_CARD_SHADOW = '0 2px 12px rgba(60, 30, 120, 0.07)';
-export const ADMIN_INK = '#17132B';
+export const ADMIN_VIOLET = '#8B5E34';
+export const ADMIN_PAGE_BG = '#F7F1E5';
+export const ADMIN_CARD_BORDER = '#E8DCC4';
+export const ADMIN_CARD_SHADOW = '0 2px 12px rgba(101, 67, 33, 0.07)';
+export const ADMIN_INK = '#2E2015';
 
 export function AdminBrandMark({ size = 42 }: { size?: number }) {
   return (
@@ -65,7 +65,7 @@ export function AdminBrandBar({ right }: { right?: ReactNode }) {
             style={{
               fontSize: 9.5,
               fontWeight: 600,
-              color: '#8A84A6',
+              color: '#8A7A63',
               letterSpacing: 2.6,
               marginTop: 2,
             }}

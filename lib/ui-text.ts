@@ -1144,16 +1144,16 @@ export function redeemText(
 
 export const ADMIN_TEXT = {
   adminLoginTitle: {
-    ja: 'Push-taro EVENT 管理ログイン',
-    en: 'Push-taro EVENT admin login',
-    zh: 'Push-taro EVENT 管理登录',
-    ko: 'Push-taro EVENT 관리 로그인',
+    ja: 'Push-taro 町おこし 管理ログイン',
+    en: 'Push-taro Machiokoshi admin login',
+    zh: 'Push-taro 町おこし 管理登录',
+    ko: 'Push-taro 마치오코시 관리 로그인',
   },
   adminTitle: {
-    ja: 'Push-taro EVENT プロジェクト設定',
-    en: 'Push-taro EVENT event settings',
-    zh: 'Push-taro EVENT 活动设置',
-    ko: 'Push-taro EVENT 이벤트 설정',
+    ja: 'Push-taro 町おこし プロジェクト設定',
+    en: 'Push-taro Machiokoshi project settings',
+    zh: 'Push-taro 町おこし 项目设置',
+    ko: 'Push-taro 마치오코시 프로젝트 설정',
   },
   emailLabel: {
     ja: 'メールアドレス',
