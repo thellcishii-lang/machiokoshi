@@ -1168,10 +1168,10 @@ export const ADMIN_TEXT = {
     ko: '마치오코시 프로젝트 관리 로그인',
   },
   adminTitle: {
-    ja: '町おこしプロジェクト プロジェクト設定',
-    en: 'Machiokoshi Project project settings',
-    zh: '町おこし项目 项目设置',
-    ko: '마치오코시 프로젝트 프로젝트 설정',
+    ja: '町おこしプロジェクト設定',
+    en: 'Machiokoshi Project settings',
+    zh: '町おこし项目设置',
+    ko: '마치오코시 프로젝트 설정',
   },
   emailLabel: {
     ja: 'メールアドレス',
