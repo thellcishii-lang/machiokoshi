@@ -32,6 +32,7 @@ import {
   type Locale,
 } from '@/lib/i18n';
 import { redeemText, uiText } from '@/lib/ui-text';
+import { specialSiteShopUrl, specialSiteUrl } from '@/lib/special-site';
 import { parseRedeemQrPayload } from '@/lib/stamp-qr';
 import PasswordInput from '@/components/PasswordInput';
 
@@ -758,6 +759,27 @@ export default function ExhibitorRedeemPage() {
             </p>
             {languagePills}
           </section>
+
+          <p style={{ marginTop: 10 }}>
+            <a
+              href={specialSiteShopUrl(eventId, exhibitor.id)}
+              target="_blank"
+              rel="noreferrer"
+              style={{ fontSize: 13.5, fontWeight: 600, color: VIOLET }}
+            >
+              {redeemText(locale, 'specialSiteShopLink')} ↗
+            </a>
+          </p>
+          <p style={{ marginTop: 4 }}>
+            <a
+              href={specialSiteUrl(eventId)}
+              target="_blank"
+              rel="noreferrer"
+              style={{ fontSize: 13.5, fontWeight: 600, color: VIOLET }}
+            >
+              {redeemText(locale, 'specialSiteTopLink')} ↗
+            </a>
+          </p>
 
           <section style={{ ...cardStyle, padding: 16, marginTop: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
