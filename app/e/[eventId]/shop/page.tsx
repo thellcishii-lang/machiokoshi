@@ -40,6 +40,12 @@ interface ShopLink {
   url: string;
 }
 
+interface ShopFreeDish {
+  name: string;
+  description: string;
+  photoUrl: string | null;
+}
+
 interface ShopProfile {
   displayName: string;
   address: string;
@@ -53,8 +59,12 @@ interface ShopProfile {
   links: ShopLink[];
   /** 住所からサーバー側で求めた座標（クライアントでは表示・編集しない） */
   location: { lat: number; lng: number } | null;
+  /** 達成で無料になる自店の一品。未登録は null */
+  freeDish: ShopFreeDish | null;
   published: boolean;
 }
+
+const EMPTY_FREE_DISH: ShopFreeDish = { name: '', description: '', photoUrl: null };
 
 interface TopPlacementState {
   enabled: boolean;
@@ -77,6 +87,7 @@ const EMPTY_PROFILE: ShopProfile = {
   instagramUrl: '',
   links: [],
   location: null,
+  freeDish: null,
   published: true,
 };
 
@@ -175,6 +186,7 @@ export default function ExhibitorShopPage() {
   const [messageOk, setMessageOk] = useState(false);
   const [busy, setBusy] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [freeDishPhotoUploading, setFreeDishPhotoUploading] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [eventName, setEventName] = useState('');
   const [themeColor, setThemeColor] = useState<string | null>(null);
@@ -489,6 +501,42 @@ export default function ExhibitorShopPage() {
     }));
   };
 
+  const updateFreeDish = (field: keyof ShopFreeDish, value: string | null) => {
+    setProfile((current) => ({
+      ...current,
+      freeDish: { ...(current.freeDish ?? EMPTY_FREE_DISH), [field]: value },
+    }));
+  };
+
+  const handleFreeDishPhotoSelect = async (file: File | undefined) => {
+    if (!file || !user) return;
+    setFreeDishPhotoUploading(true);
+    setMessage('');
+    try {
+      const idToken = await user.getIdToken();
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('purpose', 'free-dish');
+      const res = await fetch(`/api/events/${eventId}/shop-profile/photo`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${idToken}` },
+        body: formData,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || typeof data.url !== 'string') {
+        throw new Error(data.error ?? redeemText(locale, 'profilePhotoFailed'));
+      }
+      updateFreeDish('photoUrl', data.url);
+    } catch (e) {
+      setMessageOk(false);
+      setMessage(
+        e instanceof Error ? e.message : redeemText(locale, 'profilePhotoFailed'),
+      );
+    } finally {
+      setFreeDishPhotoUploading(false);
+    }
+  };
+
   const updateLink = (index: number, field: keyof ShopLink, value: string) => {
     setProfile((current) => ({
       ...current,
@@ -734,6 +782,101 @@ export default function ExhibitorShopPage() {
                 onChange={(e) => updateField('menuDescription', e.target.value)}
               />
             </label>
+
+            <div
+              style={{
+                border: '1px solid #e2e8f0',
+                borderRadius: 12,
+                padding: '12px 14px 14px',
+                marginTop: 16,
+              }}
+            >
+              <p style={{ fontSize: 13, fontWeight: 600, margin: 0 }}>
+                {redeemText(locale, 'profileFreeDishTitle')}
+              </p>
+              <p style={{ fontSize: 12, color: '#64748b', margin: '6px 0 0' }}>
+                {redeemText(locale, 'profileFreeDishNote')}
+              </p>
+              <label style={labelStyle}>
+                {redeemText(locale, 'profileFreeDishName')}
+                <input
+                  style={inputStyle}
+                  value={(profile.freeDish ?? EMPTY_FREE_DISH).name}
+                  onChange={(e) => updateFreeDish('name', e.target.value)}
+                />
+              </label>
+              <label style={labelStyle}>
+                {redeemText(locale, 'profileFreeDishDescription')}
+                <textarea
+                  style={{ ...inputStyle, minHeight: 60 }}
+                  value={(profile.freeDish ?? EMPTY_FREE_DISH).description}
+                  onChange={(e) => updateFreeDish('description', e.target.value)}
+                />
+              </label>
+              {(profile.freeDish ?? EMPTY_FREE_DISH).photoUrl ? (
+                <div style={{ width: 96, marginTop: 12 }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={(profile.freeDish ?? EMPTY_FREE_DISH).photoUrl ?? ''}
+                    alt=""
+                    style={{
+                      width: 96,
+                      height: 96,
+                      objectFit: 'cover',
+                      borderRadius: 10,
+                      border: '1px solid #e2e8f0',
+                      display: 'block',
+                    }}
+                  />
+                  <button
+                    onClick={() => updateFreeDish('photoUrl', null)}
+                    style={{
+                      width: '100%',
+                      marginTop: 6,
+                      padding: '5px 0',
+                      fontSize: 12.5,
+                      fontWeight: 600,
+                      borderRadius: 8,
+                      border: '1px solid #fca5a5',
+                      backgroundColor: '#ffffff',
+                      color: '#b91c1c',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {redeemText(locale, 'profilePhotoRemove')}
+                  </button>
+                </div>
+              ) : (
+                <label
+                  style={{
+                    display: 'inline-block',
+                    marginTop: 12,
+                    padding: '10px 16px',
+                    fontSize: 14,
+                    fontWeight: 700,
+                    borderRadius: 10,
+                    border: `1px solid ${VIOLET}`,
+                    color: VIOLET,
+                    backgroundColor: '#ffffff',
+                    cursor: freeDishPhotoUploading ? 'wait' : 'pointer',
+                    opacity: freeDishPhotoUploading ? 0.6 : 1,
+                  }}
+                >
+                  {redeemText(locale, 'profilePhotoAdd')}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    style={{ display: 'none' }}
+                    disabled={freeDishPhotoUploading}
+                    onChange={(e) => {
+                      void handleFreeDishPhotoSelect(e.target.files?.[0]);
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+              )}
+            </div>
+
             <label style={labelStyle}>
               {redeemText(locale, 'profileDescription')}
               <textarea

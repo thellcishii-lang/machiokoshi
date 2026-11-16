@@ -11,6 +11,7 @@ import {
   listPublicShops,
   parseShopProfile,
   resolveShopLocation,
+  shopFreeDishPhotoStoragePath,
   shopPhotoStoragePath,
   toPublicShop,
   updateShopProfile,
@@ -154,6 +155,11 @@ describe('shopPhotoStoragePath', () => {
   it('events/{eventId}/shop-photos/{exhibitorId}/{fileName} を作る', () => {
     expect(shopPhotoStoragePath('ev1', 'shop-a', 'x.jpg')).toBe(
       'events/ev1/shop-photos/shop-a/x.jpg',
+    );
+  });
+  it('無料の一品の写真は同じディレクトリに free-dish- 接頭辞で作る', () => {
+    expect(shopFreeDishPhotoStoragePath('ev1', 'shop-a', 'x.jpg')).toBe(
+      'events/ev1/shop-photos/shop-a/free-dish-x.jpg',
     );
   });
 });
@@ -326,6 +332,122 @@ describe('effectiveShopLinks（Instagram の暗黙リンク）', () => {
       { label: 'Instagram', url: 'https://instagram.com/shop' },
     ]);
     expect(shop.profile.location).toBeNull();
+  });
+});
+
+describe('無料の一品（freeDish）の読み取り（parseShopProfile / toPublicShop）', () => {
+  it('旧ドキュメント（項目なし）は null（未登録）', () => {
+    expect(parseShopProfile({}).freeDish).toBeNull();
+    expect(parseShopProfile(undefined).freeDish).toBeNull();
+    const shop = toPublicShop({ id: 'shop-a', name: '店A' }, {});
+    expect(shop.profile.freeDish).toBeNull();
+  });
+
+  it('保存済みの値を読み、公開用にもそのまま出る', () => {
+    const raw = {
+      freeDish: {
+        name: ' 飯能カレー ',
+        description: '地元野菜たっぷり',
+        photoUrl: 'https://example.com/dish.jpg',
+      },
+    };
+    const expected = {
+      name: '飯能カレー',
+      description: '地元野菜たっぷり',
+      photoUrl: 'https://example.com/dish.jpg',
+    };
+    expect(parseShopProfile(raw).freeDish).toEqual(expected);
+    const shop = toPublicShop({ id: 'shop-a', name: '店A' }, raw);
+    expect(shop.profile.freeDish).toEqual(expected);
+  });
+
+  it('名前が無ければ未登録に倒し、写真は https 以外を落とす', () => {
+    expect(
+      parseShopProfile({ freeDish: { description: '説明だけ' } }).freeDish,
+    ).toBeNull();
+    expect(
+      parseShopProfile({ freeDish: { name: '  ' } }).freeDish,
+    ).toBeNull();
+    expect(
+      parseShopProfile({
+        freeDish: { name: 'カレー', photoUrl: 'http://example.com/x.jpg' },
+      }).freeDish,
+    ).toEqual({ name: 'カレー', description: '', photoUrl: null });
+    expect(parseShopProfile({ freeDish: 'x' }).freeDish).toBeNull();
+  });
+
+  it('長すぎる名前・説明は上限で切る', () => {
+    const profile = parseShopProfile({
+      freeDish: {
+        name: 'あ'.repeat(80),
+        description: 'い'.repeat(300),
+      },
+    });
+    expect(profile.freeDish?.name).toHaveLength(50);
+    expect(profile.freeDish?.description).toHaveLength(200);
+  });
+});
+
+describe('無料の一品（freeDish）の保存検証（validateShopProfileInput）', () => {
+  it('未指定・全項目が空なら未登録（null）', () => {
+    const none = validateShopProfileInput({});
+    expect(none.ok && none.value.freeDish).toBeNull();
+    const empty = validateShopProfileInput({
+      freeDish: { name: ' ', description: '', photoUrl: null },
+    });
+    expect(empty.ok && empty.value.freeDish).toBeNull();
+    const explicitNull = validateShopProfileInput({ freeDish: null });
+    expect(explicitNull.ok && explicitNull.value.freeDish).toBeNull();
+  });
+
+  it('正常な入力を正規化する（前後空白を落とす）', () => {
+    const result = validateShopProfileInput({
+      freeDish: {
+        name: ' 飯能カレー ',
+        description: ' 地元野菜たっぷり ',
+        photoUrl: 'https://example.com/dish.jpg',
+      },
+    });
+    expect(result.ok && result.value.freeDish).toEqual({
+      name: '飯能カレー',
+      description: '地元野菜たっぷり',
+      photoUrl: 'https://example.com/dish.jpg',
+    });
+  });
+
+  it('名前なしで説明や写真だけあるものはエラー', () => {
+    expect(
+      validateShopProfileInput({ freeDish: { description: '説明だけ' } }).ok,
+    ).toBe(false);
+    expect(
+      validateShopProfileInput({
+        freeDish: { photoUrl: 'https://example.com/dish.jpg' },
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('名前51文字・説明201文字・http の写真はエラー', () => {
+    expect(
+      validateShopProfileInput({ freeDish: { name: 'あ'.repeat(51) } }).ok,
+    ).toBe(false);
+    expect(
+      validateShopProfileInput({
+        freeDish: { name: 'カレー', description: 'い'.repeat(201) },
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateShopProfileInput({
+        freeDish: { name: 'カレー', photoUrl: 'http://example.com/x.jpg' },
+      }).ok,
+    ).toBe(false);
+    expect(validateShopProfileInput({ freeDish: 'x' }).ok).toBe(false);
+  });
+
+  it('名前50文字・説明200文字は上限ちょうどで通る', () => {
+    const result = validateShopProfileInput({
+      freeDish: { name: 'あ'.repeat(50), description: 'い'.repeat(200) },
+    });
+    expect(result.ok).toBe(true);
   });
 });
 
@@ -510,6 +632,37 @@ describe('listPublicShops（公開APIの形・旧ドキュメント）', () => {
       { label: 'Instagram', url: 'https://instagram.com/shop' },
     ]);
     expect(shops[0].profile.location).toEqual({ lat: 35.85, lng: 139.32 });
+  });
+
+  it('無料の一品は profile.freeDish として出て、無い店は null', async () => {
+    const { db } = fakeShopDb([
+      {
+        id: 'shop-a',
+        data: {
+          name: '店A',
+          profile: {
+            displayName: '店A',
+            freeDish: {
+              name: '飯能カレー',
+              description: '地元野菜たっぷり',
+              photoUrl: 'https://example.com/dish.jpg',
+            },
+          },
+        },
+      },
+      {
+        id: 'shop-b',
+        data: { name: '店B', profile: { displayName: '店B' } },
+      },
+    ]);
+    const shops = await listPublicShops(db, 'ev1');
+    const byId = new Map(shops.map((s) => [s.exhibitorId, s]));
+    expect(byId.get('shop-a')?.profile.freeDish).toEqual({
+      name: '飯能カレー',
+      description: '地元野菜たっぷり',
+      photoUrl: 'https://example.com/dish.jpg',
+    });
+    expect(byId.get('shop-b')?.profile.freeDish).toBeNull();
   });
 });
 

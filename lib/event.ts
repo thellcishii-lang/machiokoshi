@@ -20,6 +20,13 @@ export type EventResetMode =
 export type EventStatus = 'draft' | 'live' | 'ended';
 
 /**
+ * スタンプ達成特典の種類。管理人がプロジェクトごとに選ぶ。
+ * - 'free-dish': 「好きな店で1回無料」クーポン（従来の挙動）
+ * - 'benefit': 管理人が文面を決める特典クーポン（stampBenefitText）
+ */
+export type StampRewardType = 'free-dish' | 'benefit';
+
+/**
  * 主催者リンク（最大3件）。来場者画面にタイトル付きカードで表示される。
  * プロジェクトドキュメントの links フィールドに配列で持つ。
  * タイトルは主催者が書いた原文のまま表示する（案内PDFのタイトルと同じ扱い、
@@ -62,6 +69,24 @@ export interface EventConfig {
    * DEFAULT_STAMP_GOAL_COUNT に倒す。
    */
   stampGoalCount: number;
+  /**
+   * スタンプ達成特典の種類（'free-dish' | 'benefit'）。管理人が
+   * プロジェクトごとに設定する。'free-dish' は従来どおり「好きな店で
+   * 1回無料」クーポン、'benefit' は stampBenefitText の内容の特典
+   * クーポンが発行される。
+   * 導入前に作られたプロジェクトには項目自体が無いため、読み取り時は
+   * 'free-dish'（従来の挙動）に倒す。
+   */
+  stampRewardType: StampRewardType;
+  /**
+   * 特典の内容（最大 STAMP_BENEFIT_TEXT_MAX_LENGTH 字）。stampRewardType が
+   * 'benefit' のときだけ意味を持ち、発行されるクーポンに発行時点の
+   * スナップショットとして写される（後から設定を変えても発行済み
+   * クーポンの表示は変わらない）。'free-dish' の間は使わない。
+   * 導入前に作られたプロジェクトには項目自体が無いため、読み取り時は
+   * 空文字に倒す。
+   */
+  stampBenefitText: string;
   /**
    * 週次ランキングの対象になる最低レビュー件数（1〜20）。管理人が
    * プロジェクトごとに設定する。その週の可視レビューがこの件数に
@@ -176,6 +201,10 @@ export const PERMANENT_END_DATE = '9999-12-31';
 export const MAX_STAMP_SLOTS = 10;
 /** スタンプの達成個数の既定値（管理人が未設定のプロジェクト）。 */
 export const DEFAULT_STAMP_GOAL_COUNT = 5;
+/** スタンプ達成特典の種類の既定値（従来の「1軒無料」）。 */
+export const DEFAULT_STAMP_REWARD_TYPE: StampRewardType = 'free-dish';
+/** 特典の内容の最大文字数。 */
+export const STAMP_BENEFIT_TEXT_MAX_LENGTH = 100;
 /** 週次ランキングの最低レビュー件数の上限。 */
 export const MAX_RANKING_MIN_REVIEWS = 20;
 /** 週次ランキングの最低レビュー件数の既定値（管理人が未設定のプロジェクト）。 */
@@ -197,6 +226,8 @@ export interface CreateEventInput {
   defaultLocale?: Locale;
   admissionQrEnabled?: boolean;
   stampGoalCount?: number;
+  stampRewardType?: StampRewardType;
+  stampBenefitText?: string;
   rankingMinReviews?: number;
   links?: EventLink[];
   couponCap?: number;
@@ -396,6 +427,70 @@ export function parseStampGoalCount(value: unknown): number {
   return isValidStampGoalCount(value)
     ? (value as number)
     : DEFAULT_STAMP_GOAL_COUNT;
+}
+
+/** スタンプ達成特典の種類として有効な値かどうか。 */
+export function isValidStampRewardType(value: unknown): boolean {
+  return value === 'free-dish' || value === 'benefit';
+}
+
+/**
+ * 保存済みの特典の種類を防御的に読む（読み取り用。throw しない）。
+ * 項目が無い旧プロジェクトや不正な値は 'free-dish'（従来の挙動）に倒す。
+ */
+export function parseStampRewardType(value: unknown): StampRewardType {
+  return value === 'benefit' ? 'benefit' : DEFAULT_STAMP_REWARD_TYPE;
+}
+
+/**
+ * 保存済みの特典の内容を防御的に読む（読み取り用。throw しない）。
+ * 項目が無い旧プロジェクトは空文字。長すぎる値は上限で切り詰める。
+ */
+export function parseStampBenefitText(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value.trim().slice(0, STAMP_BENEFIT_TEXT_MAX_LENGTH);
+}
+
+/**
+ * 特典の種類の入力を検証して正規化する（書き込み用。不正なら throw）。
+ * 未指定は既定の 'free-dish'。
+ */
+export function normalizeStampRewardType(input: unknown): StampRewardType {
+  if (input === undefined || input === null) return DEFAULT_STAMP_REWARD_TYPE;
+  if (!isValidStampRewardType(input)) {
+    throw new Error('特典の種類の指定が不正です（free-dish か benefit）');
+  }
+  return input as StampRewardType;
+}
+
+/**
+ * 特典の内容の入力を検証して正規化する（書き込み用。不正なら throw）。
+ * 未指定は空文字。前後の空白は落とす。
+ */
+export function normalizeStampBenefitText(input: unknown): string {
+  if (input === undefined || input === null) return '';
+  if (typeof input !== 'string') throw new Error('特典の内容の形式が不正です');
+  const text = input.trim();
+  if (text.length > STAMP_BENEFIT_TEXT_MAX_LENGTH) {
+    throw new Error(
+      `特典の内容は${STAMP_BENEFIT_TEXT_MAX_LENGTH}文字までです`,
+    );
+  }
+  return text;
+}
+
+/**
+ * 特典設定の組み合わせを検証する（書き込み用。不正なら throw）。
+ * 'benefit' のときは内容が必須（空の特典クーポンは発行させない）。
+ * 'free-dish' のときは内容が残っていてもよい（種類を戻したとき用に保持する）。
+ */
+export function validateStampRewardSettings(
+  rewardType: StampRewardType,
+  benefitText: string,
+): void {
+  if (rewardType === 'benefit' && !benefitText) {
+    throw new Error('特典を選ぶ場合は、特典の内容を入力してください');
+  }
 }
 
 /** トップ掲載の月額料金の下限・上限（円）。 */

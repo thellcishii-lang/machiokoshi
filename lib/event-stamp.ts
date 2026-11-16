@@ -15,7 +15,14 @@
 // 自店のスタンプしか押せないのは ID の構造上自明だが、判定はすべて
 // サーバー側（この lib）で行う。
 import { FieldValue, type Firestore } from 'firebase-admin/firestore';
-import { EVENT_SUBCOLLECTIONS, jstDateString } from './event';
+import {
+  EVENT_SUBCOLLECTIONS,
+  jstDateString,
+  parseStampBenefitText,
+  parseStampRewardType,
+  type EventConfig,
+  type StampRewardType,
+} from './event';
 import { getEvent } from './event-store';
 import type { EventExhibitor } from './event-coupon';
 
@@ -43,6 +50,14 @@ export interface StampFreeCoupon {
   memberId: string;
   /** 何周目の達成で発行されたか */
   round: number;
+  /**
+   * 発行時点の特典の種類（スナップショット）。後からプロジェクト設定を
+   * 変えても、発行済みクーポンの表示は変わらない。特典スナップショット
+   * 導入前に発行されたクーポンには項目が無いため 'free-dish' に倒す。
+   */
+  rewardType: StampRewardType;
+  /** 発行時点の特典の内容（スナップショット）。'free-dish' では空文字 */
+  benefitText: string;
   status: 'active' | 'used';
   usedExhibitorId: string | null;
   usedExhibitorName: string | null;
@@ -53,6 +68,12 @@ export interface StampCard {
   /** 現在の周（1始まり） */
   round: number;
   goalCount: number;
+  /**
+   * プロジェクトの現在の特典設定（達成までの案内文の出し分け用）。
+   * 発行済みクーポンの表示は各クーポンのスナップショットで決まる。
+   */
+  rewardType: StampRewardType;
+  benefitText: string;
   /** 現在の周で集めたスタンプ数 */
   countInRound: number;
   /** 達成まであと何個か */
@@ -75,6 +96,27 @@ export function stampIdFor(
 /** 周内のスタンプ数が達成個数に届いたかどうか（純粋関数）。 */
 export function isRoundCompleted(countInRound: number, goalCount: number): boolean {
   return countInRound >= goalCount;
+}
+
+/** 発行するクーポンに写す特典スナップショット。 */
+export interface StampRewardSnapshot {
+  rewardType: StampRewardType;
+  benefitText: string;
+}
+
+/**
+ * 達成時に発行するクーポンへ写す特典スナップショットを作る（純粋関数）。
+ * プロジェクトの現在の設定から切り取るため、発行後に設定を変えても
+ * 発行済みクーポンの表示は変わらない。'free-dish' では内容は空にする
+ * （種類を戻したとき用に設定側に残っている文面を写さない）。
+ */
+export function buildStampRewardSnapshot(
+  event: Pick<EventConfig, 'stampRewardType' | 'stampBenefitText'>,
+): StampRewardSnapshot {
+  if (event.stampRewardType === 'benefit') {
+    return { rewardType: 'benefit', benefitText: event.stampBenefitText };
+  }
+  return { rewardType: 'free-dish', benefitText: '' };
 }
 
 /**
@@ -183,6 +225,9 @@ function mapFreeCoupon(
     id,
     memberId: String(data.memberId ?? ''),
     round: typeof data.round === 'number' ? data.round : 0,
+    // スナップショット導入前のクーポンには項目が無いため従来種別に倒す
+    rewardType: parseStampRewardType(data.rewardType),
+    benefitText: parseStampBenefitText(data.benefitText),
     status: data.status === 'used' ? 'used' : 'active',
     usedExhibitorId:
       typeof data.usedExhibitorId === 'string' ? data.usedExhibitorId : null,
@@ -207,6 +252,9 @@ export type GrantStampResult =
       /** 今回で達成したか（無料クーポン発行済み） */
       completed: boolean;
       freeCouponId: string | null;
+      /** 発行したクーポンの特典スナップショット（未達成でも現在の設定を返す） */
+      rewardType: StampRewardType;
+      benefitText: string;
     }
   | { ok: false; status: number; error: string };
 
@@ -285,6 +333,7 @@ export async function grantStamp(
       grantedDateJst: today,
     });
 
+    const reward = buildStampRewardSnapshot(event);
     let freeCouponId: string | null = null;
     if (completed) {
       const freeRef = freeCouponsRef(db, input.eventId).doc();
@@ -292,6 +341,9 @@ export async function grantStamp(
       tx.set(freeRef, {
         memberId: input.memberId,
         round,
+        // 特典は発行時点のスナップショットで固定する
+        rewardType: reward.rewardType,
+        benefitText: reward.benefitText,
         status: 'active',
         issuedAt: FieldValue.serverTimestamp(),
       });
@@ -315,6 +367,8 @@ export async function grantStamp(
       goalCount,
       completed,
       freeCouponId,
+      rewardType: reward.rewardType,
+      benefitText: reward.benefitText,
     } as GrantStampResult;
   });
 }
@@ -462,6 +516,8 @@ export async function getStampCard(
     memberId,
     round,
     goalCount: event.stampGoalCount,
+    rewardType: event.stampRewardType,
+    benefitText: event.stampBenefitText,
     countInRound: stamps.length,
     remaining: Math.max(event.stampGoalCount - stamps.length, 0),
     stamps,

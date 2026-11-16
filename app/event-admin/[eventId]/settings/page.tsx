@@ -135,6 +135,8 @@ export default function EventSettingsAdminPage() {
   const [linksMessage, setLinksMessage] = useState('');
   const [linksSaving, setLinksSaving] = useState(false);
   const [stampGoalCount, setStampGoalCount] = useState(5);
+  const [stampRewardType, setStampRewardType] = useState<'free-dish' | 'benefit'>('free-dish');
+  const [stampBenefitText, setStampBenefitText] = useState('');
   const [stampGoalMessage, setStampGoalMessage] = useState('');
   const [stampGoalSaving, setStampGoalSaving] = useState(false);
   const [rankingMinReviews, setRankingMinReviews] = useState(3);
@@ -199,6 +201,14 @@ export default function EventSettingsAdminPage() {
       if (typeof data.event?.stampGoalCount === 'number') {
         setStampGoalCount(data.event.stampGoalCount);
       }
+      if (data.event?.stampRewardType === 'benefit') {
+        setStampRewardType('benefit');
+      } else if (data.event?.stampRewardType === 'free-dish') {
+        setStampRewardType('free-dish');
+      }
+      if (typeof data.event?.stampBenefitText === 'string') {
+        setStampBenefitText(data.event.stampBenefitText);
+      }
       if (typeof data.event?.rankingMinReviews === 'number') {
         setRankingMinReviews(data.event.rankingMinReviews);
       }
@@ -262,15 +272,27 @@ export default function EventSettingsAdminPage() {
   };
 
   const handleSaveStampGoal = async () => {
+    if (stampRewardType === 'benefit' && !stampBenefitText.trim()) {
+      setStampGoalMessage(adminText(locale, 'stampBenefitRequired'));
+      return;
+    }
     setStampGoalSaving(true);
     setStampGoalMessage('');
     try {
       const data = await callApi(`/api/events/${eventId}`, {
         method: 'PATCH',
-        body: JSON.stringify({ stampGoalCount }),
+        body: JSON.stringify({ stampGoalCount, stampRewardType, stampBenefitText }),
       });
       if (typeof data.event?.stampGoalCount === 'number') {
         setStampGoalCount(data.event.stampGoalCount);
+      }
+      if (data.event?.stampRewardType === 'benefit') {
+        setStampRewardType('benefit');
+      } else if (data.event?.stampRewardType === 'free-dish') {
+        setStampRewardType('free-dish');
+      }
+      if (typeof data.event?.stampBenefitText === 'string') {
+        setStampBenefitText(data.event.stampBenefitText);
       }
       setStampGoalMessage(adminText(locale, 'stampGoalSaved'));
     } catch (e) {
@@ -555,6 +577,66 @@ export default function EventSettingsAdminPage() {
               ))}
             </select>
           </label>
+          <fieldset style={{ border: 'none', padding: 0, margin: '20px 0 0' }}>
+            <legend style={{ fontSize: 13, fontWeight: 600, padding: 0 }}>
+              {adminText(locale, 'stampRewardTypeLabel')}
+            </legend>
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                fontSize: 14,
+                fontWeight: 600,
+                marginTop: 10,
+                cursor: 'pointer',
+              }}
+            >
+              <input
+                type="radio"
+                name="stampRewardType"
+                checked={stampRewardType === 'free-dish'}
+                onChange={() => setStampRewardType('free-dish')}
+                style={{ width: 18, height: 18 }}
+              />
+              {adminText(locale, 'stampRewardFreeDishOption')}
+            </label>
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                fontSize: 14,
+                fontWeight: 600,
+                marginTop: 8,
+                cursor: 'pointer',
+              }}
+            >
+              <input
+                type="radio"
+                name="stampRewardType"
+                checked={stampRewardType === 'benefit'}
+                onChange={() => setStampRewardType('benefit')}
+                style={{ width: 18, height: 18 }}
+              />
+              {adminText(locale, 'stampRewardBenefitOption')}
+            </label>
+          </fieldset>
+          {stampRewardType === 'benefit' && (
+            <label style={{ ...labelStyle, marginBottom: 0 }}>
+              {adminText(locale, 'stampBenefitTextLabel')}
+              <input
+                style={inputStyle}
+                value={stampBenefitText}
+                maxLength={100}
+                placeholder={adminText(locale, 'stampBenefitTextPlaceholder')}
+                onChange={(e) => setStampBenefitText(e.target.value)}
+              />
+            </label>
+          )}
+          <p style={{ fontSize: 12.5, color: '#64748b', margin: '12px 0 0' }}>
+            {adminText(locale, 'stampRewardNote')}
+          </p>
           <button
             onClick={() => void handleSaveStampGoal()}
             disabled={stampGoalSaving}

@@ -11,8 +11,14 @@ import {
   isValidResetTime,
   isValidRankingMinReviews,
   isValidStampGoalCount,
+  isValidStampRewardType,
+  normalizeStampBenefitText,
+  normalizeStampRewardType,
   parseRankingMinReviews,
+  parseStampBenefitText,
   parseStampGoalCount,
+  parseStampRewardType,
+  validateStampRewardSettings,
   receivesCapsPropagation,
   resolveCreateStatus,
   subscriberUsage,
@@ -256,5 +262,59 @@ describe('ランキング最低レビュー件数（rankingMinReviews）', () =>
     expect(parseRankingMinReviews(0)).toBe(3);
     expect(parseRankingMinReviews(99)).toBe(3);
     expect(parseRankingMinReviews('5')).toBe(3);
+  });
+});
+
+describe('スタンプ達成特典（stampRewardType / stampBenefitText）', () => {
+  it('種類は free-dish と benefit だけが有効', () => {
+    expect(isValidStampRewardType('free-dish')).toBe(true);
+    expect(isValidStampRewardType('benefit')).toBe(true);
+    expect(isValidStampRewardType('free')).toBe(false);
+    expect(isValidStampRewardType('')).toBe(false);
+    expect(isValidStampRewardType(undefined)).toBe(false);
+    expect(isValidStampRewardType(null)).toBe(false);
+    expect(isValidStampRewardType(1)).toBe(false);
+  });
+  it('読み取り時は未設定・不正な値を free-dish（従来の挙動）に倒す', () => {
+    expect(parseStampRewardType('benefit')).toBe('benefit');
+    expect(parseStampRewardType('free-dish')).toBe('free-dish');
+    expect(parseStampRewardType(undefined)).toBe('free-dish');
+    expect(parseStampRewardType(null)).toBe('free-dish');
+    expect(parseStampRewardType('unknown')).toBe('free-dish');
+  });
+  it('特典の内容の読み取りは未設定を空文字にし、上限で切り詰める', () => {
+    expect(parseStampBenefitText('特製グッズをプレゼント')).toBe(
+      '特製グッズをプレゼント',
+    );
+    expect(parseStampBenefitText(undefined)).toBe('');
+    expect(parseStampBenefitText(null)).toBe('');
+    expect(parseStampBenefitText(123)).toBe('');
+    expect(parseStampBenefitText('あ'.repeat(150))).toBe('あ'.repeat(100));
+  });
+  it('保存時は種類を検証し、未指定は free-dish', () => {
+    expect(normalizeStampRewardType(undefined)).toBe('free-dish');
+    expect(normalizeStampRewardType(null)).toBe('free-dish');
+    expect(normalizeStampRewardType('benefit')).toBe('benefit');
+    expect(() => normalizeStampRewardType('free')).toThrow();
+    expect(() => normalizeStampRewardType(1)).toThrow();
+  });
+  it('保存時は特典の内容を検証し、100文字を超えたらエラー', () => {
+    expect(normalizeStampBenefitText(undefined)).toBe('');
+    expect(normalizeStampBenefitText('  特製グッズ  ')).toBe('特製グッズ');
+    expect(normalizeStampBenefitText('あ'.repeat(100))).toBe('あ'.repeat(100));
+    expect(() => normalizeStampBenefitText('あ'.repeat(101))).toThrow();
+    expect(() => normalizeStampBenefitText(123)).toThrow();
+  });
+  it('benefit で内容が空なら組み合わせエラー（free-dish は空でも可）', () => {
+    expect(() =>
+      validateStampRewardSettings('benefit', ''),
+    ).toThrow('特典の内容を入力してください');
+    expect(() =>
+      validateStampRewardSettings('benefit', '特製グッズをプレゼント'),
+    ).not.toThrow();
+    expect(() => validateStampRewardSettings('free-dish', '')).not.toThrow();
+    expect(() =>
+      validateStampRewardSettings('free-dish', '残っている文面'),
+    ).not.toThrow();
   });
 });

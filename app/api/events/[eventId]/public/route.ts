@@ -25,6 +25,10 @@ export async function GET(
       defaultLocale: event.defaultLocale,
       // 入場用QRの取り込みが有効かどうか（来場者画面の表示制御に使う）
       admissionQrEnabled: event.admissionQrEnabled,
+      // スタンプ達成特典の種類と内容（特設サイトの達成特典の表示に使う。
+      // 未設定のプロジェクトでは 'free-dish' / '' になる）
+      stampRewardType: event.stampRewardType,
+      stampBenefitText: event.stampBenefitText,
       // 主催者リンク（最大3件、タイトル付きで来場者画面に表示する）
       links: event.links,
       // 特設サイト（本家）の表示内容。読み取り時に正規化済みの値を返す

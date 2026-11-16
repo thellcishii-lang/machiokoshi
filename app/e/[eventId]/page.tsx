@@ -94,6 +94,9 @@ interface MemberClaim {
 interface MemberFreeCoupon {
   id: string;
   round: number;
+  /** 発行時点の特典スナップショット（旧データでは未設定 = 'free-dish'） */
+  rewardType?: string;
+  benefitText?: string;
   status: 'active' | 'used';
   usedExhibitorName: string | null;
 }
@@ -102,6 +105,9 @@ interface MemberStampCard {
   memberId: string;
   round: number;
   goalCount: number;
+  /** プロジェクトの現在の特典設定（旧データでは未設定 = 'free-dish'） */
+  rewardType?: string;
+  benefitText?: string;
   countInRound: number;
   remaining: number;
   stamps: Array<{
@@ -2062,9 +2068,14 @@ export default function EventVisitorPage() {
                       margin: '4px 0 0',
                     }}
                   >
-                    {uiText(locale, 'stampRemaining', {
-                      count: String(stampCard.remaining),
-                    })}
+                    {stampCard.rewardType === 'benefit'
+                      ? uiText(locale, 'stampRemainingBenefit', {
+                          count: String(stampCard.remaining),
+                          benefit: stampCard.benefitText ?? '',
+                        })
+                      : uiText(locale, 'stampRemaining', {
+                          count: String(stampCard.remaining),
+                        })}
                   </p>
                 )}
                 <div
@@ -2120,7 +2131,9 @@ export default function EventVisitorPage() {
                           fontSize: 12,
                         }}
                       >
-                        {uiText(locale, 'freeCouponTitle')}
+                        {freeCoupon.rewardType === 'benefit'
+                          ? uiText(locale, 'benefitCouponTitle')
+                          : uiText(locale, 'freeCouponTitle')}
                       </span>
                       <span style={{ fontSize: 13, color: '#475569' }}>
                         {uiText(locale, 'stampRoundLabel', {
@@ -2128,6 +2141,18 @@ export default function EventVisitorPage() {
                         })}
                       </span>
                     </div>
+                    {freeCoupon.rewardType === 'benefit' && freeCoupon.benefitText && (
+                      <p
+                        style={{
+                          fontSize: 15,
+                          fontWeight: 800,
+                          textAlign: 'center',
+                          margin: '12px 0 0',
+                        }}
+                      >
+                        {freeCoupon.benefitText}
+                      </p>
+                    )}
                     <div
                       style={{
                         marginTop: 14,
@@ -2179,9 +2204,16 @@ export default function EventVisitorPage() {
                         {uiText(locale, 'usedStamp')}
                       </span>
                       <span style={{ fontSize: 13, color: '#6b7280' }}>
-                        {uiText(locale, 'freeCouponTitle')}
+                        {freeCoupon.rewardType === 'benefit'
+                          ? uiText(locale, 'benefitCouponTitle')
+                          : uiText(locale, 'freeCouponTitle')}
                       </span>
                     </div>
+                    {freeCoupon.rewardType === 'benefit' && freeCoupon.benefitText && (
+                      <p style={{ fontSize: 13, margin: '6px 0 0', color: '#6b7280' }}>
+                        {freeCoupon.benefitText}
+                      </p>
+                    )}
                     <p style={{ fontSize: 13, margin: '6px 0 0', color: '#6b7280' }}>
                       {uiText(locale, 'freeCouponUsed', {
                         shop: freeCoupon.usedExhibitorName ?? '',

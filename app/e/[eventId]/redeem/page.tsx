@@ -515,7 +515,9 @@ export default function ExhibitorRedeemPage() {
           ok: true,
           stamp: true,
           text: data.completed
-            ? redeemText(locale, 'stampCompleted')
+            ? data.rewardType === 'benefit'
+              ? redeemText(locale, 'stampCompletedBenefit')
+              : redeemText(locale, 'stampCompleted')
             : redeemText(locale, 'stampGranted', {
                 count: String(data.countInRound),
                 goal: String(data.goalCount),

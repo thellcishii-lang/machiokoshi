@@ -2,6 +2,8 @@
 // 店舗写真のアップロード（店舗専用ページ）。参加店セッションを確認のうえ、
 // Admin SDK で Storage に保存し、表示用 URL を返す。
 // 保存先: events/{eventId}/shop-photos/{exhibitorId}/{uuid}.{ext}
+// 無料の一品の写真はフォームの purpose='free-dish' で区別し、同じ
+// ディレクトリに free-dish- 接頭辞で保存する（公開読み取りは共通）。
 // 検証（jpg/png/webp、1枚5MBまで）はレビュー写真と同じ純粋関数。
 // 書き込みは Admin SDK 経由のみで、storage.rules 側は読み取りだけを
 // 公開する（クライアントからの直接書き込みは許可しない）。
@@ -10,7 +12,10 @@ import { NextResponse } from 'next/server';
 import { getStorage } from 'firebase-admin/storage';
 import { requireEventExhibitor } from '@/lib/event-auth';
 import { validateReviewPhoto } from '@/lib/event-review';
-import { shopPhotoStoragePath } from '@/lib/event-shop';
+import {
+  shopFreeDishPhotoStoragePath,
+  shopPhotoStoragePath,
+} from '@/lib/event-shop';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,11 +49,11 @@ export async function POST(
     return NextResponse.json({ error: validation.error }, { status: 400 });
   }
 
-  const storagePath = shopPhotoStoragePath(
-    eventId,
-    guard.exhibitor.id,
-    `${randomUUID()}.${validation.extension}`,
-  );
+  const fileName = `${randomUUID()}.${validation.extension}`;
+  const storagePath =
+    formData.get('purpose') === 'free-dish'
+      ? shopFreeDishPhotoStoragePath(eventId, guard.exhibitor.id, fileName)
+      : shopPhotoStoragePath(eventId, guard.exhibitor.id, fileName);
   try {
     const bucket = getStorage().bucket();
     const storedFile = bucket.file(storagePath);
