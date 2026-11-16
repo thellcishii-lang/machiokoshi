@@ -35,6 +35,7 @@ import { redeemText, uiText } from '@/lib/ui-text';
 import { specialSiteShopUrl, specialSiteUrl } from '@/lib/special-site';
 import { parseRedeemQrPayload } from '@/lib/stamp-qr';
 import PasswordInput from '@/components/PasswordInput';
+import PoweredByFooter from '@/components/PoweredByFooter';
 
 interface Exhibitor {
   id: string;
@@ -183,6 +184,7 @@ export default function ExhibitorRedeemPage() {
   const [result, setResult] = useState<RedeemResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [eventName, setEventName] = useState('');
   const scannerRef = useRef<Html5Qrcode | null>(null);
 
   useEffect(() => {
@@ -192,6 +194,20 @@ export default function ExhibitorRedeemPage() {
     } catch {
       // 保存が読めなくても日本語で続行する
     }
+  }, [eventId]);
+
+  // ヘッダーに出すプロジェクト名は公開情報から取る（ログイン前の画面でも出すため）
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`/api/events/${eventId}/public`);
+        if (!res.ok) return;
+        const data = await res.json().catch(() => ({}));
+        if (typeof data.event?.name === 'string') setEventName(data.event.name);
+      } catch {
+        // 取れなければヘッダーは空のまま（画面の動作には影響しない）
+      }
+    })();
   }, [eventId]);
 
   useEffect(() => {
@@ -324,7 +340,7 @@ export default function ExhibitorRedeemPage() {
       }}
     >
       <p style={{ fontSize: 21, fontWeight: 800, color: VIOLET, margin: 0, letterSpacing: -0.2 }}>
-        Push-taro 町おこし
+        {eventName}
       </p>
       {right}
     </div>
@@ -694,6 +710,7 @@ export default function ExhibitorRedeemPage() {
           )}
         </section>
         {resultCard}
+        <PoweredByFooter />
       </main>
     );
   }
@@ -1059,6 +1076,7 @@ export default function ExhibitorRedeemPage() {
           ))}
         </>
       )}
+      <PoweredByFooter />
     </main>
   );
 }

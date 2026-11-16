@@ -26,6 +26,7 @@ import {
 import { redeemText, uiText } from '@/lib/ui-text';
 import { specialSiteShopUrl, specialSiteUrl } from '@/lib/special-site';
 import PasswordInput from '@/components/PasswordInput';
+import PoweredByFooter from '@/components/PoweredByFooter';
 
 interface Exhibitor {
   id: string;
@@ -148,6 +149,7 @@ export default function ExhibitorShopPage() {
   const [busy, setBusy] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [loginError, setLoginError] = useState('');
+  const [eventName, setEventName] = useState('');
   const [forgotBusy, setForgotBusy] = useState(false);
   const [forgotMessage, setForgotMessage] = useState('');
   // 初回読み込みはユーザー×プロジェクトで1回だけ（言語切替で callApi の
@@ -161,6 +163,20 @@ export default function ExhibitorShopPage() {
     } catch {
       // 保存が読めなくても日本語で続行する
     }
+  }, [eventId]);
+
+  // ヘッダーに出すプロジェクト名は公開情報から取る（ログイン前の画面でも出すため）
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`/api/events/${eventId}/public`);
+        if (!res.ok) return;
+        const data = await res.json().catch(() => ({}));
+        if (typeof data.event?.name === 'string') setEventName(data.event.name);
+      } catch {
+        // 取れなければヘッダーは空のまま（画面の動作には影響しない）
+      }
+    })();
   }, [eventId]);
 
   useEffect(() => {
@@ -283,7 +299,7 @@ export default function ExhibitorShopPage() {
       }}
     >
       <p style={{ fontSize: 21, fontWeight: 800, color: VIOLET, margin: 0, letterSpacing: -0.2 }}>
-        Push-taro 町おこし
+        {eventName}
       </p>
       {right}
     </div>
@@ -452,6 +468,7 @@ export default function ExhibitorShopPage() {
             </p>
           )}
         </section>
+        <PoweredByFooter />
       </main>
     );
   }
@@ -729,6 +746,7 @@ export default function ExhibitorShopPage() {
           </section>
         </>
       )}
+      <PoweredByFooter />
     </main>
   );
 }
