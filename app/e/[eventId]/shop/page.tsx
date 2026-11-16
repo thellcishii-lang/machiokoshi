@@ -24,6 +24,7 @@ import {
   type Locale,
 } from '@/lib/i18n';
 import { redeemText, uiText } from '@/lib/ui-text';
+import { specialSiteShopUrl, specialSiteUrl } from '@/lib/special-site';
 import PasswordInput from '@/components/PasswordInput';
 
 interface Exhibitor {
@@ -519,6 +520,26 @@ export default function ExhibitorShopPage() {
               style={{ fontSize: 13.5, fontWeight: 600, color: VIOLET }}
             >
               {redeemText(locale, 'toRedeemPage')}
+            </a>
+          </p>
+          <p style={{ marginTop: 6 }}>
+            <a
+              href={specialSiteShopUrl(eventId, exhibitor.id)}
+              target="_blank"
+              rel="noreferrer"
+              style={{ fontSize: 13.5, fontWeight: 600, color: VIOLET }}
+            >
+              {redeemText(locale, 'specialSiteShopLink')} ↗
+            </a>
+          </p>
+          <p style={{ marginTop: 4 }}>
+            <a
+              href={specialSiteUrl(eventId)}
+              target="_blank"
+              rel="noreferrer"
+              style={{ fontSize: 13.5, fontWeight: 600, color: VIOLET }}
+            >
+              {redeemText(locale, 'specialSiteTopLink')} ↗
             </a>
           </p>
 
