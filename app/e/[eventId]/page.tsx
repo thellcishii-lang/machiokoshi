@@ -31,8 +31,15 @@ import {
 } from '@/lib/i18n';
 import { uiText } from '@/lib/ui-text';
 import { specialSiteUrl } from '@/lib/special-site';
-import { themeCssVars } from '@/lib/theme-color';
+import { themeCssVars, themePalette } from '@/lib/theme-color';
 import PoweredByFooter from '@/components/PoweredByFooter';
+import StampCelebration from '@/components/StampCelebration';
+import {
+  isCelebratedInStorage,
+  markCelebratedInStorage,
+  pickCelebrationCoupon,
+  safeLocalStorage,
+} from '@/lib/stamp-celebration';
 import { buildCouponGroups } from '@/lib/coupon-groups';
 import {
   buildFreeCouponQrPayload,
@@ -789,6 +796,10 @@ export default function EventVisitorPage() {
   const [coupons, setCoupons] = useState<PublicCoupon[]>([]);
   const [myClaims, setMyClaims] = useState<MemberClaim[]>([]);
   const [stampCard, setStampCard] = useState<MemberStampCard | null>(null);
+  // 達成セレブレーション表示中の無料クーポン（null = 出していない）
+  const [celebrationCoupon, setCelebrationCoupon] = useState<MemberFreeCoupon | null>(null);
+  // セッション内でお祝い済みのクーポン（localStorage が使えない環境の代替）
+  const celebratedSessionRef = useRef<Set<string>>(new Set());
   const [myReviews, setMyReviews] = useState<MemberReview[]>([]);
   const [reviewableShops, setReviewableShops] = useState<ReviewableShop[]>([]);
   const [notices, setNotices] = useState<EventNotice[]>([]);
@@ -1221,6 +1232,55 @@ export default function EventVisitorPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, phase, eventId, locale]);
+
+  // 達成セレブレーションの判定は、スタンプデータが更新されるたびに行う。
+  // お店で最後のスタンプが押された達成は、お客さんがカウンターで開いている
+  // この画面の次の自動更新（15秒周期・タブ復帰時）で検知され、その場で
+  // 花びらが出る（お店の人と一緒に喜べるように）。
+  // 1クーポンにつき1回だけ: 表示済みは localStorage に残し、使えない
+  // 環境ではセッション内の記録で抑える。表示した時点で記録するため、
+  // 開いている間の再更新で重ねて出ることはない。
+  useEffect(() => {
+    if (!stampCard || celebrationCoupon) return;
+    const storage = safeLocalStorage();
+    const target = pickCelebrationCoupon(
+      stampCard.freeCoupons,
+      (id) =>
+        celebratedSessionRef.current.has(id) ||
+        isCelebratedInStorage(storage, id),
+    );
+    if (!target) return;
+    // 今回の達成より古い未使用分もまとめて表示済みにし、閉じた直後に
+    // 過去分のお祝いが続けて出ないようにする
+    for (const freeCoupon of stampCard.freeCoupons) {
+      if (freeCoupon.status === 'active') {
+        celebratedSessionRef.current.add(freeCoupon.id);
+        markCelebratedInStorage(storage, freeCoupon.id);
+      }
+    }
+    setCelebrationCoupon(target);
+  }, [stampCard, celebrationCoupon]);
+
+  // セレブレーションのボタン: 閉じて、該当クーポンのQRへスクロールし、
+  // テーマカラーのリングを光らせて場所を示す。クーポン自体は消込まで
+  // 画面に残り続ける（従来どおり）。
+  const handleCelebrationReveal = (freeCouponId: string) => {
+    setCelebrationCoupon(null);
+    window.requestAnimationFrame(() => {
+      const el = document.getElementById(`free-coupon-${freeCouponId}`);
+      if (!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const accent = themePalette(event?.themeColor).accent;
+      el.animate(
+        [
+          { boxShadow: '0 0 0 0 rgba(0, 0, 0, 0)' },
+          { boxShadow: `0 0 0 4px ${accent}` },
+          { boxShadow: '0 0 0 0 rgba(0, 0, 0, 0)' },
+        ],
+        { duration: 900, iterations: 2 },
+      );
+    });
+  };
 
   const handleClaim = async (couponId: string) => {
     if (!user) return;
@@ -2111,6 +2171,7 @@ export default function EventVisitorPage() {
                 freeCoupon.status === 'active' ? (
                   <article
                     key={freeCoupon.id}
+                    id={`free-coupon-${freeCoupon.id}`}
                     style={{
                       background: CARD_GRADIENT,
                       border: `1px solid ${SOFT_BORDER}`,
@@ -2624,6 +2685,14 @@ export default function EventVisitorPage() {
             </div>
           </div>
         </div>
+      )}
+      {celebrationCoupon && (
+        <StampCelebration
+          locale={locale}
+          coupon={celebrationCoupon}
+          onReveal={handleCelebrationReveal}
+          onClose={() => setCelebrationCoupon(null)}
+        />
       )}
       <PoweredByFooter />
     </main>
