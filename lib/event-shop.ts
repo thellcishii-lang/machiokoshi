@@ -13,8 +13,17 @@
 import type { Firestore } from 'firebase-admin/firestore';
 import { EVENT_EXHIBITORS_COLLECTION } from './event-coupon';
 import { isHttpsUrl } from './event';
+import { geocodeAddress, type GeoPoint, type GeocodeFn } from './geocode';
 
 export const SHOP_PROFILE_PHOTO_MAX_COUNT = 3;
+
+/** 店舗リンクの最大件数（Instagram・公式サイトなど）。 */
+export const SHOP_PROFILE_LINK_MAX_COUNT = 3;
+
+export const SHOP_PROFILE_LINK_LIMITS = {
+  label: 30,
+  url: 500,
+} as const;
 
 export const SHOP_PROFILE_LIMITS = {
   displayName: 60,
@@ -25,6 +34,19 @@ export const SHOP_PROFILE_LIMITS = {
   menuDescription: 300,
   description: 1000,
 } as const;
+
+/** 店舗リンク1件（表示名＋URL）。特設サイトの店舗ページに並べて表示する。 */
+export interface ShopLink {
+  label: string;
+  url: string;
+}
+
+/**
+ * 店舗の座標。住所から保存時にサーバー側で求める（lib/geocode.ts）。
+ * 特設サイトの店舗マップ（ピン表示）に使う。求められなかった場合は null。
+ * 店側から送られた値は使わない（保存 API でも無視する）。
+ */
+export type ShopLocation = GeoPoint;
 
 export interface ShopProfile {
   /** 表示名。未設定なら登録名（参加店名）で表示する */
@@ -40,6 +62,14 @@ export interface ShopProfile {
   description: string;
   photoUrls: string[];
   instagramUrl: string;
+  /**
+   * 店舗リンク（最大3件）。未設定なら空配列。公開時は、リンクが空で
+   * instagramUrl がある場合に Instagram を暗黙の1件目として扱う
+   * （toPublicShop / effectiveShopLinks を参照）。
+   */
+  links: ShopLink[];
+  /** 住所から求めた座標。未取得・取得失敗は null */
+  location: ShopLocation | null;
   /** 掲載するかどうか。既定は掲載する（true） */
   published: boolean;
 }
@@ -69,6 +99,8 @@ export function emptyShopProfile(): ShopProfile {
     description: '',
     photoUrls: [],
     instagramUrl: '',
+    links: [],
+    location: null,
     published: true,
   };
 }
@@ -88,6 +120,40 @@ function readPhotoUrls(value: unknown): string[] {
 
 function readInstagramUrl(value: unknown): string {
   return typeof value === 'string' && isHttpsUrl(value) ? value : '';
+}
+
+/**
+ * 読み取り用: 店舗リンク。不正な行は捨て、上限件数で切り、表示名は
+ * 上限文字数に丸める（保存時は validateShopProfileInput で厳密に検証）。
+ */
+function readShopLinks(value: unknown): ShopLink[] {
+  if (!Array.isArray(value)) return [];
+  const links: ShopLink[] = [];
+  for (const item of value) {
+    if (typeof item !== 'object' || item === null) continue;
+    const record = item as Record<string, unknown>;
+    if (typeof record.label !== 'string' || typeof record.url !== 'string') {
+      continue;
+    }
+    const label = record.label.trim().slice(0, SHOP_PROFILE_LINK_LIMITS.label);
+    const url = record.url.trim();
+    if (!label || !isHttpsUrl(url)) continue;
+    links.push({ label, url });
+    if (links.length >= SHOP_PROFILE_LINK_MAX_COUNT) break;
+  }
+  return links;
+}
+
+/** 読み取り用: 座標。数値の組で範囲内なら採用し、それ以外は null に倒す。 */
+function readShopLocation(value: unknown): ShopLocation | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const record = value as Record<string, unknown>;
+  const lat = record.lat;
+  const lng = record.lng;
+  if (typeof lat !== 'number' || typeof lng !== 'number') return null;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+  return { lat, lng };
 }
 
 /**
@@ -111,11 +177,31 @@ export function parseShopProfile(value: unknown): ShopProfile {
     description: readString(source.description, SHOP_PROFILE_LIMITS.description),
     photoUrls: readPhotoUrls(source.photoUrls),
     instagramUrl: readInstagramUrl(source.instagramUrl),
+    links: readShopLinks(source.links),
+    location: readShopLocation(source.location),
     published: source.published !== false,
   };
 }
 
-/** 公開用に整形する（表示名が未設定なら登録名に倒す）。 */
+/**
+ * 公開表示用の実効リンク。
+ * 店舗リンクが設定されていればそれを使い、空で Instagram URL だけが
+ * ある場合は Instagram を暗黙の1件目として扱う（リンク機能より前に
+ * 登録された店の Instagram が、特設サイトから消えないようにするため）。
+ */
+export function effectiveShopLinks(profile: ShopProfile): ShopLink[] {
+  if (profile.links.length > 0) return profile.links;
+  if (profile.instagramUrl) {
+    return [{ label: 'Instagram', url: profile.instagramUrl }];
+  }
+  return [];
+}
+
+/**
+ * 公開用に整形する（表示名が未設定なら登録名に倒す）。
+ * リンクは実効リンク（店舗リンク優先、無ければ Instagram を暗黙の
+ * 1件目）に差し替える。座標は保存済みのものをそのまま出す。
+ */
 export function toPublicShop(
   exhibitor: { id: string; name: string },
   rawProfile: unknown,
@@ -123,6 +209,7 @@ export function toPublicShop(
 ): PublicShop {
   const profile = parseShopProfile(rawProfile);
   if (!profile.displayName) profile.displayName = exhibitor.name;
+  profile.links = effectiveShopLinks(profile);
   return {
     exhibitorId: exhibitor.id,
     name: exhibitor.name,
@@ -158,10 +245,76 @@ function validateTextField(
 }
 
 /**
+ * 保存時検証: 店舗リンク。
+ * - 両方空の行は黙って捨てる（編集画面の空行をそのまま送れるように。
+ *   追加事項と同じ方針）
+ * - 片方だけ入力された行はエラー
+ * - 表示名は最大30文字、URL は https のみ・最大500文字
+ * - 実質の件数は最大 SHOP_PROFILE_LINK_MAX_COUNT 件
+ */
+function validateShopLinks(
+  raw: unknown,
+): { ok: true; value: ShopLink[] } | { ok: false; error: string } {
+  if (raw === undefined || raw === null) return { ok: true, value: [] };
+  if (!Array.isArray(raw)) {
+    return { ok: false, error: 'リンクの形式が不正です' };
+  }
+  const links: ShopLink[] = [];
+  for (const item of raw) {
+    if (typeof item !== 'object' || item === null) {
+      return { ok: false, error: 'リンクの形式が不正です' };
+    }
+    const record = item as Record<string, unknown>;
+    const labelRaw = record.label === undefined ? '' : record.label;
+    const urlRaw = record.url === undefined ? '' : record.url;
+    if (typeof labelRaw !== 'string' || typeof urlRaw !== 'string') {
+      return { ok: false, error: 'リンクの形式が不正です' };
+    }
+    const label = labelRaw.trim();
+    const url = urlRaw.trim();
+    if (!label && !url) continue;
+    if (!label || !url) {
+      return {
+        ok: false,
+        error: 'リンクの表示名とURLは両方入力してください',
+      };
+    }
+    if (label.length > SHOP_PROFILE_LINK_LIMITS.label) {
+      return {
+        ok: false,
+        error: `リンクの表示名は${SHOP_PROFILE_LINK_LIMITS.label}文字以内で入力してください`,
+      };
+    }
+    if (url.length > SHOP_PROFILE_LINK_LIMITS.url) {
+      return {
+        ok: false,
+        error: `リンクのURLは${SHOP_PROFILE_LINK_LIMITS.url}文字以内で入力してください`,
+      };
+    }
+    if (!isHttpsUrl(url)) {
+      return {
+        ok: false,
+        error: 'リンクのURLは https:// で始まる必要があります',
+      };
+    }
+    links.push({ label, url });
+  }
+  if (links.length > SHOP_PROFILE_LINK_MAX_COUNT) {
+    return {
+      ok: false,
+      error: `リンクは${SHOP_PROFILE_LINK_MAX_COUNT}件までです`,
+    };
+  }
+  return { ok: true, value: links };
+}
+
+/**
  * 店舗プロフィールの保存入力を検証して正規化する（書き込み用）。
  * 文字項目は任意（空でよい）で上限文字数まで。写真は最大3枚・https
- * のみ。Instagram URL は https のみ（空は可）。published は真偽値のみ
- * （未指定は掲載）。
+ * のみ。Instagram URL は https のみ（空は可）。リンクは最大3件。
+ * published は真偽値のみ（未指定は掲載）。
+ * 座標（location）は店側の入力を一切使わないため、ここでは常に null
+ * を返し、実際の値は保存時にサーバー側で決める（updateShopProfile）。
  */
 export function validateShopProfileInput(
   raw: unknown,
@@ -215,6 +368,9 @@ export function validateShopProfileInput(
     };
   }
 
+  const links = validateShopLinks(source.links);
+  if (!links.ok) return links;
+
   if (source.published !== undefined && typeof source.published !== 'boolean') {
     return { ok: false, error: '掲載設定の形式が不正です' };
   }
@@ -225,6 +381,9 @@ export function validateShopProfileInput(
       ...texts,
       photoUrls,
       instagramUrl,
+      links: links.value,
+      // 座標はサーバー側でのみ決める（クライアントの値は無視する）
+      location: null,
       published: source.published !== false,
     },
   };
@@ -283,20 +442,53 @@ export type UpdateShopProfileResult =
   | { ok: true; profile: ShopProfile }
   | { ok: false; status: number; error: string };
 
-/** 自店プロフィールの保存（プロフィール全体を置き換える）。 */
+/**
+ * 保存時の座標を決める（純粋な判断＋ジオコーディング呼び出し）。
+ * - 住所が空なら座標なし
+ * - 住所が前回と同じで座標が既にあれば、それを使い回す（無駄な変換をしない）
+ * - 住所が変わった／座標がまだ無い場合は住所から変換する
+ * 変換に失敗しても例外にせず null を返す（保存自体は止めない）。
+ */
+export async function resolveShopLocation(
+  previous: ShopProfile,
+  next: ShopProfile,
+  geocode: GeocodeFn = geocodeAddress,
+): Promise<ShopLocation | null> {
+  const address = next.address.trim();
+  if (!address) return null;
+  if (previous.address.trim() === address && previous.location) {
+    return previous.location;
+  }
+  try {
+    return await geocode(address);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 自店プロフィールの保存（プロフィール全体を置き換える）。
+ * 座標は入力値を使わず、保存済みプロフィールとの住所の差分を見て
+ * サーバー側で決める（resolveShopLocation）。ジオコーディングの
+ * 失敗で保存が失敗することはない。
+ */
 export async function updateShopProfile(
   db: Firestore,
   eventId: string,
   exhibitorId: string,
   profile: ShopProfile,
+  geocode: GeocodeFn = geocodeAddress,
 ): Promise<UpdateShopProfileResult> {
   const ref = exhibitorRef(db, eventId, exhibitorId);
   const snap = await ref.get();
   if (!snap.exists) {
     return { ok: false, status: 404, error: 'お店が見つかりません' };
   }
-  await ref.update({ profile });
-  return { ok: true, profile };
+  const previous = parseShopProfile(snap.data()?.profile);
+  const location = await resolveShopLocation(previous, profile, geocode);
+  const saved: ShopProfile = { ...profile, location };
+  await ref.update({ profile: saved });
+  return { ok: true, profile: saved };
 }
 
 /**

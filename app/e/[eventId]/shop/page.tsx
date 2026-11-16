@@ -25,6 +25,7 @@ import {
 } from '@/lib/i18n';
 import { redeemText, uiText } from '@/lib/ui-text';
 import { specialSiteShopUrl, specialSiteUrl } from '@/lib/special-site';
+import { themeCssVars } from '@/lib/theme-color';
 import PasswordInput from '@/components/PasswordInput';
 import PoweredByFooter from '@/components/PoweredByFooter';
 
@@ -32,6 +33,11 @@ interface Exhibitor {
   id: string;
   name: string;
   lang: string;
+}
+
+interface ShopLink {
+  label: string;
+  url: string;
 }
 
 interface ShopProfile {
@@ -44,6 +50,9 @@ interface ShopProfile {
   description: string;
   photoUrls: string[];
   instagramUrl: string;
+  links: ShopLink[];
+  /** 住所からサーバー側で求めた座標（クライアントでは表示・編集しない） */
+  location: { lat: number; lng: number } | null;
   published: boolean;
 }
 
@@ -66,12 +75,18 @@ const EMPTY_PROFILE: ShopProfile = {
   description: '',
   photoUrls: [],
   instagramUrl: '',
+  links: [],
+  location: null,
   published: true,
 };
 
 const PHOTO_MAX = 3;
+const LINK_MAX = 3;
 
-const VIOLET = '#8B5E34';
+// アクセント色はプロジェクトのテーマカラー（CSS カスタムプロパティ）
+// 経由で使う。変数はルート要素に themeCssVars で渡し、未設定の場合は
+// var() のフォールバック（現在のベージュ／茶系）になる。
+const VIOLET = 'var(--theme-accent, #8B5E34)';
 
 // モックの言語セグメントは短い表記（EN など）。保存・送信は従来どおり locale で行う。
 const PILL_LABELS: Record<Locale, string> = {
@@ -162,6 +177,7 @@ export default function ExhibitorShopPage() {
   const [photoUploading, setPhotoUploading] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [eventName, setEventName] = useState('');
+  const [themeColor, setThemeColor] = useState<string | null>(null);
   const [forgotBusy, setForgotBusy] = useState(false);
   const [forgotMessage, setForgotMessage] = useState('');
   // 初回読み込みはユーザー×プロジェクトで1回だけ（言語切替で callApi の
@@ -185,6 +201,9 @@ export default function ExhibitorShopPage() {
         if (!res.ok) return;
         const data = await res.json().catch(() => ({}));
         if (typeof data.event?.name === 'string') setEventName(data.event.name);
+        if (typeof data.event?.themeColor === 'string') {
+          setThemeColor(data.event.themeColor);
+        }
       } catch {
         // 取れなければヘッダーは空のまま（画面の動作には影響しない）
       }
@@ -470,6 +489,29 @@ export default function ExhibitorShopPage() {
     }));
   };
 
+  const updateLink = (index: number, field: keyof ShopLink, value: string) => {
+    setProfile((current) => ({
+      ...current,
+      links: current.links.map((link, i) =>
+        i === index ? { ...link, [field]: value } : link,
+      ),
+    }));
+  };
+
+  const handleAddLink = () => {
+    setProfile((current) => ({
+      ...current,
+      links: [...current.links, { label: '', url: '' }].slice(0, LINK_MAX),
+    }));
+  };
+
+  const handleRemoveLink = (index: number) => {
+    setProfile((current) => ({
+      ...current,
+      links: current.links.filter((_, i) => i !== index),
+    }));
+  };
+
   const handleSave = async () => {
     setBusy(true);
     setMessage('');
@@ -495,7 +537,7 @@ export default function ExhibitorShopPage() {
 
   if (!user) {
     return (
-      <main style={containerStyle}>
+      <main style={{ ...containerStyle, ...themeCssVars(themeColor) } as React.CSSProperties}>
         {brandRow(languagePills)}
         <h1 style={{ fontSize: 20, fontWeight: 800, margin: '18px 0 0' }}>
           {redeemText(locale, 'shopLoginTitle')}
@@ -552,7 +594,7 @@ export default function ExhibitorShopPage() {
   }
 
   return (
-    <main style={containerStyle}>
+    <main style={{ ...containerStyle, ...themeCssVars(themeColor) } as React.CSSProperties}>
       {brandRow(
         <button onClick={() => void signOut(auth)} style={logoutButtonStyle}>
           {redeemText(locale, 'logoutButton')}
@@ -782,6 +824,80 @@ export default function ExhibitorShopPage() {
                 onChange={(e) => updateField('instagramUrl', e.target.value)}
               />
             </label>
+
+            <div style={{ marginTop: 16 }}>
+              <p style={{ fontSize: 13, fontWeight: 600, margin: 0 }}>
+                {redeemText(locale, 'profileLinks')}
+              </p>
+              <p style={{ fontSize: 12, color: '#64748b', margin: '6px 0 0' }}>
+                {redeemText(locale, 'profileLinksNote')}
+              </p>
+              {profile.links.map((link, index) => (
+                <div
+                  key={index}
+                  style={{
+                    border: '1px solid #e2e8f0',
+                    borderRadius: 12,
+                    padding: '10px 12px 12px',
+                    marginTop: 10,
+                  }}
+                >
+                  <label style={{ ...labelStyle, marginTop: 0 }}>
+                    {redeemText(locale, 'profileLinkLabel')}
+                    <input
+                      style={inputStyle}
+                      value={link.label}
+                      placeholder={redeemText(locale, 'profileLinkLabelPlaceholder')}
+                      onChange={(e) => updateLink(index, 'label', e.target.value)}
+                    />
+                  </label>
+                  <label style={labelStyle}>
+                    {redeemText(locale, 'profileLinkUrl')}
+                    <input
+                      style={inputStyle}
+                      type="url"
+                      placeholder="https://"
+                      value={link.url}
+                      onChange={(e) => updateLink(index, 'url', e.target.value)}
+                    />
+                  </label>
+                  <button
+                    onClick={() => handleRemoveLink(index)}
+                    style={{
+                      marginTop: 10,
+                      padding: '5px 12px',
+                      fontSize: 12.5,
+                      fontWeight: 600,
+                      borderRadius: 8,
+                      border: '1px solid #fca5a5',
+                      backgroundColor: '#ffffff',
+                      color: '#b91c1c',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {redeemText(locale, 'profilePhotoRemove')}
+                  </button>
+                </div>
+              ))}
+              {profile.links.length < LINK_MAX && (
+                <button
+                  onClick={handleAddLink}
+                  style={{
+                    marginTop: 10,
+                    padding: '10px 16px',
+                    fontSize: 14,
+                    fontWeight: 700,
+                    borderRadius: 10,
+                    border: `1px solid ${VIOLET}`,
+                    color: VIOLET,
+                    backgroundColor: '#ffffff',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {redeemText(locale, 'profileLinkAdd')}
+                </button>
+              )}
+            </div>
             <label
               style={{
                 display: 'flex',

@@ -3,7 +3,8 @@
 // app/event-admin/[eventId]/site/page.tsx
 // Push-taro 町おこし 管理人向けの特設サイト編集画面。
 // 本家（push-taro.com）上の特設サイトに表示される、プロジェクトごとの
-// 紹介文・ヒーロー画像・追加事項（タイトル＋本文、最大5件）を編集する。
+// 紹介文・ご当地グルメの定義・ヒーロー画像・アイコン・テーマカラー・
+// 追加事項（タイトル＋本文、最大5件）を編集する。
 // あわせて、トップ掲載（先頭5枠）課金の ON/OFF と月額料金もここで設定する。
 // 保存先はプロジェクトドキュメントのトップレベル項目で、読み書きは
 // /api/events/{eventId}/site-settings、画像アップロードは
@@ -37,6 +38,7 @@ import { CapWarningBanner } from '@/components/CapWarningBanner';
 import { AdminNav } from '../AdminNav';
 import { specialSiteUrl } from '@/lib/special-site';
 import {
+  MAX_GOURMET_DEFINITION_LENGTH,
   MAX_SITE_DESCRIPTION_LENGTH,
   MAX_SITE_NOTE_BODY_LENGTH,
   MAX_SITE_NOTE_TITLE_LENGTH,
@@ -45,6 +47,23 @@ import {
 } from '@/lib/event-site';
 
 const VIOLET = '#8B5E34';
+
+/**
+ * テーマカラーのプリセット（グルメ系プロジェクトに合う色味）。
+ * 先頭の茶色がサイト既定色。表示ラベルは16進コード（言語中立）を使う。
+ */
+const THEME_COLOR_PRESETS = [
+  '#8b5e34', // 茶（サイト既定）
+  '#dd5e22', // 柿
+  '#c73e2c', // トマト
+  '#6f7d3c', // 抹茶
+  '#2f4a67', // 藍
+  '#d9a62e', // からし
+  '#83406a', // 梅紫
+  '#3a3a3a', // 炭
+] as const;
+
+const THEME_COLOR_HEX_PATTERN = /^#[0-9a-fA-F]{6}$/;
 
 const containerStyle: React.CSSProperties = {
   padding: '20px 16px 48px',
@@ -142,15 +161,22 @@ export default function SiteEditAdminPage() {
   const [eventName, setEventName] = useState('');
   const [loadMessage, setLoadMessage] = useState('');
   const [description, setDescription] = useState('');
+  const [gourmetDefinition, setGourmetDefinition] = useState('');
   const [heroImageUrl, setHeroImageUrl] = useState<string | null>(null);
+  const [siteIconUrl, setSiteIconUrl] = useState<string | null>(null);
+  const [themeColor, setThemeColor] = useState<string | null>(null);
+  const [themeColorHex, setThemeColorHex] = useState('');
   const [notes, setNotes] = useState<SiteNote[]>([{ title: '', body: '' }]);
   const [topPlacementEnabled, setTopPlacementEnabled] = useState(false);
   const [topPlacementPrice, setTopPlacementPrice] = useState('');
   const [uploading, setUploading] = useState(false);
   const [imageMessage, setImageMessage] = useState('');
+  const [iconUploading, setIconUploading] = useState(false);
+  const [iconMessage, setIconMessage] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const iconFileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -193,9 +219,21 @@ export default function SiteEditAdminPage() {
       setDescription(
         typeof siteData.siteDescription === 'string' ? siteData.siteDescription : '',
       );
+      setGourmetDefinition(
+        typeof siteData.gourmetDefinition === 'string'
+          ? siteData.gourmetDefinition
+          : '',
+      );
       setHeroImageUrl(
         typeof siteData.heroImageUrl === 'string' ? siteData.heroImageUrl : null,
       );
+      setSiteIconUrl(
+        typeof siteData.siteIconUrl === 'string' ? siteData.siteIconUrl : null,
+      );
+      const loadedThemeColor =
+        typeof siteData.themeColor === 'string' ? siteData.themeColor : null;
+      setThemeColor(loadedThemeColor);
+      setThemeColorHex(loadedThemeColor ?? '');
       const loadedNotes: SiteNote[] = Array.isArray(siteData.siteNotes)
         ? siteData.siteNotes
         : [];
@@ -228,26 +266,36 @@ export default function SiteEditAdminPage() {
     }
   };
 
+  // 画像アップロード共通処理（kind でヒーロー画像／アイコンを区別する）。
+  // URL はフォーム状態にだけ入れる。公開ページへの反映は「保存する」時点。
+  const uploadSiteImage = async (
+    file: File,
+    kind: 'hero' | 'icon',
+  ): Promise<string> => {
+    if (!user) throw new Error(adminText(locale, 'heroImageUploadFailed'));
+    const idToken = await user.getIdToken();
+    const form = new FormData();
+    form.append('file', file);
+    form.append('kind', kind);
+    const res = await fetch(`/api/events/${eventId}/site-image`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${idToken}` },
+      body: form,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error ?? adminText(locale, 'heroImageUploadFailed'));
+    }
+    return data.url as string;
+  };
+
   const handleImageSelected = async (files: FileList | null) => {
     const file = files?.[0];
     if (!file || !user) return;
     setUploading(true);
     setImageMessage('');
     try {
-      const idToken = await user.getIdToken();
-      const form = new FormData();
-      form.append('file', file);
-      const res = await fetch(`/api/events/${eventId}/site-image`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${idToken}` },
-        body: form,
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data.error ?? adminText(locale, 'heroImageUploadFailed'));
-      }
-      // URL はフォーム状態にだけ入れる。公開ページへの反映は「保存する」時点。
-      setHeroImageUrl(data.url as string);
+      setHeroImageUrl(await uploadSiteImage(file, 'hero'));
     } catch (e) {
       setImageMessage(
         e instanceof Error ? e.message : adminText(locale, 'heroImageUploadFailed'),
@@ -256,6 +304,39 @@ export default function SiteEditAdminPage() {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
+  };
+
+  const handleIconSelected = async (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file || !user) return;
+    setIconUploading(true);
+    setIconMessage('');
+    try {
+      setSiteIconUrl(await uploadSiteImage(file, 'icon'));
+    } catch (e) {
+      setIconMessage(
+        e instanceof Error ? e.message : adminText(locale, 'heroImageUploadFailed'),
+      );
+    } finally {
+      setIconUploading(false);
+      if (iconFileInputRef.current) iconFileInputRef.current.value = '';
+    }
+  };
+
+  const applyThemeColor = (value: string | null) => {
+    setThemeColor(value);
+    setThemeColorHex(value ?? '');
+  };
+
+  const handleThemeColorHexChange = (raw: string) => {
+    setThemeColorHex(raw);
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      setThemeColor(null);
+    } else if (THEME_COLOR_HEX_PATTERN.test(trimmed)) {
+      setThemeColor(trimmed.toLowerCase());
+    }
+    // 形式が整うまでは themeColor を変えない（入力途中の文字列で壊さない）
   };
 
   const updateNote = (index: number, field: keyof SiteNote, value: string) => {
@@ -273,7 +354,10 @@ export default function SiteEditAdminPage() {
         method: 'PUT',
         body: JSON.stringify({
           siteDescription: description,
+          gourmetDefinition,
           heroImageUrl,
+          siteIconUrl,
+          themeColor,
           siteNotes: notes,
           topPlacementEnabled,
           topPlacementPrice: priceText === '' ? null : Number(priceText),
@@ -283,9 +367,19 @@ export default function SiteEditAdminPage() {
       if (typeof data.siteDescription === 'string') {
         setDescription(data.siteDescription);
       }
+      if (typeof data.gourmetDefinition === 'string') {
+        setGourmetDefinition(data.gourmetDefinition);
+      }
       setHeroImageUrl(
         typeof data.heroImageUrl === 'string' ? data.heroImageUrl : null,
       );
+      setSiteIconUrl(
+        typeof data.siteIconUrl === 'string' ? data.siteIconUrl : null,
+      );
+      const savedThemeColor =
+        typeof data.themeColor === 'string' ? data.themeColor : null;
+      setThemeColor(savedThemeColor);
+      setThemeColorHex(savedThemeColor ?? '');
       const savedNotes: SiteNote[] = Array.isArray(data.siteNotes)
         ? data.siteNotes
         : [];
@@ -378,6 +472,26 @@ export default function SiteEditAdminPage() {
       </section>
 
       <section style={{ marginTop: 32 }}>
+        <h2 style={sectionTitleStyle}>{adminText(locale, 'gourmetDefinitionLabel')}</h2>
+        <p style={noteTextStyle}>{adminText(locale, 'gourmetDefinitionNote')}</p>
+        <div style={{ ...cardStyle, marginTop: 12, padding: 24 }}>
+          <textarea
+            style={{ ...inputStyle, marginTop: 0, minHeight: 140, resize: 'vertical' }}
+            value={gourmetDefinition}
+            maxLength={MAX_GOURMET_DEFINITION_LENGTH}
+            placeholder={adminText(locale, 'gourmetDefinitionPlaceholder')}
+            onChange={(e) => setGourmetDefinition(e.target.value)}
+          />
+          <div style={{ fontSize: 12, color: '#64748b', marginTop: 6, textAlign: 'right' }}>
+            {adminText(locale, 'siteCharCount', {
+              count: String(gourmetDefinition.length),
+              max: String(MAX_GOURMET_DEFINITION_LENGTH),
+            })}
+          </div>
+        </div>
+      </section>
+
+      <section style={{ marginTop: 32 }}>
         <h2 style={sectionTitleStyle}>{adminText(locale, 'heroImageLabel')}</h2>
         <p style={noteTextStyle}>{adminText(locale, 'heroImageNote')}</p>
         <div style={{ ...cardStyle, marginTop: 12, padding: 24 }}>
@@ -429,6 +543,144 @@ export default function SiteEditAdminPage() {
             )}
           </div>
           {imageMessage && <p style={adminFeedbackStyle}>{imageMessage}</p>}
+        </div>
+      </section>
+
+      <section style={{ marginTop: 32 }}>
+        <h2 style={sectionTitleStyle}>{adminText(locale, 'siteIconLabel')}</h2>
+        <p style={noteTextStyle}>{adminText(locale, 'siteIconNote')}</p>
+        <div style={{ ...cardStyle, marginTop: 12, padding: 24 }}>
+          {siteIconUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={siteIconUrl}
+              alt={adminText(locale, 'siteIconLabel')}
+              style={{
+                display: 'block',
+                width: 96,
+                height: 96,
+                objectFit: 'cover',
+                borderRadius: 20,
+                border: '1px solid #E8DCC4',
+                marginBottom: 16,
+              }}
+            />
+          )}
+          <input
+            ref={iconFileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            style={{ display: 'none' }}
+            onChange={(e) => void handleIconSelected(e.target.files)}
+          />
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <button
+              onClick={() => iconFileInputRef.current?.click()}
+              disabled={iconUploading}
+              style={secondaryButtonStyle}
+            >
+              <span style={adminButtonContentStyle}>
+                {iconUploading && <ButtonSpinner />}
+                {iconUploading
+                  ? adminText(locale, 'heroImageUploading')
+                  : siteIconUrl
+                    ? adminText(locale, 'heroImageReplaceButton')
+                    : adminText(locale, 'heroImageUploadButton')}
+              </span>
+            </button>
+            {siteIconUrl && (
+              <button
+                onClick={() => setSiteIconUrl(null)}
+                disabled={iconUploading}
+                style={dangerButtonStyle}
+              >
+                {adminText(locale, 'heroImageRemoveButton')}
+              </button>
+            )}
+          </div>
+          {iconMessage && <p style={adminFeedbackStyle}>{iconMessage}</p>}
+        </div>
+      </section>
+
+      <section style={{ marginTop: 32 }}>
+        <h2 style={sectionTitleStyle}>{adminText(locale, 'themeColorLabel')}</h2>
+        <p style={noteTextStyle}>{adminText(locale, 'themeColorNote')}</p>
+        <div style={{ ...cardStyle, marginTop: 12, padding: 24 }}>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            {THEME_COLOR_PRESETS.map((preset) => {
+              const selected = themeColor === preset;
+              return (
+                <button
+                  key={preset}
+                  type="button"
+                  title={preset}
+                  aria-pressed={selected}
+                  onClick={() => applyThemeColor(preset)}
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: '50%',
+                    backgroundColor: preset,
+                    border: selected
+                      ? '3px solid #0f172a'
+                      : '1px solid rgba(15, 23, 42, 0.25)',
+                    boxShadow: selected
+                      ? '0 0 0 2px #ffffff inset'
+                      : undefined,
+                    cursor: 'pointer',
+                    padding: 0,
+                  }}
+                />
+              );
+            })}
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              gap: 10,
+              alignItems: 'flex-end',
+              flexWrap: 'wrap',
+              marginTop: 16,
+            }}
+          >
+            <label style={{ ...labelStyle, marginBottom: 0 }}>
+              #RRGGBB
+              <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input
+                  style={{ ...inputStyle, width: 150 }}
+                  value={themeColorHex}
+                  placeholder="#8b5e34"
+                  onChange={(e) => handleThemeColorHexChange(e.target.value)}
+                />
+                <input
+                  type="color"
+                  value={themeColor ?? '#8b5e34'}
+                  onChange={(e) => applyThemeColor(e.target.value)}
+                  style={{
+                    width: 48,
+                    height: 44,
+                    padding: 2,
+                    border: '1px solid #E8DCC4',
+                    borderRadius: 12,
+                    backgroundColor: '#ffffff',
+                    cursor: 'pointer',
+                  }}
+                />
+              </span>
+            </label>
+            {themeColor && (
+              <button
+                type="button"
+                onClick={() => applyThemeColor(null)}
+                style={dangerButtonStyle}
+              >
+                {adminText(locale, 'themeColorResetButton')}
+              </button>
+            )}
+          </div>
+          <p style={noteTextStyle}>
+            {themeColor ?? adminText(locale, 'themeColorUnset')}
+          </p>
         </div>
       </section>
 

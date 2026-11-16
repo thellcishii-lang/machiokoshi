@@ -1,8 +1,11 @@
 // app/api/events/[eventId]/site-image/route.ts
-// 特設サイトのヒーロー画像アップロード（管理人本人だけ）。
+// 特設サイトの画像アップロード（管理人本人だけ）。
+// フォーム項目 kind で用途を受ける: 'hero'（ヒーロー画像、既定）/
+// 'icon'（ヘッダー用アイコン）。保存先・検証は共通で、どちらの URL も
+// site-settings の PUT で保存する（アップロードしただけでは表示は
+// 変わらない。ヒーロー画像と同じ作法）。
 // 店舗写真・レビュー写真と同じ方式: Admin SDK で Storage に保存し、
-// 表示用 URL を返す。URL の保存は site-settings の PUT で行う
-// （アップロードしただけでは表示は変わらない）。
+// 表示用 URL を返す。
 // 保存先: events/{eventId}/site-images/{uuid}.{ext}
 // 検証（jpg/png/webp、1枚5MBまで）はレビュー写真と同じ純粋関数を流用する。
 // 書き込みは Admin SDK 経由のみで、storage.rules 側は読み取りだけを
@@ -37,6 +40,16 @@ export async function POST(
   if (!(file instanceof File)) {
     return NextResponse.json({ error: 'file が必要です' }, { status: 400 });
   }
+  // 用途（未指定はヒーロー画像）。値そのものは保存先に影響しないが、
+  // 呼び出し側がどちらの画像として扱うかを明示できるように受ける。
+  const kindRaw = formData.get('kind');
+  const kind = kindRaw === null || kindRaw === '' ? 'hero' : kindRaw;
+  if (kind !== 'hero' && kind !== 'icon') {
+    return NextResponse.json(
+      { error: 'kind の形式が不正です' },
+      { status: 400 },
+    );
+  }
 
   const validation = validateReviewPhoto({
     contentType: file.type,
@@ -59,7 +72,7 @@ export async function POST(
     });
     await storedFile.makePublic();
     const url = `https://storage.googleapis.com/${bucket.name}/${storagePath}`;
-    return NextResponse.json({ url, storagePath });
+    return NextResponse.json({ url, storagePath, kind });
   } catch (error) {
     console.error('[site-image] Storage 保存に失敗:', error);
     return NextResponse.json(

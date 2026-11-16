@@ -32,9 +32,12 @@ import {
   receivesCapsPropagation,
 } from './event';
 import {
+  normalizeGourmetDefinition,
   normalizeHeroImageUrl,
   normalizeSiteDescription,
+  normalizeSiteIconUrl,
   normalizeSiteNotes,
+  normalizeThemeColor,
   parseSiteSettings,
 } from './event-site';
 
@@ -119,7 +122,10 @@ export async function createEvent(input: CreateEventInput): Promise<EventConfig>
     links: normalizeEventLinks(input.links),
     // 特設サイトの表示内容は作成時点では未設定（編集画面で後から設定する）
     siteDescription: '',
+    gourmetDefinition: '',
     heroImageUrl: null,
+    siteIconUrl: null,
+    themeColor: null,
     siteNotes: [],
     // トップ掲載も作成時点では無効・料金未設定（特設サイト編集画面で設定する）
     topPlacementEnabled: false,
@@ -286,7 +292,10 @@ export type UpdateEventInput = Partial<
     | 'rankingMinReviews'
     | 'links'
     | 'siteDescription'
+    | 'gourmetDefinition'
     | 'heroImageUrl'
+    | 'siteIconUrl'
+    | 'themeColor'
     | 'siteNotes'
     | 'topPlacementEnabled'
     | 'topPlacementPrice'
@@ -334,9 +343,21 @@ export async function updateEvent(
     patch.siteDescription !== undefined
       ? normalizeSiteDescription(patch.siteDescription)
       : undefined;
+  const gourmetDefinition =
+    patch.gourmetDefinition !== undefined
+      ? normalizeGourmetDefinition(patch.gourmetDefinition)
+      : undefined;
   const heroImageUrl =
     patch.heroImageUrl !== undefined
       ? normalizeHeroImageUrl(patch.heroImageUrl)
+      : undefined;
+  const siteIconUrl =
+    patch.siteIconUrl !== undefined
+      ? normalizeSiteIconUrl(patch.siteIconUrl)
+      : undefined;
+  const themeColor =
+    patch.themeColor !== undefined
+      ? normalizeThemeColor(patch.themeColor)
       : undefined;
   const siteNotes =
     patch.siteNotes !== undefined
@@ -365,7 +386,10 @@ export async function updateEvent(
       ...patch,
       ...(links !== undefined ? { links } : {}),
       ...(siteDescription !== undefined ? { siteDescription } : {}),
+      ...(gourmetDefinition !== undefined ? { gourmetDefinition } : {}),
       ...(heroImageUrl !== undefined ? { heroImageUrl } : {}),
+      ...(siteIconUrl !== undefined ? { siteIconUrl } : {}),
+      ...(themeColor !== undefined ? { themeColor } : {}),
       ...(siteNotes !== undefined ? { siteNotes } : {}),
       ...(topPlacementEnabled !== undefined ? { topPlacementEnabled } : {}),
       ...(topPlacementPrice !== undefined ? { topPlacementPrice } : {}),

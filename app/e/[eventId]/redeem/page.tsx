@@ -33,6 +33,7 @@ import {
 } from '@/lib/i18n';
 import { redeemText, uiText } from '@/lib/ui-text';
 import { specialSiteShopUrl, specialSiteUrl } from '@/lib/special-site';
+import { themeCssVars } from '@/lib/theme-color';
 import { parseRedeemQrPayload } from '@/lib/stamp-qr';
 import PasswordInput from '@/components/PasswordInput';
 import PoweredByFooter from '@/components/PoweredByFooter';
@@ -68,8 +69,12 @@ interface TodayStamp {
   grantedAt: string | null;
 }
 
-const VIOLET = '#8B5E34';
-const VIOLET_BRIGHT = '#B07B45';
+// アクセント色はプロジェクトのテーマカラー（CSS カスタムプロパティ）
+// 経由で使う。変数はルート要素に themeCssVars で渡し、未設定の場合は
+// var() のフォールバック（現在のベージュ／茶系）になる。
+const VIOLET = 'var(--theme-accent, #8B5E34)';
+const VIOLET_BRIGHT = 'var(--theme-accent-bright, #B07B45)';
+const SOFT_BG = 'var(--theme-card-to, #F3E8D2)';
 
 // モックの言語セグメントは短い表記（EN など）。保存・送信は従来どおり locale で行う。
 const PILL_LABELS: Record<Locale, string> = {
@@ -185,6 +190,7 @@ export default function ExhibitorRedeemPage() {
   const [busy, setBusy] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [eventName, setEventName] = useState('');
+  const [themeColor, setThemeColor] = useState<string | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
 
   useEffect(() => {
@@ -204,6 +210,9 @@ export default function ExhibitorRedeemPage() {
         if (!res.ok) return;
         const data = await res.json().catch(() => ({}));
         if (typeof data.event?.name === 'string') setEventName(data.event.name);
+        if (typeof data.event?.themeColor === 'string') {
+          setThemeColor(data.event.themeColor);
+        }
       } catch {
         // 取れなければヘッダーは空のまま（画面の動作には影響しない）
       }
@@ -663,7 +672,7 @@ export default function ExhibitorRedeemPage() {
 
   if (!user) {
     return (
-      <main style={containerStyle}>
+      <main style={{ ...containerStyle, ...themeCssVars(themeColor) } as React.CSSProperties}>
         {brandRow(languagePills)}
         <h1 style={{ fontSize: 20, fontWeight: 800, margin: '18px 0 0' }}>
           {redeemText(locale, 'redeemLoginTitle')}
@@ -726,7 +735,7 @@ export default function ExhibitorRedeemPage() {
   });
 
   return (
-    <main style={containerStyle}>
+    <main style={{ ...containerStyle, ...themeCssVars(themeColor) } as React.CSSProperties}>
       {brandRow(
         <button onClick={() => void signOut(auth)} style={logoutButtonStyle}>
           {redeemText(locale, 'logoutButton')}
@@ -945,7 +954,7 @@ export default function ExhibitorRedeemPage() {
                     width: 50,
                     height: 50,
                     borderRadius: '50%',
-                    backgroundColor: '#F3E8D2',
+                    backgroundColor: SOFT_BG,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -955,11 +964,11 @@ export default function ExhibitorRedeemPage() {
                   <svg width="27" height="27" viewBox="0 0 24 24">
                     <path
                       d="M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v1.5a2.5 2.5 0 0 0 0 5V16a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1.5a2.5 2.5 0 0 0 0-5V8Z"
-                      fill={VIOLET}
+                      style={{ fill: VIOLET }}
                     />
                     <path
                       d="M13.5 7v2M13.5 11v2M13.5 15v2"
-                      stroke="#F3E8D2"
+                      style={{ stroke: SOFT_BG }}
                       strokeWidth="1.6"
                       strokeLinecap="round"
                       strokeDasharray="0.1 3.1"

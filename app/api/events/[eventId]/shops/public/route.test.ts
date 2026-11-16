@@ -86,6 +86,52 @@ describe('GET /api/events/[eventId]/shops/public', () => {
     expect(JSON.stringify(body)).not.toContain('memberId');
   });
 
+  it('各店のリンクと座標をそのまま含めて返す', async () => {
+    mocks.listPublicShops.mockResolvedValue([
+      {
+        exhibitorId: 'shop-a',
+        name: '店A',
+        profile: {
+          displayName: 'カレー堂A',
+          published: true,
+          links: [{ label: '公式サイト', url: 'https://example.com/' }],
+          location: { lat: 35.85, lng: 139.32 },
+        },
+      },
+      {
+        exhibitorId: 'shop-b',
+        name: '店B',
+        profile: {
+          displayName: 'カレー堂B',
+          published: true,
+          links: [],
+          location: null,
+        },
+      },
+    ]);
+    mocks.listPublicReviews.mockResolvedValue({
+      reviews: [],
+      summary: {
+        count: 0,
+        averageStars: 0,
+        categories: { taste: 0, service: 0, atmosphere: 0, presentation: 0 },
+      },
+    });
+
+    const response = await callGet();
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.shops[0].profile.links).toEqual([
+      { label: '公式サイト', url: 'https://example.com/' },
+    ]);
+    expect(body.shops[0].profile.location).toEqual({
+      lat: 35.85,
+      lng: 139.32,
+    });
+    expect(body.shops[1].profile.links).toEqual([]);
+    expect(body.shops[1].profile.location).toBeNull();
+  });
+
   it('店が無ければ空の一覧を返す', async () => {
     mocks.listPublicShops.mockResolvedValue([]);
     const response = await callGet();
