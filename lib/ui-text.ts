@@ -49,6 +49,12 @@ export const UI_TEXT = {
     zh: '相关链接',
     ko: '관련 링크',
   },
+  specialSite: {
+    ja: '特設サイト',
+    en: 'Special site',
+    zh: '特设网站',
+    ko: '특설 사이트',
+  },
   endedMessage: {
     ja: 'このプロジェクトは終了しました。',
     en: 'This event has ended.',
@@ -1127,6 +1133,18 @@ export const REDEEM_TEXT = {
     zh: '前往核销页面',
     ko: '사용 처리 화면으로',
   },
+  specialSiteShopLink: {
+    ja: '特設サイトで自店ページを見る',
+    en: 'View your shop page on the special site',
+    zh: '在特设网站查看本店页面',
+    ko: '특설 사이트에서 내 매장 페이지 보기',
+  },
+  specialSiteTopLink: {
+    ja: '特設サイトを開く',
+    en: 'Open the special site',
+    zh: '打开特设网站',
+    ko: '특설 사이트 열기',
+  },
 } as const satisfies Record<string, Record<Locale, string>>;
 
 export type RedeemTextKey = keyof typeof REDEEM_TEXT;
@@ -1244,6 +1262,30 @@ export const ADMIN_TEXT = {
     en: '⑦ Billing',
     zh: '⑦ 收费',
     ko: '⑦ 과금',
+  },
+  navSpecialSite: {
+    ja: '特設サイト',
+    en: 'Special site',
+    zh: '特设网站',
+    ko: '특설 사이트',
+  },
+  specialSiteOpen: {
+    ja: '特設サイトを開く',
+    en: 'Open special site',
+    zh: '打开特设网站',
+    ko: '특설 사이트 열기',
+  },
+  specialSiteUrlCopy: {
+    ja: 'URLコピー',
+    en: 'Copy URL',
+    zh: '复制链接',
+    ko: 'URL 복사',
+  },
+  specialSiteUrlCopied: {
+    ja: 'コピーしました',
+    en: 'Copied',
+    zh: '已复制',
+    ko: '복사했습니다',
   },
   navSettings: {
     ja: 'プロジェクト設定',

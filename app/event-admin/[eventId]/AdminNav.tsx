@@ -15,6 +15,7 @@
 import type { ReactNode } from 'react';
 import { adminText } from '@/lib/ui-text';
 import type { Locale } from '@/lib/i18n';
+import { specialSiteUrl } from '@/lib/special-site';
 import { ADMIN_CARD_BORDER, ADMIN_CARD_SHADOW, ADMIN_VIOLET } from '@/components/AdminBrand';
 
 function NavIcon({ children }: { children: ReactNode }) {
@@ -92,6 +93,14 @@ const billingIcon = (
   </NavIcon>
 );
 
+const externalIcon = (
+  <NavIcon>
+    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+    <path d="M15 3h6v6" />
+    <path d="M10 14 21 3" />
+  </NavIcon>
+);
+
 const gearIcon = (
   <NavIcon>
     <circle cx="12" cy="12" r="3" />
@@ -156,7 +165,13 @@ export function AdminNav({
   /** サイドバー内ではカード枠なしにする（AdminShell が指定）。 */
   plain?: boolean;
 }) {
-  const items = [
+  const items: Array<{
+    key: string;
+    href: string;
+    label: string;
+    icon: ReactNode;
+    external?: boolean;
+  }> = [
     { key: '設定', href: '/event-admin', label: adminText(locale, 'navSettings'), icon: settingsIcon },
     ...(eventId && eventName
       ? [
@@ -181,6 +196,15 @@ export function AdminNav({
           // 課金は別料金オプション。ナビは常時出し、オプション OFF の
           // 契約では課金ページ側で案内文を出す（API が 404 を返す）。
           { key: '⑦', href: `/event-admin/${eventId}/billing`, label: adminText(locale, 'navBilling'), icon: billingIcon },
+          // 特設サイトは本家（push-taro.com）上の公開ページ。宣伝に使う
+          // URL へすぐ飛べるよう、末尾に外部リンクとして置く。
+          {
+            key: '特設',
+            href: specialSiteUrl(eventId),
+            label: adminText(locale, 'navSpecialSite'),
+            icon: externalIcon,
+            external: true,
+          },
         ]
       : []),
   ];
@@ -193,9 +217,19 @@ export function AdminNav({
             {item.label}
           </span>
         ) : (
-          <a key={item.href} href={item.href} style={itemLinkStyle}>
+          <a
+            key={item.href}
+            href={item.href}
+            style={itemLinkStyle}
+            {...(item.external ? { target: '_blank', rel: 'noreferrer' } : {})}
+          >
             <span style={{ display: 'flex', color: ADMIN_VIOLET }}>{item.icon}</span>
             {item.label}
+            {item.external && (
+              <span aria-hidden="true" style={{ marginLeft: 'auto', fontSize: 13, color: '#94a3b8' }}>
+                ↗
+              </span>
+            )}
           </a>
         ),
       )}

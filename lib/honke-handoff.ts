@@ -19,8 +19,11 @@
  */
 
 import { createHmac, randomBytes } from 'node:crypto';
+// HONKE_BASE_URL の定義は lib/special-site.ts（クライアントからも使うため）。
+// ここでは従来の import 先として使えるよう再 export する。
+import { HONKE_BASE_URL } from './special-site';
 
-export const HONKE_BASE_URL = 'https://push-taro.com';
+export { HONKE_BASE_URL };
 export const HANDOFF_TTL_SECONDS = 600;
 
 export type HandoffPurpose = 'account' | 'coupon-option';

@@ -42,6 +42,7 @@ import { AdminShell } from '@/components/AdminShell';
 import { VisitorQr } from '@/components/VisitorQr';
 import { AdminNav } from './[eventId]/AdminNav';
 import { openHonkeLink } from '@/lib/honke-handoff-client';
+import { specialSiteUrl } from '@/lib/special-site';
 import {
   ADMIN_CARD_BORDER,
   ADMIN_CARD_SHADOW,
@@ -277,6 +278,7 @@ export default function EventAdminPage() {
   // プロジェクトフォームの送信中状態（保存／下書きで作成／登録で作成を区別する）。
   const [formBusy, setFormBusy] = useState<null | 'save' | 'draft' | 'live'>(null);
   // カード上のアクション（開催中にする／削除）の処理中と結果表示。
+  const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
   const [cardBusy, setCardBusy] = useState<{ id: string; action: 'publish' | 'delete' } | null>(null);
   const [cardFeedback, setCardFeedback] = useState<{ id: string; text: string; error: boolean } | null>(null);
   // 初回パスワード変更ゲートの状態（unknown の間は管理画面を出さない）。
@@ -484,6 +486,17 @@ export default function EventAdminPage() {
 
   // 下書きカードの「開催中にする」。既存の更新 API で状態だけを変え、
   // 成功したらカード表示を即時に切り替える。失敗理由はカードの近くに出す。
+  // 特設サイトの URL コピー（課金ページの handleCopy と同じ作法）。
+  const handleCopyUrl = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedUrl(url);
+      window.setTimeout(() => setCopiedUrl(null), 2000);
+    } catch {
+      // クリップボードが使えない環境では何もしない（リンクから開ける）。
+    }
+  };
+
   const handlePublish = async (event: EventConfig) => {
     setCardBusy({ id: event.id, action: 'publish' });
     setCardFeedback(null);
@@ -878,6 +891,23 @@ export default function EventAdminPage() {
                       {adminText(locale, 'couponPurchaseButton')}
                     </button>
                   )}
+                  <a
+                    href={specialSiteUrl(event.id)}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={cardActionOutlineStyle}
+                  >
+                    {adminText(locale, 'specialSiteOpen')}
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => void handleCopyUrl(specialSiteUrl(event.id))}
+                    style={cardActionButtonStyle}
+                  >
+                    {copiedUrl === specialSiteUrl(event.id)
+                      ? adminText(locale, 'specialSiteUrlCopied')
+                      : adminText(locale, 'specialSiteUrlCopy')}
+                  </button>
                 </div>
                 {(event.status === 'draft' || event.status === 'ended') && (
                   <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>

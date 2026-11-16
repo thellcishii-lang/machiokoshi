@@ -30,6 +30,7 @@ import {
   type Locale,
 } from '@/lib/i18n';
 import { uiText } from '@/lib/ui-text';
+import { specialSiteUrl } from '@/lib/special-site';
 import { buildCouponGroups } from '@/lib/coupon-groups';
 import {
   buildFreeCouponQrPayload,
@@ -1361,6 +1362,25 @@ export default function EventVisitorPage() {
           })}
         </div>
       </header>
+
+      <section style={{ marginTop: 20 }}>
+        <a
+          href={specialSiteUrl(eventId)}
+          target="_blank"
+          rel="noreferrer"
+          style={{
+            ...cardStyle,
+            display: 'block',
+            padding: 14,
+            fontWeight: 700,
+            fontSize: 15,
+            color: VIOLET,
+            textDecoration: 'none',
+          }}
+        >
+          🌐 {uiText(locale, 'specialSite')}
+        </a>
+      </section>
 
       {infoPdfs.length > 0 && (
         <section style={{ marginTop: 20 }}>
