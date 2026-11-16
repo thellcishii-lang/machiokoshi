@@ -1,15 +1,18 @@
 'use client';
 
 // app/event-admin/[eventId]/AdminNav.tsx
-// 管理画面①②③とプロジェクト設定の間の共通ナビ。
+// 管理画面の共通ナビ。
 // AdminShell のサイドバー（PC）とアコーディオン（スマホ）の中に置かれる。
 // plain=true のときはサイドバー用にカード枠なし、通常はスマホ用に
 // 白カードの中にアイコン付きメニューを縦に並べる。
 // 現在地はどちらもバイオレットの塗りつぶしで示す（承認済みモック準拠）。
-// 構造: 先頭は常に「プロジェクト設定」（= 主催者トップ。プロジェクト一覧がTOP）。
-// プロジェクト内の画面では、その下にプロジェクト名（そのプロジェクトの編集フォーム
-// への入口）→ プッシュ＋消込 → 予約配信 → クーポン管理 → レビュー管理 → 投稿 → 設定 と並び、
+// 構造: プロジェクト内の画面では、先頭に「プロジェクト一覧」への戻りリンク、
+// その下にプロジェクト名（見出し）、続いてプロジェクトメニュー
+// （ダッシュボード → プッシュ＋消込 → 予約配信 → クーポン管理 → レビュー管理
+// → 投稿 → 設定 → 課金 → 特設サイト編集 → 特設サイト（外部））を並べ、
 // 今どのプロジェクトの中にいるかがサイドバーで分かるようにする。
+// プロジェクトのダッシュボード（/event-admin/[eventId]）を開いた時点で
+// サイドバーがこのプロジェクトメニューに切り替わる。
 // eventId が無い場合（主催者トップ）はプロジェクト設定のみを現在地として出す。
 // 上限警告バナー（CapWarningBanner）は各画面のコンテンツ側で描画する。
 import type { ReactNode } from 'react';
@@ -41,6 +44,15 @@ const eventIcon = (
   <NavIcon>
     <rect x="3" y="5" width="18" height="16" rx="2" />
     <path d="M3 10h18M8 3v4M16 3v4" />
+  </NavIcon>
+);
+
+const dashboardIcon = (
+  <NavIcon>
+    <rect x="3" y="3" width="7" height="7" rx="1.5" />
+    <rect x="14" y="3" width="7" height="7" rx="1.5" />
+    <rect x="3" y="14" width="7" height="7" rx="1.5" />
+    <rect x="14" y="14" width="7" height="7" rx="1.5" />
   </NavIcon>
 );
 
@@ -157,6 +169,27 @@ const plainNavStyle: React.CSSProperties = {
   gap: 4,
 };
 
+const backLinkStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
+  padding: '8px 14px',
+  fontSize: 13.5,
+  fontWeight: 600,
+  color: '#8A7A63',
+  textDecoration: 'none',
+};
+
+const projectNameStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 10,
+  padding: '12px 14px 6px',
+  fontSize: 16,
+  fontWeight: 800,
+  color: '#2E2015',
+};
+
 export function AdminNav({
   eventId,
   eventName,
@@ -165,7 +198,7 @@ export function AdminNav({
   plain = false,
 }: {
   eventId?: string;
-  /** プロジェクト内の画面で、そのプロジェクト名を編集への入口として出す。 */
+  /** プロジェクト内の画面で、メニューの見出しとしてそのプロジェクト名を出す。 */
   eventName?: string;
   current: string;
   locale: Locale;
@@ -178,49 +211,50 @@ export function AdminNav({
     label: string;
     icon: ReactNode;
     external?: boolean;
-  }> = [
-    { key: '設定', href: '/event-admin', label: adminText(locale, 'navSettings'), icon: settingsIcon },
-    ...(eventId && eventName
-      ? [
-          {
-            key: 'プロジェクト名',
-            // そのプロジェクトの編集フォームへ直接戻れる入口（一覧側が
-            // ?edit= を読み取って選択＋スクロールする）。
-            href: `/event-admin?edit=${eventId}`,
-            label: eventName,
-            icon: eventIcon,
-          },
-        ]
-      : []),
-    ...(eventId
-      ? [
-          { key: '①', href: `/event-admin/${eventId}/push`, label: adminText(locale, 'navPush'), icon: pushIcon },
-          { key: '②', href: `/event-admin/${eventId}/schedule`, label: adminText(locale, 'navSchedule'), icon: scheduleIcon },
-          { key: '③', href: `/event-admin/${eventId}/coupons`, label: adminText(locale, 'navCoupons'), icon: couponsIcon },
-          { key: '④', href: `/event-admin/${eventId}/reviews`, label: adminText(locale, 'navReviews'), icon: reviewsIcon },
-          { key: '⑤', href: `/event-admin/${eventId}/social`, label: adminText(locale, 'navSocial'), icon: socialIcon },
-          { key: '⑥', href: `/event-admin/${eventId}/settings`, label: adminText(locale, 'navConfig'), icon: gearIcon },
-          // 課金は別料金オプション。ナビは常時出し、オプション OFF の
-          // 契約では課金ページ側で案内文を出す（API が 404 を返す）。
-          { key: '⑦', href: `/event-admin/${eventId}/billing`, label: adminText(locale, 'navBilling'), icon: billingIcon },
-          // 特設サイト編集は公開ページの表示内容（紹介文・ヒーロー画像・
-          // 追加事項）を編集する画面。下の外部リンク（公開ページそのもの）
-          // とは別物なので、並べて置く。
-          { key: '⑧', href: `/event-admin/${eventId}/site`, label: adminText(locale, 'navSiteEdit'), icon: siteEditIcon },
-          // 特設サイトは本家（push-taro.com）上の公開ページ。宣伝に使う
-          // URL へすぐ飛べるよう、末尾に外部リンクとして置く。
-          {
-            key: '特設',
-            href: specialSiteUrl(eventId),
-            label: adminText(locale, 'navSpecialSite'),
-            icon: externalIcon,
-            external: true,
-          },
-        ]
-      : []),
-  ];
+  }> = eventId
+    ? [
+        { key: 'ダッシュボード', href: `/event-admin/${eventId}`, label: adminText(locale, 'navDashboard'), icon: dashboardIcon },
+        { key: '①', href: `/event-admin/${eventId}/push`, label: adminText(locale, 'navPush'), icon: pushIcon },
+        { key: '②', href: `/event-admin/${eventId}/schedule`, label: adminText(locale, 'navSchedule'), icon: scheduleIcon },
+        { key: '③', href: `/event-admin/${eventId}/coupons`, label: adminText(locale, 'navCoupons'), icon: couponsIcon },
+        { key: '④', href: `/event-admin/${eventId}/reviews`, label: adminText(locale, 'navReviews'), icon: reviewsIcon },
+        { key: '⑤', href: `/event-admin/${eventId}/social`, label: adminText(locale, 'navSocial'), icon: socialIcon },
+        { key: '⑥', href: `/event-admin/${eventId}/settings`, label: adminText(locale, 'navConfig'), icon: gearIcon },
+        // 課金は別料金オプション。ナビは常時出し、オプション OFF の
+        // 契約では課金ページ側で案内文を出す（API が 404 を返す）。
+        { key: '⑦', href: `/event-admin/${eventId}/billing`, label: adminText(locale, 'navBilling'), icon: billingIcon },
+        // 特設サイト編集は公開ページの表示内容（紹介文・ヒーロー画像・
+        // 追加事項）を編集する画面。下の外部リンク（公開ページそのもの）
+        // とは別物なので、並べて置く。
+        { key: '⑧', href: `/event-admin/${eventId}/site`, label: adminText(locale, 'navSiteEdit'), icon: siteEditIcon },
+        // 特設サイトは本家（push-taro.com）上の公開ページ。宣伝に使う
+        // URL へすぐ飛べるよう、末尾に外部リンクとして置く。
+        {
+          key: '特設',
+          href: specialSiteUrl(eventId),
+          label: adminText(locale, 'navSpecialSite'),
+          icon: externalIcon,
+          external: true,
+        },
+      ]
+    : [
+        { key: '設定', href: '/event-admin', label: adminText(locale, 'navSettings'), icon: settingsIcon },
+      ];
   return (
     <nav style={plain ? plainNavStyle : cardNavStyle}>
+      {eventId && (
+        <>
+          <a href="/event-admin" style={backLinkStyle}>
+            ← {adminText(locale, 'eventsListTitle')}
+          </a>
+          {eventName && (
+            <div style={projectNameStyle}>
+              <span style={{ display: 'flex', color: ADMIN_VIOLET }}>{eventIcon}</span>
+              {eventName}
+            </div>
+          )}
+        </>
+      )}
       {items.map((item) =>
         item.key === current ? (
           <span key={item.href} style={itemCurrentStyle} aria-current="page">

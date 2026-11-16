@@ -1275,6 +1275,30 @@ export const ADMIN_TEXT = {
     zh: '⑧ 特设网站编辑',
     ko: '⑧ 특설 사이트 편집',
   },
+  navDashboard: {
+    ja: 'ダッシュボード',
+    en: 'Dashboard',
+    zh: '仪表盘',
+    ko: '대시보드',
+  },
+  openDashboardButton: {
+    ja: 'ダッシュボードを開く',
+    en: 'Open dashboard',
+    zh: '打开仪表盘',
+    ko: '대시보드 열기',
+  },
+  dashboardShopsLabel: {
+    ja: '参加店',
+    en: 'Participating shops',
+    zh: '参加店铺',
+    ko: '참가 점포',
+  },
+  dashboardReviewsLabel: {
+    ja: 'レビュー',
+    en: 'Reviews',
+    zh: '点评',
+    ko: '리뷰',
+  },
   specialSiteOpen: {
     ja: '特設サイトを開く',
     en: 'Open special site',
@@ -1570,10 +1594,10 @@ export const ADMIN_TEXT = {
     ko: '진행 중으로 변경',
   },
   editButton: {
-    ja: '編集',
-    en: 'Edit',
-    zh: '编辑',
-    ko: '편집',
+    ja: 'プロジェクト編集',
+    en: 'Edit project',
+    zh: '编辑项目',
+    ko: '프로젝트 편집',
   },
   deleteEventButton: {
     ja: 'このプロジェクトを削除',
