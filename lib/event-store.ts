@@ -22,9 +22,13 @@ import {
   isValidRankingMinReviews,
   isValidStampGoalCount,
   normalizeEventLinks,
+  normalizeTopPlacementEnabled,
+  normalizeTopPlacementPrice,
   parseEventLinks,
   parseRankingMinReviews,
   parseStampGoalCount,
+  parseTopPlacementEnabled,
+  parseTopPlacementPrice,
   receivesCapsPropagation,
 } from './event';
 import {
@@ -62,6 +66,9 @@ function toEventConfig(id: string, data: FirebaseFirestore.DocumentData): EventC
     links: parseEventLinks(data.links),
     // 特設サイトの表示内容も導入前のイベントには項目自体が無いため既定値に倒す
     ...parseSiteSettings(data),
+    // トップ掲載の設定も導入前のイベントには項目が無いため既定値に倒す
+    topPlacementEnabled: parseTopPlacementEnabled(data.topPlacementEnabled),
+    topPlacementPrice: parseTopPlacementPrice(data.topPlacementPrice),
     couponCap: data.couponCap ?? MAX_COUPONS_PER_EVENT,
     backupRetentionDays: data.backupRetentionDays ?? DEFAULT_BACKUP_RETENTION_DAYS,
     status: data.status,
@@ -114,6 +121,9 @@ export async function createEvent(input: CreateEventInput): Promise<EventConfig>
     siteDescription: '',
     heroImageUrl: null,
     siteNotes: [],
+    // トップ掲載も作成時点では無効・料金未設定（特設サイト編集画面で設定する）
+    topPlacementEnabled: false,
+    topPlacementPrice: null,
     couponCap: input.couponCap ?? MAX_COUPONS_PER_EVENT,
     backupRetentionDays:
       input.backupRetentionDays ?? DEFAULT_BACKUP_RETENTION_DAYS,
@@ -278,6 +288,8 @@ export type UpdateEventInput = Partial<
     | 'siteDescription'
     | 'heroImageUrl'
     | 'siteNotes'
+    | 'topPlacementEnabled'
+    | 'topPlacementPrice'
     | 'couponCap'
     | 'backupRetentionDays'
     | 'status'
@@ -330,6 +342,15 @@ export async function updateEvent(
     patch.siteNotes !== undefined
       ? normalizeSiteNotes(patch.siteNotes)
       : undefined;
+  // トップ掲載の設定も検証・正規化してから保存する
+  const topPlacementEnabled =
+    patch.topPlacementEnabled !== undefined
+      ? normalizeTopPlacementEnabled(patch.topPlacementEnabled)
+      : undefined;
+  const topPlacementPrice =
+    patch.topPlacementPrice !== undefined
+      ? normalizeTopPlacementPrice(patch.topPlacementPrice)
+      : undefined;
   if (
     patch.startDate !== undefined &&
     patch.endDate !== undefined &&
@@ -346,6 +367,8 @@ export async function updateEvent(
       ...(siteDescription !== undefined ? { siteDescription } : {}),
       ...(heroImageUrl !== undefined ? { heroImageUrl } : {}),
       ...(siteNotes !== undefined ? { siteNotes } : {}),
+      ...(topPlacementEnabled !== undefined ? { topPlacementEnabled } : {}),
+      ...(topPlacementPrice !== undefined ? { topPlacementPrice } : {}),
       updatedAt: FieldValue.serverTimestamp(),
     });
 }

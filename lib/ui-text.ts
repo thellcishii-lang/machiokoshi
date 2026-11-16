@@ -1145,6 +1145,78 @@ export const REDEEM_TEXT = {
     zh: '打开特设网站',
     ko: '특설 사이트 열기',
   },
+  topPlacementTitle: {
+    ja: '特設サイト トップ掲載',
+    en: 'Special site top placement',
+    zh: '特设网站置顶展示',
+    ko: '특설 사이트 상단 게재',
+  },
+  topPlacementNote: {
+    ja: '特設サイトのトップページに表示される5件に、優先的に掲載されます。',
+    en: 'Your shop is shown with priority among the 5 shops displayed at the top of the special site.',
+    zh: '将在特设网站首页显示的5家店铺中优先展示本店。',
+    ko: '특설 사이트 톱 페이지에 표시되는 5곳에 우선적으로 게재됩니다.',
+  },
+  topPlacementPrice: {
+    ja: '月額 {price} 円',
+    en: '{price} JPY / month',
+    zh: '每月 {price} 日元',
+    ko: '월 {price}엔',
+  },
+  topPlacementSubscribeButton: {
+    ja: 'トップ掲載を申し込む',
+    en: 'Apply for top placement',
+    zh: '申请置顶展示',
+    ko: '상단 게재 신청하기',
+  },
+  topPlacementFeaturedNote: {
+    ja: '現在、特設サイトのトップに掲載中です。',
+    en: 'Your shop is currently featured at the top of the special site.',
+    zh: '目前正在特设网站顶部展示中。',
+    ko: '현재 특설 사이트 상단에 게재 중입니다.',
+  },
+  topPlacementPastDueNote: {
+    ja: 'お支払いが確認できていません。掲載は継続していますが、未払いが確定すると掲載が止まります。',
+    en: 'Your payment could not be confirmed. Placement continues for now, but it stops if the payment stays unpaid.',
+    zh: '尚未确认到付款。目前继续展示，但若确定未付款将停止展示。',
+    ko: '결제가 확인되지 않았습니다. 게재는 계속되지만, 미납이 확정되면 게재가 중단됩니다.',
+  },
+  topPlacementCancelButton: {
+    ja: 'トップ掲載を解約する',
+    en: 'Cancel top placement',
+    zh: '取消置顶展示',
+    ko: '상단 게재 해지하기',
+  },
+  topPlacementSubscribeMessage: {
+    ja: 'トップ掲載のお申し込みを受け付けました。反映まで少し時間がかかる場合があります。',
+    en: 'Your top placement application was received. It may take a little while to appear.',
+    zh: '已收到置顶展示的申请。生效可能需要一些时间。',
+    ko: '상단 게재 신청이 접수되었습니다. 반영까지 시간이 걸릴 수 있습니다.',
+  },
+  topPlacementCheckoutCanceled: {
+    ja: 'トップ掲載のお申し込みはキャンセルされました。',
+    en: 'The top placement application was cancelled.',
+    zh: '置顶展示的申请已取消。',
+    ko: '상단 게재 신청이 취소되었습니다.',
+  },
+  topPlacementCancelMessage: {
+    ja: 'トップ掲載を解約しました。',
+    en: 'Top placement has been cancelled.',
+    zh: '已取消置顶展示。',
+    ko: '상단 게재를 해지했습니다.',
+  },
+  topPlacementSubscribeFailed: {
+    ja: 'トップ掲載の申し込みに失敗しました。時間をおいて再度お試しください。',
+    en: 'Failed to apply for top placement. Please try again later.',
+    zh: '置顶展示申请失败。请稍后再试。',
+    ko: '상단 게재 신청에 실패했습니다. 잠시 후 다시 시도해 주세요.',
+  },
+  topPlacementCancelFailed: {
+    ja: 'トップ掲載の解約に失敗しました。時間をおいて再度お試しください。',
+    en: 'Failed to cancel top placement. Please try again later.',
+    zh: '取消置顶展示失败。请稍后再试。',
+    ko: '상단 게재 해지에 실패했습니다. 잠시 후 다시 시도해 주세요.',
+  },
 } as const satisfies Record<string, Record<Locale, string>>;
 
 export type RedeemTextKey = keyof typeof REDEEM_TEXT;
@@ -2390,6 +2462,36 @@ export const ADMIN_TEXT = {
     en: 'Failed to save site settings',
     zh: '保存特设网站设置失败',
     ko: '특설 사이트 설정 저장에 실패했습니다',
+  },
+  siteTopPlacementTitle: {
+    ja: 'トップ掲載',
+    en: 'Top placement',
+    zh: '置顶展示',
+    ko: '상단 게재',
+  },
+  siteTopPlacementNote: {
+    ja: '特設サイトのトップに表示される参加店は5件までです。有効にすると、参加店が月額料金を払ってその5件に優先表示されるようになります（申し込みは店舗ページから）。',
+    en: 'Only 5 shops appear at the top of the special site. When enabled, shops can pay a monthly fee to be shown among those 5 first (they apply from their shop page).',
+    zh: '特设网站顶部最多显示5家店铺。启用后，参与店铺可支付月费优先显示在这5家之中（从店铺页面申请）。',
+    ko: '특설 사이트 상단에 표시되는 매장은 최대 5곳입니다. 활성화하면 참여 매장이 월 요금을 내고 그 5곳에 우선 표시될 수 있습니다(신청은 매장 페이지에서).',
+  },
+  siteTopPlacementEnabledLabel: {
+    ja: 'トップ掲載を有効にする',
+    en: 'Enable top placement',
+    zh: '启用置顶展示',
+    ko: '상단 게재 활성화',
+  },
+  siteTopPlacementPriceLabel: {
+    ja: '掲載料金（月額・円）',
+    en: 'Placement fee (monthly, JPY)',
+    zh: '展示费用（月额・日元）',
+    ko: '게재 요금(월액・엔)',
+  },
+  siteTopPlacementCancelNote: {
+    ja: 'オフにすると新規の申し込みと特設サイトへの優先表示が止まりますが、契約中のサブスクリプションは自動では解約されません（解約は参加店が店舗ページから行います）。料金を変更しても、契約中の金額は変わりません。',
+    en: 'Turning this off stops new applications and priority display on the special site, but existing subscriptions are not cancelled automatically (shops cancel from their shop page). Changing the price does not change what existing subscribers pay.',
+    zh: '关闭后将停止新的申请和特设网站的优先显示，但已签约的订阅不会自动取消（由参与店铺从店铺页面取消）。修改价格不会改变已签约的金额。',
+    ko: '끄면 신규 신청과 특설 사이트 우선 표시가 중단되지만, 계약 중인 구독은 자동으로 해지되지 않습니다(해지는 참여 매장이 매장 페이지에서 합니다). 요금을 변경해도 계약 중인 금액은 바뀌지 않습니다.',
   },
   stampSettingsTitle: {
     ja: 'スタンプ設定',

@@ -4,6 +4,7 @@
 // Push-taro 町おこし 管理人向けの特設サイト編集画面。
 // 本家（push-taro.com）上の特設サイトに表示される、プロジェクトごとの
 // 紹介文・ヒーロー画像・追加事項（タイトル＋本文、最大5件）を編集する。
+// あわせて、トップ掲載（先頭5枠）課金の ON/OFF と月額料金もここで設定する。
 // 保存先はプロジェクトドキュメントのトップレベル項目で、読み書きは
 // /api/events/{eventId}/site-settings、画像アップロードは
 // /api/events/{eventId}/site-image 経由。
@@ -143,6 +144,8 @@ export default function SiteEditAdminPage() {
   const [description, setDescription] = useState('');
   const [heroImageUrl, setHeroImageUrl] = useState<string | null>(null);
   const [notes, setNotes] = useState<SiteNote[]>([{ title: '', body: '' }]);
+  const [topPlacementEnabled, setTopPlacementEnabled] = useState(false);
+  const [topPlacementPrice, setTopPlacementPrice] = useState('');
   const [uploading, setUploading] = useState(false);
   const [imageMessage, setImageMessage] = useState('');
   const [saving, setSaving] = useState(false);
@@ -197,6 +200,12 @@ export default function SiteEditAdminPage() {
         ? siteData.siteNotes
         : [];
       setNotes(loadedNotes.length > 0 ? loadedNotes : [{ title: '', body: '' }]);
+      setTopPlacementEnabled(siteData.topPlacementEnabled === true);
+      setTopPlacementPrice(
+        typeof siteData.topPlacementPrice === 'number'
+          ? String(siteData.topPlacementPrice)
+          : '',
+      );
       setLoadMessage('');
     } catch (e) {
       setLoadMessage(e instanceof Error ? e.message : adminText(locale, 'loadFailed'));
@@ -259,12 +268,15 @@ export default function SiteEditAdminPage() {
     setSaving(true);
     setSaveMessage('');
     try {
+      const priceText = topPlacementPrice.trim();
       const data = await callApi(`/api/events/${eventId}/site-settings`, {
         method: 'PUT',
         body: JSON.stringify({
           siteDescription: description,
           heroImageUrl,
           siteNotes: notes,
+          topPlacementEnabled,
+          topPlacementPrice: priceText === '' ? null : Number(priceText),
         }),
       });
       // サーバー側で正規化された値（空行の除去など）をそのまま表示に戻す
@@ -278,6 +290,12 @@ export default function SiteEditAdminPage() {
         ? data.siteNotes
         : [];
       setNotes(savedNotes.length > 0 ? savedNotes : [{ title: '', body: '' }]);
+      setTopPlacementEnabled(data.topPlacementEnabled === true);
+      setTopPlacementPrice(
+        typeof data.topPlacementPrice === 'number'
+          ? String(data.topPlacementPrice)
+          : '',
+      );
       setSaveMessage(adminText(locale, 'savedMessage'));
     } catch (e) {
       setSaveMessage(
@@ -467,6 +485,46 @@ export default function SiteEditAdminPage() {
               {adminText(locale, 'siteNoteAddButton')}
             </button>
           )}
+        </div>
+      </section>
+
+      <section style={{ marginTop: 32 }}>
+        <h2 style={sectionTitleStyle}>{adminText(locale, 'siteTopPlacementTitle')}</h2>
+        <p style={noteTextStyle}>{adminText(locale, 'siteTopPlacementNote')}</p>
+        <div style={{ ...cardStyle, marginTop: 12, padding: 24 }}>
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              fontSize: 14,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={topPlacementEnabled}
+              onChange={(e) => setTopPlacementEnabled(e.target.checked)}
+              style={{ width: 18, height: 18 }}
+            />
+            {adminText(locale, 'siteTopPlacementEnabledLabel')}
+          </label>
+          <label style={{ ...labelStyle, marginTop: 16, marginBottom: 0 }}>
+            {adminText(locale, 'siteTopPlacementPriceLabel')}
+            <input
+              style={inputStyle}
+              type="number"
+              min={100}
+              max={1000000}
+              step={100}
+              inputMode="numeric"
+              placeholder="3000"
+              value={topPlacementPrice}
+              onChange={(e) => setTopPlacementPrice(e.target.value)}
+            />
+          </label>
+          <p style={noteTextStyle}>{adminText(locale, 'siteTopPlacementCancelNote')}</p>
         </div>
       </section>
 

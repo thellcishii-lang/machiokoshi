@@ -1,5 +1,7 @@
 // app/api/billing/webhook/[contractId]/route.ts
 // 店舗課金オプションの Stripe Webhook 受信口。
+// 店舗課金とトップ掲載（特設サイトの先頭5枠）で共用し、
+// metadata.kind = 'top-placement' のイベントはトップ掲載側へ振り分ける。
 // パスで管理人（契約）を特定し、その管理人自身の Webhook シークレットで
 // 署名を検証する。検証は生ボディに対して行う（JSON に変換してからでは
 // 署名が一致しない）。署名検証に失敗したら 400。
@@ -14,6 +16,11 @@ import {
   verifyStripeWebhookEvent,
   type StripeWebhookEventLike,
 } from '@/lib/event-billing';
+import {
+  applyTopPlacementWebhookEffect,
+  stripeEventKind,
+  TOP_PLACEMENT_KIND,
+} from '@/lib/event-placement';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,11 +58,13 @@ export async function POST(
     return NextResponse.json({ error: '署名検証に失敗しました' }, { status: 400 });
   }
 
-  const result = await applyStripeWebhookEffect(
-    db,
-    contractId,
-    event as unknown as StripeWebhookEventLike,
-  );
+  // metadata.kind で振り分ける: 'top-placement' はトップ掲載、
+  // それ以外（kind なし）は店舗課金として処理する。
+  const eventLike = event as unknown as StripeWebhookEventLike;
+  const result =
+    stripeEventKind(eventLike) === TOP_PLACEMENT_KIND
+      ? await applyTopPlacementWebhookEffect(db, contractId, eventLike)
+      : await applyStripeWebhookEffect(db, contractId, eventLike);
   return NextResponse.json({
     received: true,
     applied: result.applied,

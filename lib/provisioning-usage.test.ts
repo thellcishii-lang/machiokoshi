@@ -24,6 +24,8 @@ function eventWith(status: EventConfig['status']): EventConfig {
     siteDescription: '',
     heroImageUrl: null,
     siteNotes: [],
+    topPlacementEnabled: false,
+    topPlacementPrice: null,
     couponCap: 100,
     backupRetentionDays: 30,
     status,
