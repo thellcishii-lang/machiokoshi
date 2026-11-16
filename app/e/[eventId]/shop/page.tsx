@@ -25,6 +25,7 @@ import {
 } from '@/lib/i18n';
 import { redeemText, uiText } from '@/lib/ui-text';
 import { specialSiteShopUrl, specialSiteUrl } from '@/lib/special-site';
+import { themeCssVars } from '@/lib/theme-color';
 import PasswordInput from '@/components/PasswordInput';
 import PoweredByFooter from '@/components/PoweredByFooter';
 
@@ -82,7 +83,10 @@ const EMPTY_PROFILE: ShopProfile = {
 const PHOTO_MAX = 3;
 const LINK_MAX = 3;
 
-const VIOLET = '#8B5E34';
+// アクセント色はプロジェクトのテーマカラー（CSS カスタムプロパティ）
+// 経由で使う。変数はルート要素に themeCssVars で渡し、未設定の場合は
+// var() のフォールバック（現在のベージュ／茶系）になる。
+const VIOLET = 'var(--theme-accent, #8B5E34)';
 
 // モックの言語セグメントは短い表記（EN など）。保存・送信は従来どおり locale で行う。
 const PILL_LABELS: Record<Locale, string> = {
@@ -173,6 +177,7 @@ export default function ExhibitorShopPage() {
   const [photoUploading, setPhotoUploading] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [eventName, setEventName] = useState('');
+  const [themeColor, setThemeColor] = useState<string | null>(null);
   const [forgotBusy, setForgotBusy] = useState(false);
   const [forgotMessage, setForgotMessage] = useState('');
   // 初回読み込みはユーザー×プロジェクトで1回だけ（言語切替で callApi の
@@ -196,6 +201,9 @@ export default function ExhibitorShopPage() {
         if (!res.ok) return;
         const data = await res.json().catch(() => ({}));
         if (typeof data.event?.name === 'string') setEventName(data.event.name);
+        if (typeof data.event?.themeColor === 'string') {
+          setThemeColor(data.event.themeColor);
+        }
       } catch {
         // 取れなければヘッダーは空のまま（画面の動作には影響しない）
       }
@@ -529,7 +537,7 @@ export default function ExhibitorShopPage() {
 
   if (!user) {
     return (
-      <main style={containerStyle}>
+      <main style={{ ...containerStyle, ...themeCssVars(themeColor) } as React.CSSProperties}>
         {brandRow(languagePills)}
         <h1 style={{ fontSize: 20, fontWeight: 800, margin: '18px 0 0' }}>
           {redeemText(locale, 'shopLoginTitle')}
@@ -586,7 +594,7 @@ export default function ExhibitorShopPage() {
   }
 
   return (
-    <main style={containerStyle}>
+    <main style={{ ...containerStyle, ...themeCssVars(themeColor) } as React.CSSProperties}>
       {brandRow(
         <button onClick={() => void signOut(auth)} style={logoutButtonStyle}>
           {redeemText(locale, 'logoutButton')}

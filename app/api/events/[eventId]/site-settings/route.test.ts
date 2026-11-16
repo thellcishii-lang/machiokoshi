@@ -22,8 +22,10 @@ const EVENT_ID = 'event-1';
 
 const EVENT = {
   siteDescription: '紹介文',
+  gourmetDefinition: '地元産野菜を使うこと。\n味噌ベースのルー。',
   heroImageUrl: null,
   siteIconUrl: 'https://example.com/icon.png',
+  themeColor: '#6f7d3c',
   siteNotes: [],
   topPlacementEnabled: false,
   topPlacementPrice: null,
@@ -58,6 +60,15 @@ describe('GET /api/events/[eventId]/site-settings', () => {
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.siteIconUrl).toBe('https://example.com/icon.png');
+  });
+
+  it('現在のご当地グルメの定義を含めて返す', async () => {
+    const response = await callGet();
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.gourmetDefinition).toBe(
+      '地元産野菜を使うこと。\n味噌ベースのルー。',
+    );
   });
 });
 
@@ -94,6 +105,98 @@ describe('PUT /api/events/[eventId]/site-settings', () => {
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.siteIconUrl).toBeNull();
+  });
+
+  it('ご当地グルメの定義を保存し、そのまま返す（往復・改行保持）', async () => {
+    const response = await callPut({
+      siteDescription: '紹介文',
+      gourmetDefinition: ' 地元産野菜を使うこと。\n味噌ベースのルー。 ',
+      heroImageUrl: null,
+      siteIconUrl: null,
+      siteNotes: [],
+      topPlacementEnabled: false,
+      topPlacementPrice: null,
+    });
+    expect(response.status).toBe(200);
+    expect(mocks.updateEvent).toHaveBeenCalledWith(
+      EVENT_ID,
+      expect.objectContaining({
+        gourmetDefinition: '地元産野菜を使うこと。\n味噌ベースのルー。',
+      }),
+    );
+    const body = await response.json();
+    expect(body.gourmetDefinition).toBe(
+      '地元産野菜を使うこと。\n味噌ベースのルー。',
+    );
+  });
+
+  it('定義が1001文字なら 400 で、保存しない', async () => {
+    const response = await callPut({
+      siteDescription: '',
+      gourmetDefinition: 'あ'.repeat(1001),
+      heroImageUrl: null,
+      siteIconUrl: null,
+      siteNotes: [],
+      topPlacementEnabled: false,
+      topPlacementPrice: null,
+    });
+    expect(response.status).toBe(400);
+    expect(mocks.updateEvent).not.toHaveBeenCalled();
+  });
+
+  it('テーマカラーを小文字に正規化して保存し、そのまま返す（往復）', async () => {
+    const response = await callPut({
+      siteDescription: '',
+      gourmetDefinition: '',
+      heroImageUrl: null,
+      siteIconUrl: null,
+      themeColor: '#DD5E22',
+      siteNotes: [],
+      topPlacementEnabled: false,
+      topPlacementPrice: null,
+    });
+    expect(response.status).toBe(200);
+    expect(mocks.updateEvent).toHaveBeenCalledWith(
+      EVENT_ID,
+      expect.objectContaining({ themeColor: '#dd5e22' }),
+    );
+    const body = await response.json();
+    expect(body.themeColor).toBe('#dd5e22');
+  });
+
+  it('テーマカラー未設定（null）はそのまま通り、GET でも返る', async () => {
+    const getResponse = await callGet();
+    const getBody = await getResponse.json();
+    expect(getBody.themeColor).toBe('#6f7d3c');
+
+    const response = await callPut({
+      siteDescription: '',
+      gourmetDefinition: '',
+      heroImageUrl: null,
+      siteIconUrl: null,
+      themeColor: null,
+      siteNotes: [],
+      topPlacementEnabled: false,
+      topPlacementPrice: null,
+    });
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.themeColor).toBeNull();
+  });
+
+  it('形式の違うテーマカラーは 400 で、保存しない', async () => {
+    const response = await callPut({
+      siteDescription: '',
+      gourmetDefinition: '',
+      heroImageUrl: null,
+      siteIconUrl: null,
+      themeColor: 'red',
+      siteNotes: [],
+      topPlacementEnabled: false,
+      topPlacementPrice: null,
+    });
+    expect(response.status).toBe(400);
+    expect(mocks.updateEvent).not.toHaveBeenCalled();
   });
 
   it('https でないアイコン URL は 400 で、保存しない', async () => {

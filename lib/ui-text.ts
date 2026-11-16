@@ -2421,6 +2421,24 @@ export const ADMIN_TEXT = {
     zh: '{count}/{max} 字',
     ko: '{count}/{max}자',
   },
+  gourmetDefinitionLabel: {
+    ja: 'ご当地グルメの定義',
+    en: 'Definition of the local gourmet',
+    zh: '当地美食的定义',
+    ko: '지역 미식의 정의',
+  },
+  gourmetDefinitionNote: {
+    ja: 'その土地のグルメと呼べる条件（ルール・素材・スタイルなど）を書きます。特設サイトに表示されます（最大1000文字、改行できます）。',
+    en: 'Describe what qualifies as this area’s gourmet (rules, ingredients, style). Shown on the special site (up to 1000 characters, line breaks allowed).',
+    zh: '填写可称为当地美食的条件（规则、食材、风格等）。将显示在特设网站上（最多1000字，可换行）。',
+    ko: '그 지역 미식이라 부를 수 있는 조건(규칙・재료・스타일 등)을 적습니다. 특설 사이트에 표시됩니다(최대 1000자, 줄바꿈 가능).',
+  },
+  gourmetDefinitionPlaceholder: {
+    ja: '例: 地元産の野菜を使い、味噌ベースのルーで仕上げたものが「飯能カレー」です',
+    en: 'e.g. Made with local vegetables and a miso-based roux — that is what makes it a “Hanno curry”.',
+    zh: '例：使用本地蔬菜、以味噌为基底的咖喱酱制成的，才是“饭能咖喱”',
+    ko: '예: 지역산 채소를 사용하고 된장 베이스 루로 마무리한 것이 “한노 카레”입니다',
+  },
   heroImageLabel: {
     ja: 'ヒーロー画像',
     en: 'Hero image',
@@ -2462,6 +2480,30 @@ export const ADMIN_TEXT = {
     en: 'Image upload failed',
     zh: '图片上传失败',
     ko: '이미지 업로드에 실패했습니다',
+  },
+  themeColorLabel: {
+    ja: 'テーマカラー',
+    en: 'Theme color',
+    zh: '主题色',
+    ko: '테마 색상',
+  },
+  themeColorNote: {
+    ja: '特設サイトの色味をプロジェクトごとに変えられます。色を選ぶか、#RRGGBB 形式で直接指定してください。未設定の場合はサイト既定の茶色になります。',
+    en: 'Change the special site’s color scheme per project. Pick a color or enter one in #RRGGBB format. When unset, the site default brown is used.',
+    zh: '可以为每个项目更改特设网站的配色。请选择颜色或以 #RRGGBB 格式直接输入。未设置时使用网站默认的棕色。',
+    ko: '특설 사이트의 색감을 프로젝트마다 바꿀 수 있습니다. 색을 고르거나 #RRGGBB 형식으로 직접 입력하세요. 미설정 시 사이트 기본 갈색이 됩니다.',
+  },
+  themeColorResetButton: {
+    ja: '既定に戻す',
+    en: 'Reset to default',
+    zh: '恢复默认',
+    ko: '기본값으로 되돌리기',
+  },
+  themeColorUnset: {
+    ja: '未設定（サイト既定の茶色）',
+    en: 'Unset (site default brown)',
+    zh: '未设置（网站默认棕色）',
+    ko: '미설정(사이트 기본 갈색)',
   },
   siteIconLabel: {
     ja: 'アイコン',

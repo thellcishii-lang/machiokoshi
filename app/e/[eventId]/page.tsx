@@ -31,6 +31,7 @@ import {
 } from '@/lib/i18n';
 import { uiText } from '@/lib/ui-text';
 import { specialSiteUrl } from '@/lib/special-site';
+import { themeCssVars } from '@/lib/theme-color';
 import PoweredByFooter from '@/components/PoweredByFooter';
 import { buildCouponGroups } from '@/lib/coupon-groups';
 import {
@@ -56,6 +57,8 @@ interface PublicEvent {
   admissionQrEnabled: boolean;
   /** 主催者リンク（最大3件）。未登録なら空で、画面に何も出さない */
   links?: PublicEventLink[];
+  /** テーマカラー（特設サイト設定）。未設定は null で既定の茶系になる */
+  themeColor?: string | null;
 }
 
 interface AdmissionQrState {
@@ -162,12 +165,19 @@ function normalizePhoneNumber(value: string): string {
   return compact;
 }
 
-const VIOLET = '#8B5E34';
-const VIOLET_BRIGHT = '#B07B45';
+// アクセント色はプロジェクトのテーマカラー（CSS カスタムプロパティ）
+// 経由で使う。変数はルート要素に themeCssVars で渡し、未設定の場合は
+// var() のフォールバック（現在のベージュ／茶系）になる。
+const VIOLET = 'var(--theme-accent, #8B5E34)';
+const VIOLET_BRIGHT = 'var(--theme-accent-bright, #B07B45)';
 const CLAIM_BLUE = '#2563eb';
 const INK = '#17122b';
-const HERO_GRADIENT = 'linear-gradient(135deg, #F1E4CB, #E7D3AC)';
-const CARD_GRADIENT = 'linear-gradient(180deg, #FBF6EA, #F3E8D2)';
+const HERO_GRADIENT =
+  'linear-gradient(135deg, var(--theme-hero-from, #F1E4CB), var(--theme-hero-to, #E7D3AC))';
+const CARD_GRADIENT =
+  'linear-gradient(180deg, var(--theme-card-from, #FBF6EA), var(--theme-card-to, #F3E8D2))';
+const SOFT_BORDER = 'var(--theme-hero-to, #E7D3AC)';
+const SOFT_BG = 'var(--theme-card-from, #FBF6EA)';
 
 // モックの言語ピルは短い表記（EN など）。選択の保存・送信は従来どおり locale で行う。
 const PILL_LABELS: Record<Locale, string> = {
@@ -248,7 +258,7 @@ function PinLogo() {
           d="M12 21.5s-7.2-5.6-7.2-11.1a7.2 7.2 0 1 1 14.4 0c0 5.5-7.2 11.1-7.2 11.1Z"
           fill="#ffffff"
         />
-        <circle cx="12" cy="9.7" r="2.7" fill={VIOLET} />
+        <circle cx="12" cy="9.7" r="2.7" style={{ fill: VIOLET }} />
       </svg>
     </div>
   );
@@ -662,7 +672,7 @@ function ReviewShopCard({
                     fontSize: 13,
                     backgroundColor: '#ffffff',
                     color: VIOLET,
-                    border: '1px solid #E7D3AC',
+                    border: `1px solid ${SOFT_BORDER}`,
                     borderRadius: 10,
                     cursor: 'pointer',
                   }}
@@ -1272,11 +1282,15 @@ export default function EventVisitorPage() {
 
   return (
     <main
-      style={{
-        ...containerStyle,
-        // 登録フェーズでは下部固定バナーに隠れないよう余白を確保する
-        paddingBottom: phase === 'register' ? 148 : 32,
-      }}
+      style={
+        {
+          ...containerStyle,
+          // プロジェクトのテーマカラー（未設定なら既定パレットが入る）
+          ...themeCssVars(event.themeColor),
+          // 登録フェーズでは下部固定バナーに隠れないよう余白を確保する
+          paddingBottom: phase === 'register' ? 148 : 32,
+        } as React.CSSProperties
+      }
     >
       <div
         style={{
@@ -1488,9 +1502,9 @@ export default function EventVisitorPage() {
                 <svg aria-hidden="true" width="19" height="19" viewBox="0 0 24 24">
                   <path
                     d="M4 4h5v5H4zM15 4h5v5h-5zM4 15h5v5H4zM15 15h2v2h-2zM20 15h-1v1h1zM18 18h2v2h-2zM15 18h1v2h-3v-2h2z"
-                    fill={VIOLET}
+                    style={{ fill: VIOLET }}
                   />
-                  <path d="M6.5 6.5h1v1h-1zM17.5 6.5h1v1h-1zM6.5 17.5h1v1h-1z" fill={VIOLET} />
+                  <path d="M6.5 6.5h1v1h-1zM17.5 6.5h1v1h-1zM6.5 17.5h1v1h-1z" style={{ fill: VIOLET }} />
                 </svg>
                 <span style={{ fontWeight: 800, fontSize: 15.5, flex: 1 }}>
                   {uiText(locale, 'admissionQrTitle')}
@@ -1772,8 +1786,8 @@ export default function EventVisitorPage() {
                       : {
                           marginTop: 12,
                           fontSize: 14,
-                          backgroundColor: '#FBF6EA',
-                          border: '1px solid #E7D3AC',
+                          backgroundColor: SOFT_BG,
+                          border: `1px solid ${SOFT_BORDER}`,
                           borderRadius: 10,
                           padding: '9px 12px',
                         }
@@ -1798,8 +1812,8 @@ export default function EventVisitorPage() {
                 }}
               >
                 <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24">
-                  <rect x="4" y="3" width="16" height="18" rx="2.5" fill="none" stroke={VIOLET} strokeWidth="2" />
-                  <path d="M8 8.5h8M8 12.5h8M8 16.5h5" stroke={VIOLET} strokeWidth="2" strokeLinecap="round" />
+                  <rect x="4" y="3" width="16" height="18" rx="2.5" fill="none" style={{ stroke: VIOLET }} strokeWidth="2" />
+                  <path d="M8 8.5h8M8 12.5h8M8 16.5h5" style={{ stroke: VIOLET }} strokeWidth="2" strokeLinecap="round" />
                 </svg>
                 <span style={{ flex: 1 }}>{uiText(locale, 'myCouponsTitle')}</span>
                 <span style={{ fontSize: 13, color: '#64748b', fontWeight: 600 }}>
@@ -1851,7 +1865,7 @@ export default function EventVisitorPage() {
                     key={claim.claimId}
                     style={{
                       background: CARD_GRADIENT,
-                      border: '1px solid #E7D3AC',
+                      border: `1px solid ${SOFT_BORDER}`,
                       borderRadius: 16,
                       padding: 16,
                       marginTop: 12,
@@ -1998,7 +2012,7 @@ export default function EventVisitorPage() {
                           border: stamp
                             ? `2px solid ${VIOLET}`
                             : '2px dashed #cbd5e1',
-                          backgroundColor: stamp ? '#FBF6EA' : '#ffffff',
+                          backgroundColor: stamp ? SOFT_BG : '#ffffff',
                           borderRadius: 12,
                           minHeight: 62,
                           padding: '8px 6px',
@@ -2088,7 +2102,7 @@ export default function EventVisitorPage() {
                     key={freeCoupon.id}
                     style={{
                       background: CARD_GRADIENT,
-                      border: '1px solid #E7D3AC',
+                      border: `1px solid ${SOFT_BORDER}`,
                       borderRadius: 16,
                       padding: 16,
                       marginTop: 12,
@@ -2284,8 +2298,8 @@ export default function EventVisitorPage() {
                           marginTop: 10,
                           padding: '11px 12px',
                           borderRadius: 12,
-                          border: '1px solid #E7D3AC',
-                          backgroundColor: '#FBF6EA',
+                          border: `1px solid ${SOFT_BORDER}`,
+                          backgroundColor: SOFT_BG,
                           fontWeight: 700,
                           fontSize: 14,
                           color: VIOLET,
@@ -2365,8 +2379,8 @@ export default function EventVisitorPage() {
               style={{
                 marginTop: 10,
                 fontSize: 14,
-                backgroundColor: '#FBF6EA',
-                border: '1px solid #E7D3AC',
+                backgroundColor: SOFT_BG,
+                border: `1px solid ${SOFT_BORDER}`,
                 borderRadius: 10,
                 padding: '9px 12px',
               }}
@@ -2543,9 +2557,9 @@ export default function EventVisitorPage() {
                 <svg width="23" height="23" viewBox="0 0 24 24">
                   <path
                     d="M18 9.2a6 6 0 1 0-12 0c0 5.4-2.3 6.8-2.3 6.8h16.6S18 14.6 18 9.2Z"
-                    fill={VIOLET}
+                    style={{ fill: VIOLET }}
                   />
-                  <path d="M10.1 19.4a2 2 0 0 0 3.8 0" fill={VIOLET} />
+                  <path d="M10.1 19.4a2 2 0 0 0 3.8 0" style={{ fill: VIOLET }} />
                 </svg>
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>

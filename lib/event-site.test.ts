@@ -1,14 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import {
+  MAX_GOURMET_DEFINITION_LENGTH,
   MAX_SITE_DESCRIPTION_LENGTH,
   MAX_SITE_NOTES,
+  normalizeGourmetDefinition,
   normalizeHeroImageUrl,
   normalizeSiteDescription,
   normalizeSiteIconUrl,
   normalizeSiteNotes,
+  normalizeThemeColor,
+  parseGourmetDefinition,
   parseHeroImageUrl,
   parseSiteIconUrl,
   parseSiteNotes,
+  parseThemeColor,
   parseSiteSettings,
   siteImageStoragePath,
 } from './event-site';
@@ -151,18 +156,79 @@ describe('normalizeSiteIconUrl / parseSiteIconUrl', () => {
   });
 });
 
+describe('normalizeGourmetDefinition / parseGourmetDefinition', () => {
+  it('改行を保持し、前後の空白だけ落とす', () => {
+    expect(
+      normalizeGourmetDefinition('  地元産野菜を使うこと。\n味噌ベースのルー。  '),
+    ).toBe('地元産野菜を使うこと。\n味噌ベースのルー。');
+  });
+
+  it('未指定・空白のみは空文字', () => {
+    expect(normalizeGourmetDefinition(undefined)).toBe('');
+    expect(normalizeGourmetDefinition(null)).toBe('');
+    expect(normalizeGourmetDefinition('   ')).toBe('');
+    expect(parseGourmetDefinition(undefined)).toBe('');
+    expect(parseGourmetDefinition(42)).toBe('');
+  });
+
+  it('1000文字は通り、1001文字は保存時に例外・読み取り時は切り詰める', () => {
+    const at1000 = 'あ'.repeat(MAX_GOURMET_DEFINITION_LENGTH);
+    expect(normalizeGourmetDefinition(at1000)).toHaveLength(
+      MAX_GOURMET_DEFINITION_LENGTH,
+    );
+    expect(() =>
+      normalizeGourmetDefinition('あ'.repeat(MAX_GOURMET_DEFINITION_LENGTH + 1)),
+    ).toThrow();
+    expect(() => normalizeGourmetDefinition(42)).toThrow();
+    expect(
+      parseGourmetDefinition('あ'.repeat(MAX_GOURMET_DEFINITION_LENGTH + 100)),
+    ).toHaveLength(MAX_GOURMET_DEFINITION_LENGTH);
+  });
+});
+
+describe('normalizeThemeColor / parseThemeColor', () => {
+  it('未指定・空は null（サイト既定）', () => {
+    expect(normalizeThemeColor(undefined)).toBeNull();
+    expect(normalizeThemeColor(null)).toBeNull();
+    expect(normalizeThemeColor('   ')).toBeNull();
+    expect(parseThemeColor(undefined)).toBeNull();
+    expect(parseThemeColor('')).toBeNull();
+  });
+
+  it('#RRGGBB を小文字に正規化する', () => {
+    expect(normalizeThemeColor('#8B5E34')).toBe('#8b5e34');
+    expect(normalizeThemeColor(' #DD5E22 ')).toBe('#dd5e22');
+    expect(parseThemeColor('#C73E2C')).toBe('#c73e2c');
+  });
+
+  it('形式が違うものは保存時に例外・読み取り時は null', () => {
+    expect(() => normalizeThemeColor('8b5e34')).toThrow();
+    expect(() => normalizeThemeColor('#8b5e3')).toThrow();
+    expect(() => normalizeThemeColor('#8b5e345')).toThrow();
+    expect(() => normalizeThemeColor('#gggggg')).toThrow();
+    expect(() => normalizeThemeColor(123)).toThrow();
+    expect(parseThemeColor('red')).toBeNull();
+    expect(parseThemeColor('#12345')).toBeNull();
+    expect(parseThemeColor(42)).toBeNull();
+  });
+});
+
 describe('parseSiteSettings', () => {
   it('falls back to defaults when fields are absent (pre-feature projects)', () => {
     expect(parseSiteSettings(undefined)).toEqual({
       siteDescription: '',
+      gourmetDefinition: '',
       heroImageUrl: null,
       siteIconUrl: null,
+      themeColor: null,
       siteNotes: [],
     });
     expect(parseSiteSettings({})).toEqual({
       siteDescription: '',
+      gourmetDefinition: '',
       heroImageUrl: null,
       siteIconUrl: null,
+      themeColor: null,
       siteNotes: [],
     });
   });
@@ -171,14 +237,18 @@ describe('parseSiteSettings', () => {
     expect(
       parseSiteSettings({
         siteDescription: '紹介文',
+        gourmetDefinition: '地元産野菜を使うこと。\n味噌ベースのルー。',
         heroImageUrl: 'https://example.com/hero.jpg',
         siteIconUrl: 'https://example.com/icon.png',
+        themeColor: '#DD5E22',
         siteNotes: [{ title: '題', body: '本文' }],
       }),
     ).toEqual({
       siteDescription: '紹介文',
+      gourmetDefinition: '地元産野菜を使うこと。\n味噌ベースのルー。',
       heroImageUrl: 'https://example.com/hero.jpg',
       siteIconUrl: 'https://example.com/icon.png',
+      themeColor: '#dd5e22',
       siteNotes: [{ title: '題', body: '本文' }],
     });
   });

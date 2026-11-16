@@ -84,6 +84,13 @@ export interface EventConfig {
    * 空文字に倒す（検証・正規化は lib/event-site.ts）。
    */
   siteDescription: string;
+  /**
+   * ご当地グルメの定義（最大1000字、改行可）。その土地のグルメと
+   * 呼べる条件・素材・スタイルを管理人が書き、特設サイトに表示する。
+   * 未設定は空文字。導入前に作られたプロジェクトには項目自体が無いため、
+   * 読み取り時は空文字に倒す（検証・正規化は lib/event-site.ts）。
+   */
+  gourmetDefinition: string;
   /** 特設サイトのヒーロー画像の公開URL。未設定は null。 */
   heroImageUrl: string | null;
   /**
@@ -92,6 +99,13 @@ export interface EventConfig {
    * 無いため、読み取り時は null に倒す（検証・正規化は lib/event-site.ts）。
    */
   siteIconUrl: string | null;
+  /**
+   * 特設サイトのテーマカラー（#rrggbb）。プロジェクトごとに色味を
+   * 変えるための設定で、未設定は null（表示側の既定色）。
+   * 導入前に作られたプロジェクトには項目自体が無いため、読み取り時は
+   * null に倒す（検証・正規化は lib/event-site.ts）。
+   */
+  themeColor: string | null;
   /**
    * 特設サイトの追加事項（タイトル＋本文、最大5件）。管理人が特設サイト
    * 編集画面で設定する。未登録なら空配列。
