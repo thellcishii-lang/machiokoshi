@@ -153,9 +153,7 @@ export function AdminShell({
                 lineHeight: 1.12,
               }}
             >
-              Push-taro
-              <br />
-              町おこし
+              町おこしプロジェクト
             </div>
             <div
               style={{

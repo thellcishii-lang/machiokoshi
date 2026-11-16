@@ -31,6 +31,7 @@ import {
 } from '@/lib/i18n';
 import { uiText } from '@/lib/ui-text';
 import { specialSiteUrl } from '@/lib/special-site';
+import PoweredByFooter from '@/components/PoweredByFooter';
 import { buildCouponGroups } from '@/lib/coupon-groups';
 import {
   buildFreeCouponQrPayload,
@@ -1298,25 +1299,13 @@ export default function EventVisitorPage() {
                 lineHeight: 1.15,
               }}
             >
-              Push-taro 町おこし
+              {event.name}
             </p>
             <p style={{ fontSize: 12.5, color: '#475569', margin: '2px 0 0' }}>
               {uiText(locale, 'visitorPageLabel')}
             </p>
           </div>
         </div>
-        <svg
-          aria-hidden="true"
-          width="26"
-          height="26"
-          viewBox="0 0 24 24"
-          style={{ flexShrink: 0, marginTop: 4, opacity: 0.75 }}
-        >
-          <path
-            d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58ZM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6Z"
-            fill="#4A3E30"
-          />
-        </svg>
       </div>
 
       <header
@@ -1328,14 +1317,10 @@ export default function EventVisitorPage() {
           boxShadow: '0 4px 14px rgba(139, 94, 52, 0.18)',
         }}
       >
-        <h1 style={{ fontSize: 23, fontWeight: 800, margin: 0, color: INK }}>{event.name}</h1>
-        <p style={{ fontSize: 13, color: '#4b4560', margin: '6px 0 0' }}>
-          {uiText(locale, 'period', { start: event.startDate, end: event.endDate })}
-        </p>
         <div
           role="group"
           aria-label={uiText(locale, 'language')}
-          style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}
+          style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}
         >
           {SUPPORTED_LOCALES.map((l) => {
             const selected = l === locale;
@@ -2594,6 +2579,7 @@ export default function EventVisitorPage() {
           </div>
         </div>
       )}
+      <PoweredByFooter />
     </main>
   );
 }
