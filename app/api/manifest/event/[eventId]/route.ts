@@ -29,14 +29,14 @@ export async function GET(
 
   const pagePath = `/e/${eventId}`;
   const manifest = {
-    name: eventName ? `${eventName}｜Push-taro EVENT` : 'Push-taro EVENT',
+    name: eventName ? `${eventName}｜Push-taro 町おこし` : 'Push-taro 町おこし',
     short_name: eventName || 'EVENT',
     id: pagePath,
     start_url: pagePath,
     scope: pagePath,
     display: 'standalone',
     background_color: '#ffffff',
-    theme_color: '#6D28D9',
+    theme_color: '#8B5E34',
     icons: [
       { src: '/icon-192x192.png', sizes: '192x192', type: 'image/png' },
       { src: '/icon-512x512.png', sizes: '512x512', type: 'image/png' },

@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 const inter = Inter({ subsets: ['latin'], display: 'swap', variable: '--font-inter' });
 
 export const viewport: Viewport = {
-  themeColor: '#ff6b6b',
+  themeColor: '#8B5E34',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,

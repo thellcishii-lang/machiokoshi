@@ -1,7 +1,7 @@
 'use client';
 
 // app/event-admin/page.tsx
-// Push-taro EVENT の主催者向けプロジェクト設定画面。
+// Push-taro 町おこし の主催者向けプロジェクト設定画面。
 // プロジェクトの一覧・作成・編集（開催期間／リセット方式／リセット時刻／上限／バックアップ保持日数／状態）。
 // 作成は「下書きで作成」と「登録（開催中として作成）」の2ボタンで状態を明示する。
 // 下書きはカードの「開催中にする」から公開でき、下書きと終了はカードから
@@ -93,7 +93,7 @@ function toForm(event: EventConfig): EventForm {
   };
 }
 
-const VIOLET = '#6D28D9';
+const VIOLET = '#8B5E34';
 
 // 契約まわりの手続きは本家の町おこし専用契約ページ（push-taro.com/machiokoshi-account）。
 const HONKE_SHOP_URL = 'https://push-taro.com/machiokoshi-account';
@@ -123,7 +123,7 @@ const inputStyle: React.CSSProperties = {
   width: '100%',
   padding: '11px 12px',
   marginTop: 6,
-  border: '1px solid #D9D4EC',
+  border: '1px solid #E8DCC4',
   borderRadius: 12,
   fontSize: 14,
   backgroundColor: '#ffffff',
@@ -146,7 +146,7 @@ const primaryButtonStyle: React.CSSProperties = {
   border: 'none',
   borderRadius: 12,
   cursor: 'pointer',
-  boxShadow: '0 4px 12px rgba(109, 40, 217, 0.25)',
+  boxShadow: '0 4px 12px rgba(139, 94, 52, 0.25)',
 };
 
 const logoutButtonStyle: React.CSSProperties = {
@@ -154,9 +154,9 @@ const logoutButtonStyle: React.CSSProperties = {
   fontSize: 13,
   fontWeight: 600,
   borderRadius: 999,
-  border: '1px solid #E3DEF2',
+  border: '1px solid #E8DCC4',
   backgroundColor: '#ffffff',
-  color: '#3F3D56',
+  color: '#4A3E30',
   cursor: 'pointer',
 };
 
@@ -182,13 +182,13 @@ const cardActionSolidStyle: React.CSSProperties = {
   ...cardActionBaseStyle,
   backgroundColor: VIOLET,
   color: '#ffffff',
-  boxShadow: '0 3px 10px rgba(109, 40, 217, 0.25)',
+  boxShadow: '0 3px 10px rgba(139, 94, 52, 0.25)',
 };
 
 const cardActionOutlineStyle: React.CSSProperties = {
   ...cardActionBaseStyle,
   backgroundColor: '#ffffff',
-  border: '1.5px solid #C4B5FD',
+  border: '1.5px solid #D9BE8C',
   color: VIOLET,
 };
 
@@ -213,7 +213,7 @@ const secondaryButtonStyle: React.CSSProperties = {
   fontSize: 15,
   backgroundColor: '#ffffff',
   color: VIOLET,
-  border: '1.5px solid #C4B5FD',
+  border: '1.5px solid #D9BE8C',
   borderRadius: 12,
   cursor: 'pointer',
 };
@@ -638,8 +638,8 @@ export default function EventAdminPage() {
           ...cardStyle,
           marginTop: 16,
           padding: '16px 20px',
-          backgroundColor: '#F5F3FF',
-          border: '1px solid #DDD6FE',
+          backgroundColor: '#FBF6EA',
+          border: '1px solid #E7D3AC',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -714,7 +714,7 @@ export default function EventAdminPage() {
                   position: 'relative',
                   padding: '22px 20px 18px',
                   ...(event.id === selectedId
-                    ? { border: '2px solid #6D28D9' }
+                    ? { border: '2px solid #8B5E34' }
                     : null),
                 }}
               >
@@ -793,7 +793,7 @@ export default function EventAdminPage() {
                           ? '#DC2626'
                           : usage.level === 'warning'
                             ? '#F59E0B'
-                            : '#7C3AED';
+                            : '#B07B45';
                       return (
                         <div style={{ marginTop: 10 }}>
                           <div
@@ -818,7 +818,7 @@ export default function EventAdminPage() {
                             style={{
                               height: 8,
                               borderRadius: 999,
-                              backgroundColor: '#EDE9FE',
+                              backgroundColor: '#F3E8D2',
                               overflow: 'hidden',
                               marginTop: 6,
                             }}

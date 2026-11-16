@@ -1,7 +1,7 @@
 'use client';
 
 // app/e/[eventId]/redeem/page.tsx
-// Push-taro EVENT の出店者用 消込専用画面。
+// Push-taro 町おこし の出店者用 消込専用画面。
 // メール+パスワード（プロジェクト専用アクセスコード）でログインし、自社の
 // クーポンだけを消し込む。ログインはサーバー照合（exhibitor-login API）が
 // 発行するカスタムトークンでセッション化する。出店者は Firebase Auth の
@@ -66,8 +66,8 @@ interface TodayStamp {
   grantedAt: string | null;
 }
 
-const VIOLET = '#6D28D9';
-const VIOLET_BRIGHT = '#7C3AED';
+const VIOLET = '#8B5E34';
+const VIOLET_BRIGHT = '#B07B45';
 
 // モックの言語セグメントは短い表記（EN など）。保存・送信は従来どおり locale で行う。
 const PILL_LABELS: Record<Locale, string> = {
@@ -129,7 +129,7 @@ const scanButtonStyle: React.CSSProperties = {
   border: 'none',
   borderRadius: 14,
   cursor: 'pointer',
-  boxShadow: '0 4px 14px rgba(109, 40, 217, 0.35)',
+  boxShadow: '0 4px 14px rgba(139, 94, 52, 0.35)',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
@@ -323,7 +323,7 @@ export default function ExhibitorRedeemPage() {
       }}
     >
       <p style={{ fontSize: 21, fontWeight: 800, color: VIOLET, margin: 0, letterSpacing: -0.2 }}>
-        Push-taro EVENT
+        Push-taro 町おこし
       </p>
       {right}
     </div>
@@ -906,7 +906,7 @@ export default function ExhibitorRedeemPage() {
                     width: 50,
                     height: 50,
                     borderRadius: '50%',
-                    backgroundColor: '#ede9fe',
+                    backgroundColor: '#F3E8D2',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -920,7 +920,7 @@ export default function ExhibitorRedeemPage() {
                     />
                     <path
                       d="M13.5 7v2M13.5 11v2M13.5 15v2"
-                      stroke="#ede9fe"
+                      stroke="#F3E8D2"
                       strokeWidth="1.6"
                       strokeLinecap="round"
                       strokeDasharray="0.1 3.1"

@@ -1,7 +1,7 @@
 'use client';
 
 // app/event-admin/[eventId]/schedule/page.tsx
-// Push-taro EVENT 管理画面②：予約配信。
+// Push-taro 町おこし 管理画面②：予約配信。
 // 15分刻み（00/15/30/45分）で複数の予約を入れられる。実行は event-tick が担う。
 // 画面の固定文は4言語辞書（lib/ui-text.ts の ADMIN_TEXT）。
 // 見た目は承認済みモック準拠。ログイン後は共通シェル（components/AdminShell）
@@ -71,7 +71,7 @@ for (let h = 0; h < 24; h += 1) {
   }
 }
 
-const VIOLET = '#6D28D9';
+const VIOLET = '#8B5E34';
 
 const containerStyle: React.CSSProperties = {
   padding: '20px 16px 48px',
@@ -96,7 +96,7 @@ const inputStyle: React.CSSProperties = {
   width: '100%',
   padding: '11px 12px',
   marginTop: 6,
-  border: '1px solid #D9D4EC',
+  border: '1px solid #E8DCC4',
   borderRadius: 12,
   fontSize: 14,
   backgroundColor: '#ffffff',
@@ -119,7 +119,7 @@ const primaryButtonStyle: React.CSSProperties = {
   border: 'none',
   borderRadius: 12,
   cursor: 'pointer',
-  boxShadow: '0 4px 12px rgba(109, 40, 217, 0.25)',
+  boxShadow: '0 4px 12px rgba(139, 94, 52, 0.25)',
 };
 
 const dangerButtonStyle: React.CSSProperties = {
@@ -397,7 +397,7 @@ export default function EventScheduleAdminPage() {
                   fontSize: 12.5,
                   fontWeight: 600,
                   borderRadius: 999,
-                  border: '1px solid #D9D4EC',
+                  border: '1px solid #E8DCC4',
                   backgroundColor: '#ffffff',
                   color: VIOLET,
                   cursor: 'pointer',
@@ -483,7 +483,7 @@ export default function EventScheduleAdminPage() {
                   fontSize: 12,
                   fontWeight: 700,
                   borderRadius: 999,
-                  backgroundColor: '#ede9fe',
+                  backgroundColor: '#F3E8D2',
                   color: VIOLET,
                   whiteSpace: 'nowrap',
                 }}
@@ -516,7 +516,7 @@ export default function EventScheduleAdminPage() {
                   key={campaign.id}
                   style={{
                     padding: '14px 0',
-                    borderBottom: i < finished.length - 1 ? '1px solid #F0EDF8' : 'none',
+                    borderBottom: i < finished.length - 1 ? '1px solid #EFE6D0' : 'none',
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
