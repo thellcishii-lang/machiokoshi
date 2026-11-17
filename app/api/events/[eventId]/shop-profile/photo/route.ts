@@ -4,6 +4,8 @@
 // 保存先: events/{eventId}/shop-photos/{exhibitorId}/{uuid}.{ext}
 // 無料の一品の写真はフォームの purpose='free-dish' で区別し、同じ
 // ディレクトリに free-dish- 接頭辞で保存する（公開読み取りは共通）。
+// ログインボーナス特典は purpose='login-reward'（login-reward- 接頭辞）、
+// 広告画像は purpose='ad'（ad- 接頭辞）で同じ作法にする。
 // 検証（jpg/png/webp、1枚5MBまで）はレビュー写真と同じ純粋関数。
 // 書き込みは Admin SDK 経由のみで、storage.rules 側は読み取りだけを
 // 公開する（クライアントからの直接書き込みは許可しない）。
@@ -14,8 +16,10 @@ import { requireEventExhibitor } from '@/lib/event-auth';
 import { validateReviewPhoto } from '@/lib/event-review';
 import {
   shopFreeDishPhotoStoragePath,
+  shopLoginRewardPhotoStoragePath,
   shopPhotoStoragePath,
 } from '@/lib/event-shop';
+import { shopAdPhotoStoragePath } from '@/lib/event-ads';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,10 +54,22 @@ export async function POST(
   }
 
   const fileName = `${randomUUID()}.${validation.extension}`;
+  const purpose = formData.get('purpose');
+  // 協賛（広告専用）アカウントが上げられるのは広告画像だけ
+  if (guard.exhibitor.kind === 'advertiser' && purpose !== 'ad') {
+    return NextResponse.json(
+      { error: '協賛アカウントは広告画像だけをアップロードできます' },
+      { status: 403 },
+    );
+  }
   const storagePath =
-    formData.get('purpose') === 'free-dish'
+    purpose === 'free-dish'
       ? shopFreeDishPhotoStoragePath(eventId, guard.exhibitor.id, fileName)
-      : shopPhotoStoragePath(eventId, guard.exhibitor.id, fileName);
+      : purpose === 'login-reward'
+        ? shopLoginRewardPhotoStoragePath(eventId, guard.exhibitor.id, fileName)
+        : purpose === 'ad'
+          ? shopAdPhotoStoragePath(eventId, guard.exhibitor.id, fileName)
+          : shopPhotoStoragePath(eventId, guard.exhibitor.id, fileName);
   try {
     const bucket = getStorage().bucket();
     const storedFile = bucket.file(storagePath);

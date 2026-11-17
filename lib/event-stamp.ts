@@ -45,10 +45,19 @@ export interface EventStamp {
   grantedAt: string | null;
 }
 
+/** 無料クーポンの発行元。スタンプ達成か、毎日ログインボーナスか。 */
+export type FreeCouponKind = 'stamp' | 'login';
+
 export interface StampFreeCoupon {
   id: string;
   memberId: string;
-  /** 何周目の達成で発行されたか */
+  /**
+   * 発行元（'stamp' | 'login'）。ログインボーナス導入前に発行された
+   * クーポンには項目が無いため 'stamp' に倒す。round の意味は発行元で
+   * 変わる（stamp=ラリーの周、login=ログインのサイクル）。
+   */
+  kind: FreeCouponKind;
+  /** 何周目／何サイクル目の達成で発行されたか */
   round: number;
   /**
    * 発行時点の特典の種類（スナップショット）。後からプロジェクト設定を
@@ -224,6 +233,8 @@ function mapFreeCoupon(
   return {
     id,
     memberId: String(data.memberId ?? ''),
+    // ログインボーナス導入前のクーポンには項目が無いため 'stamp' に倒す
+    kind: data.kind === 'login' ? 'login' : 'stamp',
     round: typeof data.round === 'number' ? data.round : 0,
     // スナップショット導入前のクーポンには項目が無いため従来種別に倒す
     rewardType: parseStampRewardType(data.rewardType),
@@ -273,6 +284,14 @@ export async function grantStamp(
     now?: Date;
   },
 ): Promise<GrantStampResult> {
+  // 協賛（広告専用）アカウントはスタンプを押せない
+  if (input.exhibitor.kind === 'advertiser') {
+    return {
+      ok: false,
+      status: 403,
+      error: '協賛アカウントはスタンプを押せません',
+    };
+  }
   const event = await getEvent(input.eventId);
   if (!event) {
     return { ok: false, status: 404, error: 'プロジェクトが見つかりません' };
@@ -340,6 +359,7 @@ export async function grantStamp(
       freeCouponId = freeRef.id;
       tx.set(freeRef, {
         memberId: input.memberId,
+        kind: 'stamp',
         round,
         // 特典は発行時点のスナップショットで固定する
         rewardType: reward.rewardType,
@@ -528,7 +548,7 @@ export async function getStampCard(
 // ─── 無料クーポン消込 ───
 
 export type RedeemFreeCouponResult =
-  | { ok: true; freeCouponId: string }
+  | { ok: true; freeCouponId: string; kind: FreeCouponKind }
   | { ok: false; status: number; error: string };
 
 /**
@@ -544,6 +564,14 @@ export async function redeemFreeCoupon(
     freeCouponId: string;
   },
 ): Promise<RedeemFreeCouponResult> {
+  // 協賛（広告専用）アカウントは無料クーポンを消し込めない
+  if (input.exhibitor.kind === 'advertiser') {
+    return {
+      ok: false,
+      status: 403,
+      error: '協賛アカウントはクーポンを消し込めません',
+    };
+  }
   const event = await getEvent(input.eventId);
   if (!event) {
     return { ok: false, status: 404, error: 'プロジェクトが見つかりません' };
@@ -579,7 +607,12 @@ export async function redeemFreeCoupon(
       usedExhibitorId: input.exhibitor.id,
       usedExhibitorName: input.exhibitor.name,
     });
-    return { ok: true, freeCouponId: input.freeCouponId } as RedeemFreeCouponResult;
+    return {
+      ok: true,
+      freeCouponId: input.freeCouponId,
+      // 消込画面の表示文を発行元で出し分けるために発行元も返す
+      kind: snap.data()?.kind === 'login' ? 'login' : 'stamp',
+    } as RedeemFreeCouponResult;
   });
 }
 

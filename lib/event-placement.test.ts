@@ -52,7 +52,10 @@ describe('トップ掲載の料金検証', () => {
     expect(parseTopPlacementPrice(5000)).toBe(5000);
     expect(parseTopPlacementPrice(undefined)).toBeNull();
     expect(parseTopPlacementPrice(null)).toBeNull();
-    expect(parseTopPlacementPrice(50)).toBeNull();
+    // 料金 0（無料）も正規の値として読む
+    expect(parseTopPlacementPrice(0)).toBe(0);
+    expect(parseTopPlacementPrice(50)).toBe(50);
+    expect(parseTopPlacementPrice(-1)).toBeNull();
     expect(parseTopPlacementPrice('5000')).toBeNull();
   });
 
@@ -60,7 +63,9 @@ describe('トップ掲載の料金検証', () => {
     expect(normalizeTopPlacementPrice(undefined)).toBeNull();
     expect(normalizeTopPlacementPrice(null)).toBeNull();
     expect(normalizeTopPlacementPrice(1000)).toBe(1000);
-    expect(() => normalizeTopPlacementPrice(99)).toThrow();
+    // 料金 0（無料）は通る。負数は不正値として throw
+    expect(normalizeTopPlacementPrice(0)).toBe(0);
+    expect(() => normalizeTopPlacementPrice(-1)).toThrow();
     expect(() => normalizeTopPlacementPrice(1000.5)).toThrow();
   });
 });

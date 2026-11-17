@@ -17,6 +17,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Locale } from '@/lib/i18n';
 import { uiText } from '@/lib/ui-text';
 import {
+  celebrationCouponKind,
   celebrationRewardKind,
   type CelebrationCouponLike,
 } from '@/lib/stamp-celebration';
@@ -65,6 +66,8 @@ export default function StampCelebration({
   onClose,
 }: StampCelebrationProps) {
   const kind = celebrationRewardKind(coupon);
+  // ログインボーナスのクーポンは、特典種別ではなく発行元で文面を決める
+  const isLoginCoupon = celebrationCouponKind(coupon) === 'login';
   const [reducedMotion, setReducedMotion] = useState(false);
   // 花びらは時間で止める（カード自体は閉じるまで残す）
   const [petalsVisible, setPetalsVisible] = useState(true);
@@ -187,7 +190,7 @@ export default function StampCelebration({
         >
           {uiText(locale, 'celebrationTitle')}
         </h2>
-        {kind === 'benefit' && coupon.benefitText ? (
+        {!isLoginCoupon && kind === 'benefit' && coupon.benefitText ? (
           <p
             style={{
               fontSize: 17,
@@ -207,9 +210,11 @@ export default function StampCelebration({
             margin: '10px 0 0',
           }}
         >
-          {kind === 'benefit'
-            ? uiText(locale, 'celebrationBenefitMessage')
-            : uiText(locale, 'celebrationFreeDishMessage')}
+          {isLoginCoupon
+            ? uiText(locale, 'celebrationLoginMessage')
+            : kind === 'benefit'
+              ? uiText(locale, 'celebrationBenefitMessage')
+              : uiText(locale, 'celebrationFreeDishMessage')}
         </p>
         <button
           type="button"

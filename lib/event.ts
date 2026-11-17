@@ -148,8 +148,49 @@ export interface EventConfig {
   /**
    * トップ掲載の月額料金（円）。未設定は null。設定する場合は
    * TOP_PLACEMENT_PRICE_MIN〜TOP_PLACEMENT_PRICE_MAX の整数。
+   * 0 は「無料」: 課金は発生せず、参加店が店舗ページで参加表明
+   * （placementOptIn）した店が掲載対象になる。
    */
   topPlacementPrice: number | null;
+  /**
+   * 毎日ログインボーナスを有効にするか。管理人がプロジェクト設定で
+   * 設定する。既定オフ。オンの間、来場者は来場者画面で毎日1回
+   * チェックインでき、累計 loginBonusDays 日で「好きな店で使える」
+   * ログインボーナスクーポンが発行される（実体は lib/event-login.ts）。
+   * 導入前に作られたプロジェクトには項目自体が無いため、読み取り時は
+   * オフに倒す。
+   */
+  loginBonusEnabled: boolean;
+  /**
+   * ログインボーナスの達成日数（累計・LOGIN_BONUS_DAYS_MIN〜
+   * LOGIN_BONUS_DAYS_MAX の整数）。管理人がプロジェクトごとに設定する。
+   * 導入前に作られたプロジェクトには項目自体が無いため、読み取り時は
+   * DEFAULT_LOGIN_BONUS_DAYS に倒す。
+   */
+  loginBonusDays: number;
+  /**
+   * 特設サイトの広告ページ（参加店の広告枠）を有効にするか。管理人が
+   * 特設サイト編集画面で設定する。既定オフ。オンの間、参加店は
+   * adsPrice の月額（0 なら無料）を払って広告を出せ、管理人の承認を
+   * 経て特設サイトに最大 adsSlots 件まで掲載される
+   * （実体は lib/event-ads.ts）。
+   * 導入前に作られたプロジェクトには項目自体が無いため、読み取り時は
+   * オフに倒す。
+   */
+  adsEnabled: boolean;
+  /**
+   * 広告の掲載枠数（1〜MAX_AD_SLOTS の整数）。特設サイトの広告ページに
+   * 同時に載せられる広告の上限。承認が早い順にこの件数まで載せる。
+   * 導入前に作られたプロジェクトには項目自体が無いため、読み取り時は
+   * DEFAULT_AD_SLOTS に倒す。
+   */
+  adsSlots: number;
+  /**
+   * 広告の月額料金（円）。未設定は null。設定する場合は
+   * ADS_PRICE_MIN〜ADS_PRICE_MAX の整数。0 は「無料」: 課金は
+   * 発生せず、管理人の承認だけで掲載される。
+   */
+  adsPrice: number | null;
   /**
    * クーポン上限（プロジェクト全体の件数）。購読者上限と同じく契約枠の軸なので、
    * 変更は運営側のみ。既定は MAX_COUPONS_PER_EVENT。
@@ -229,6 +270,11 @@ export interface CreateEventInput {
   stampRewardType?: StampRewardType;
   stampBenefitText?: string;
   rankingMinReviews?: number;
+  loginBonusEnabled?: boolean;
+  loginBonusDays?: number;
+  adsEnabled?: boolean;
+  adsSlots?: number;
+  adsPrice?: number | null;
   links?: EventLink[];
   couponCap?: number;
   backupRetentionDays?: number;
@@ -493,11 +539,11 @@ export function validateStampRewardSettings(
   }
 }
 
-/** トップ掲載の月額料金の下限・上限（円）。 */
-export const TOP_PLACEMENT_PRICE_MIN = 100;
+/** トップ掲載の月額料金の下限・上限（円）。0 は無料（参加表明制）。 */
+export const TOP_PLACEMENT_PRICE_MIN = 0;
 export const TOP_PLACEMENT_PRICE_MAX = 1_000_000;
 
-/** トップ掲載の月額料金として有効な値かどうか（100〜1,000,000 の整数）。 */
+/** トップ掲載の月額料金として有効な値かどうか（0〜1,000,000 の整数）。 */
 export function isValidTopPlacementPrice(value: unknown): boolean {
   return (
     typeof value === 'number' &&
@@ -564,6 +610,139 @@ export function parseRankingMinReviews(value: unknown): number {
   return isValidRankingMinReviews(value)
     ? (value as number)
     : DEFAULT_RANKING_MIN_REVIEWS;
+}
+
+/** ログインボーナスの達成日数の下限・上限（累計日数）。 */
+export const LOGIN_BONUS_DAYS_MIN = 5;
+export const LOGIN_BONUS_DAYS_MAX = 20;
+/** ログインボーナスの達成日数の既定値（管理人が未設定のプロジェクト）。 */
+export const DEFAULT_LOGIN_BONUS_DAYS = 7;
+
+/** ログインボーナス ON/OFF を防御的に読む（読み取り用）。true のみ有効。 */
+export function parseLoginBonusEnabled(value: unknown): boolean {
+  return value === true;
+}
+
+/**
+ * ログインボーナス ON/OFF の入力を検証して正規化する（書き込み用）。
+ * 未指定はオフ。それ以外の型は throw。
+ */
+export function normalizeLoginBonusEnabled(input: unknown): boolean {
+  if (input === undefined || input === null) return false;
+  if (typeof input !== 'boolean') {
+    throw new Error('ログインボーナスの設定形式が不正です');
+  }
+  return input;
+}
+
+/** ログインボーナスの達成日数として有効な値かどうか（5〜20 の整数）。 */
+export function isValidLoginBonusDays(value: unknown): boolean {
+  return (
+    typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= LOGIN_BONUS_DAYS_MIN &&
+    value <= LOGIN_BONUS_DAYS_MAX
+  );
+}
+
+/**
+ * 保存済みの達成日数を防御的に読む（読み取り用。throw しない）。
+ * 項目が無い旧プロジェクトや不正な値は DEFAULT_LOGIN_BONUS_DAYS に倒す。
+ */
+export function parseLoginBonusDays(value: unknown): number {
+  return isValidLoginBonusDays(value)
+    ? (value as number)
+    : DEFAULT_LOGIN_BONUS_DAYS;
+}
+
+/** 広告の掲載枠数の上限。 */
+export const MAX_AD_SLOTS = 50;
+/** 広告の掲載枠数の既定値（管理人が未設定のプロジェクト）。 */
+export const DEFAULT_AD_SLOTS = 5;
+
+/** 広告 ON/OFF を防御的に読む（読み取り用）。true のみ有効。 */
+export function parseAdsEnabled(value: unknown): boolean {
+  return value === true;
+}
+
+/**
+ * 広告 ON/OFF の入力を検証して正規化する（書き込み用）。
+ * 未指定はオフ。それ以外の型は throw。
+ */
+export function normalizeAdsEnabled(input: unknown): boolean {
+  if (input === undefined || input === null) return false;
+  if (typeof input !== 'boolean') {
+    throw new Error('広告の設定形式が不正です');
+  }
+  return input;
+}
+
+/** 広告の掲載枠数として有効な値かどうか（1〜MAX_AD_SLOTS の整数）。 */
+export function isValidAdsSlots(value: unknown): boolean {
+  return (
+    typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= 1 &&
+    value <= MAX_AD_SLOTS
+  );
+}
+
+/**
+ * 保存済みの掲載枠数を防御的に読む（読み取り用。throw しない）。
+ * 項目が無い旧プロジェクトや不正な値は DEFAULT_AD_SLOTS に倒す。
+ */
+export function parseAdsSlots(value: unknown): number {
+  return isValidAdsSlots(value) ? (value as number) : DEFAULT_AD_SLOTS;
+}
+
+/**
+ * 広告の掲載枠数の入力を検証して正規化する（書き込み用。不正なら throw）。
+ * 未指定は既定値。
+ */
+export function normalizeAdsSlots(input: unknown): number {
+  if (input === undefined || input === null) return DEFAULT_AD_SLOTS;
+  if (!isValidAdsSlots(input)) {
+    throw new Error(
+      `広告の枠数は1から${MAX_AD_SLOTS}の整数で指定してください`,
+    );
+  }
+  return input as number;
+}
+
+/** 広告の月額料金の下限・上限（円）。0 は無料（承認のみで掲載）。 */
+export const ADS_PRICE_MIN = 0;
+export const ADS_PRICE_MAX = 1_000_000;
+
+/** 広告の月額料金として有効な値かどうか（0〜1,000,000 の整数）。 */
+export function isValidAdsPrice(value: unknown): boolean {
+  return (
+    typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= ADS_PRICE_MIN &&
+    value <= ADS_PRICE_MAX
+  );
+}
+
+/**
+ * 保存済みの広告料金を防御的に読む（読み取り用。throw しない）。
+ * 未設定・不正な値は null（未設定）に倒す。0（無料）はそのまま 0。
+ */
+export function parseAdsPrice(value: unknown): number | null {
+  return isValidAdsPrice(value) ? (value as number) : null;
+}
+
+/**
+ * 広告料金の入力を検証して正規化する（書き込み用。不正なら throw）。
+ * 未指定・null は未設定（null）として扱う。0 は無料として有効。
+ */
+export function normalizeAdsPrice(input: unknown): number | null {
+  if (input === undefined || input === null) return null;
+  if (!isValidAdsPrice(input)) {
+    throw new Error(
+      `広告の料金は${ADS_PRICE_MIN}円から${ADS_PRICE_MAX}円の整数で指定してください`,
+    );
+  }
+  return input as number;
 }
 
 export type SubscriberUsageLevel = 'normal' | 'warning' | 'full';

@@ -12,7 +12,10 @@
 //   出さず、完了した週だけを確定させる。
 import { FieldValue, type Firestore } from 'firebase-admin/firestore';
 import { jstDateString, type EventConfig } from './event';
-import { EVENT_EXHIBITORS_COLLECTION } from './event-coupon';
+import {
+  EVENT_EXHIBITORS_COLLECTION,
+  parseExhibitorKind,
+} from './event-coupon';
 import {
   filterVisibleReviews,
   listAllReviews,
@@ -209,10 +212,13 @@ export async function computeWeeklyRanking(
       .collection(EVENT_EXHIBITORS_COLLECTION)
       .get(),
   ]);
-  const exhibitors = exhibitorsSnap.docs.map((doc) => ({
-    id: doc.id,
-    name: String(doc.data().name ?? ''),
-  }));
+  const exhibitors = exhibitorsSnap.docs
+    // 協賛（広告専用）アカウントはランキングの対象にしない
+    .filter((doc) => parseExhibitorKind(doc.data().kind) === 'shop')
+    .map((doc) => ({
+      id: doc.id,
+      name: String(doc.data().name ?? ''),
+    }));
   const entries = buildRanking(
     filterReviewsInPeriod(reviews, period),
     exhibitors,

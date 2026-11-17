@@ -45,8 +45,20 @@ export async function GET(
       // トップ掲載（先頭5枠）課金の設定。本家は enabled が false の間は
       // 各店の topFeatured を無視し、true の間は優先表示に使う。
       // 料金は店舗ページの申込表示にも使う（未設定は null）。
+      // 料金 0 は無料: topFeatured は参加表明ベースで算出済みのため、
+      // 本家は従来どおり topFeatured だけを見ればよい。
       topPlacementEnabled: event.topPlacementEnabled,
       topPlacementPrice: event.topPlacementPrice,
+      // 毎日ログインボーナスの設定（特設サイトの案内表示に使う。
+      // 未設定のプロジェクトでは false / 7 になる）
+      loginBonusEnabled: event.loginBonusEnabled,
+      loginBonusDays: event.loginBonusDays,
+      // 特設サイトの広告ページの設定。広告そのものは
+      // /api/events/{eventId}/ads/public が返す（枠数まで・承認順）。
+      // 料金 0 は無料（承認だけで掲載される。未設定は null）。
+      adsEnabled: event.adsEnabled,
+      adsSlots: event.adsSlots,
+      adsPrice: event.adsPrice,
     },
   });
 }

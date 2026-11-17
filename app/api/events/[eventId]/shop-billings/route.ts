@@ -38,10 +38,13 @@ export async function GET(
   const summary = summarizePaymentsByMonth(allPayments, new Date());
 
   return NextResponse.json({
-    exhibitors: exhibitors.map((exhibitor) => ({
-      id: exhibitor.id,
-      name: exhibitor.name,
-    })),
+    // 店舗課金は参加店だけが対象（協賛は広告専用で、ここには出さない）
+    exhibitors: exhibitors
+      .filter((exhibitor) => exhibitor.kind !== 'advertiser')
+      .map((exhibitor) => ({
+        id: exhibitor.id,
+        name: exhibitor.name,
+      })),
     billings,
     payments: recentPayments,
     summary: {

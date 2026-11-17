@@ -2,7 +2,8 @@
 // 特設サイト（本家上の公開ページ）の表示内容の取得・保存（管理人本人だけ）。
 // 保存先はプロジェクトドキュメントのトップレベル項目
 // （siteDescription / gourmetDefinition / heroImageUrl / siteIconUrl /
-// themeColor / siteNotes / topPlacementEnabled / topPlacementPrice）。
+// themeColor / siteNotes / topPlacementEnabled / topPlacementPrice /
+// adsEnabled / adsSlots / adsPrice）。
 // 検証・正規化は lib/event-site.ts と lib/event.ts の純粋関数に寄せ、
 // updateEvent 経由で保存する（リンク等の既存項目と同じ経路）。
 import { NextResponse } from 'next/server';
@@ -18,18 +19,27 @@ import {
   type SiteSettings,
 } from '@/lib/event-site';
 import {
+  normalizeAdsEnabled,
+  normalizeAdsPrice,
+  normalizeAdsSlots,
   normalizeTopPlacementEnabled,
   normalizeTopPlacementPrice,
 } from '@/lib/event';
 
 export const dynamic = 'force-dynamic';
 
-/** 特設サイト設定一式（表示内容＋トップ掲載設定）。 */
+/** 特設サイト設定一式（表示内容＋トップ掲載設定＋広告設定）。 */
 interface SiteSettingsResponse extends SiteSettings {
   /** トップ掲載（先頭5枠）課金の ON/OFF */
   topPlacementEnabled: boolean;
-  /** トップ掲載の月額料金（円）。未設定は null */
+  /** トップ掲載の月額料金（円）。未設定は null。0 は無料 */
   topPlacementPrice: number | null;
+  /** 広告ページの ON/OFF */
+  adsEnabled: boolean;
+  /** 広告の掲載枠数 */
+  adsSlots: number;
+  /** 広告の月額料金（円）。未設定は null。0 は無料 */
+  adsPrice: number | null;
 }
 
 function currentSettings(event: {
@@ -41,6 +51,9 @@ function currentSettings(event: {
   siteNotes: SiteSettings['siteNotes'];
   topPlacementEnabled: boolean;
   topPlacementPrice: number | null;
+  adsEnabled: boolean;
+  adsSlots: number;
+  adsPrice: number | null;
 }): SiteSettingsResponse {
   return {
     siteDescription: event.siteDescription,
@@ -51,6 +64,9 @@ function currentSettings(event: {
     siteNotes: event.siteNotes,
     topPlacementEnabled: event.topPlacementEnabled,
     topPlacementPrice: event.topPlacementPrice,
+    adsEnabled: event.adsEnabled,
+    adsSlots: event.adsSlots,
+    adsPrice: event.adsPrice,
   };
 }
 
@@ -95,10 +111,18 @@ export async function PUT(
         body.topPlacementEnabled,
       ),
       topPlacementPrice: normalizeTopPlacementPrice(body.topPlacementPrice),
+      adsEnabled: normalizeAdsEnabled(body.adsEnabled),
+      adsSlots: normalizeAdsSlots(body.adsSlots),
+      adsPrice: normalizeAdsPrice(body.adsPrice),
     };
     // トップ掲載を有効にするなら料金が必須（料金なしでは店が買えない）。
+    // 0（無料）は料金として有効（参加表明で掲載される）。
     if (settings.topPlacementEnabled && settings.topPlacementPrice === null) {
       throw new Error('トップ掲載を有効にする場合は、掲載料金を設定してください');
+    }
+    // 広告を有効にするなら料金が必須（0=無料も料金として有効）。
+    if (settings.adsEnabled && settings.adsPrice === null) {
+      throw new Error('広告を有効にする場合は、広告料金を設定してください');
     }
   } catch (error) {
     return NextResponse.json(

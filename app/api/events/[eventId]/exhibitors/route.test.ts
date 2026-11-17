@@ -15,6 +15,9 @@ vi.mock('@/lib/event-auth', () => ({
 }));
 vi.mock('@/lib/event-coupon', () => ({
   listExhibitors: mocks.listExhibitors,
+  // 実装と同じ規則（'advertiser' のみ協賛、それ以外は参加店）
+  parseExhibitorKind: (value: unknown) =>
+    value === 'advertiser' ? 'advertiser' : 'shop',
 }));
 vi.mock('@/lib/exhibitor-access', () => ({
   ExhibitorAccessError: class ExhibitorAccessError extends Error {

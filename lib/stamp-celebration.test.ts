@@ -3,6 +3,7 @@
 // 判定、表示済みの保存キーと読み書き。
 import { describe, expect, it } from 'vitest';
 import {
+  celebrationCouponKind,
   celebrationRewardKind,
   celebrationStorageKey,
   isCelebratedInStorage,
@@ -127,5 +128,26 @@ describe('storage helpers', () => {
     };
     expect(isCelebratedInStorage(throwing, 'fc-1')).toBe(false);
     expect(() => markCelebratedInStorage(throwing, 'fc-1')).not.toThrow();
+  });
+});
+
+describe('celebrationCouponKind', () => {
+  it("kind が 'login' のものだけを 'login' と判定する", () => {
+    expect(celebrationCouponKind({ kind: 'login' })).toBe('login');
+    expect(celebrationCouponKind({ kind: 'stamp' })).toBe('stamp');
+    // 旧データ（kind 未設定）はスタンプ達成として扱う
+    expect(celebrationCouponKind({})).toBe('stamp');
+    expect(celebrationCouponKind({ kind: 'other' })).toBe('stamp');
+  });
+
+  it('ログインボーナスのクーポンもセレブレーションの対象になる', () => {
+    const loginCoupon = coupon({ id: 'fc-login', kind: 'login', round: 2 });
+    expect(pickCelebrationCoupon([loginCoupon], noneCelebrated)).toEqual(
+      loginCoupon,
+    );
+    // 表示済みなら出さない（スタンプ達成と同じ扱い）
+    expect(
+      pickCelebrationCoupon([loginCoupon], (id) => id === 'fc-login'),
+    ).toBeNull();
   });
 });

@@ -11,7 +11,9 @@ import {
   listPublicShops,
   parseShopProfile,
   resolveShopLocation,
+  resolveTopFeatured,
   shopFreeDishPhotoStoragePath,
+  shopLoginRewardPhotoStoragePath,
   shopPhotoStoragePath,
   toPublicShop,
   updateShopProfile,
@@ -521,8 +523,11 @@ describe('resolveShopLocation', () => {
 
 // updateShopProfile / listPublicShops 用の最小フェイク Firestore。
 // exhibitors コレクションの doc 取得・更新と一覧取得だけを再現する。
+// eventData を渡すと events ドキュメント自体の get も再現する
+// （listPublicShops がトップ掲載の料金を読むため）。
 function fakeShopDb(
   docs: Array<{ id: string; data: Record<string, unknown> }>,
+  eventData?: Record<string, unknown>,
 ) {
   const updates: Array<{ id: string; value: { profile: ShopProfile } }> = [];
   const collection = {
@@ -544,7 +549,13 @@ function fakeShopDb(
   };
   const db = {
     collection: () => ({
-      doc: () => ({ collection: () => collection }),
+      doc: () => ({
+        get: async () => ({
+          exists: eventData !== undefined,
+          data: () => eventData,
+        }),
+        collection: () => collection,
+      }),
     }),
   };
   return { db: db as unknown as Firestore, updates };
@@ -682,5 +693,192 @@ describe('isShopPubliclyListed', () => {
     const profile = parseShopProfile({ published: false });
     expect(isShopPubliclyListed(profile, undefined)).toBe(false);
     expect(isShopPubliclyListed(profile, true)).toBe(false);
+  });
+});
+
+describe('ログインボーナス特典（loginReward）の読み取り', () => {
+  it('未設定は null、設定済みはそのまま読む（freeDish とは独立）', () => {
+    expect(parseShopProfile({}).loginReward).toBeNull();
+    const profile = parseShopProfile({
+      freeDish: { name: '無料カレー', description: '', photoUrl: null },
+      loginReward: {
+        name: 'ドリンク1杯',
+        description: 'ログイン特典',
+        photoUrl: 'https://example.com/drink.jpg',
+      },
+    });
+    expect(profile.loginReward).toEqual({
+      name: 'ドリンク1杯',
+      description: 'ログイン特典',
+      photoUrl: 'https://example.com/drink.jpg',
+    });
+    expect(profile.freeDish?.name).toBe('無料カレー');
+    // 公開形にも loginReward が載る
+    const shop = toPublicShop(
+      { id: 'shop-a', name: '店A' },
+      {
+        loginReward: {
+          name: 'ドリンク1杯',
+          description: 'ログイン特典',
+          photoUrl: 'https://example.com/drink.jpg',
+        },
+      },
+    );
+    expect(shop.profile.loginReward?.name).toBe('ドリンク1杯');
+  });
+
+  it('名前が無い特典は null、写真が https でなければ写真だけ落とす', () => {
+    expect(
+      parseShopProfile({ loginReward: { description: '説明だけ' } })
+        .loginReward,
+    ).toBeNull();
+    // 読み取りは防御的: 不正な写真は null に倒し、特典自体は残す
+    // （freeDish の読み取りと同じ規則）
+    expect(
+      parseShopProfile({
+        loginReward: { name: '特典', photoUrl: 'http://example.com/x.jpg' },
+      }).loginReward,
+    ).toEqual({ name: '特典', description: '', photoUrl: null });
+  });
+
+  it('写真パスは login-reward- 接頭辞で作る', () => {
+    expect(shopLoginRewardPhotoStoragePath('ev1', 'shop-a', 'x.jpg')).toBe(
+      'events/ev1/shop-photos/shop-a/login-reward-x.jpg',
+    );
+  });
+});
+
+describe('ログインボーナス特典（loginReward）の保存検証', () => {
+  it('正常な特典を通し、空なら未登録（null）', () => {
+    const ok = validateShopProfileInput({
+      loginReward: { name: ' ドリンク1杯 ', description: '', photoUrl: null },
+    });
+    expect(ok.ok).toBe(true);
+    if (ok.ok) expect(ok.value.loginReward?.name).toBe('ドリンク1杯');
+    const none = validateShopProfileInput({});
+    expect(none.ok && none.value.loginReward).toBeNull();
+  });
+
+  it('名前なし・文字数超過・http 写真はエラー（文面は特典用）', () => {
+    const noName = validateShopProfileInput({
+      loginReward: { description: '説明だけ' },
+    });
+    expect(noName.ok).toBe(false);
+    if (!noName.ok) {
+      expect(noName.error).toBe('ログインボーナス特典の名前を入力してください');
+    }
+    const tooLong = validateShopProfileInput({
+      loginReward: { name: 'あ'.repeat(51) },
+    });
+    expect(tooLong.ok).toBe(false);
+    const badPhoto = validateShopProfileInput({
+      loginReward: { name: '特典', photoUrl: 'http://example.com/x.jpg' },
+    });
+    expect(badPhoto.ok).toBe(false);
+  });
+});
+
+describe('resolveTopFeatured（トップ掲載の対象判定・無料対応）', () => {
+  it('料金 0（無料）の間は参加表明だけを見る（課金フラグは無視）', () => {
+    expect(
+      resolveTopFeatured({
+        topPlacementPrice: 0,
+        topFeatured: false,
+        placementOptIn: true,
+      }),
+    ).toBe(true);
+    expect(
+      resolveTopFeatured({
+        topPlacementPrice: 0,
+        topFeatured: true,
+        placementOptIn: false,
+      }),
+    ).toBe(false);
+    expect(
+      resolveTopFeatured({
+        topPlacementPrice: 0,
+        topFeatured: undefined,
+        placementOptIn: undefined,
+      }),
+    ).toBe(false);
+  });
+
+  it('有料の間は従来どおり課金フラグだけを見る（表明は無視）', () => {
+    expect(
+      resolveTopFeatured({
+        topPlacementPrice: 3000,
+        topFeatured: true,
+        placementOptIn: false,
+      }),
+    ).toBe(true);
+    expect(
+      resolveTopFeatured({
+        topPlacementPrice: 3000,
+        topFeatured: false,
+        placementOptIn: true,
+      }),
+    ).toBe(false);
+  });
+
+  it('料金未設定（null）は有料扱い（従来動作）', () => {
+    expect(
+      resolveTopFeatured({
+        topPlacementPrice: null,
+        topFeatured: true,
+        placementOptIn: false,
+      }),
+    ).toBe(true);
+    expect(
+      resolveTopFeatured({
+        topPlacementPrice: null,
+        topFeatured: false,
+        placementOptIn: true,
+      }),
+    ).toBe(false);
+  });
+});
+
+describe('listPublicShops のトップ掲載フラグ（無料の間は参加表明）', () => {
+  it('料金 0 のプロジェクトでは placementOptIn の店だけ topFeatured になる', async () => {
+    const { db } = fakeShopDb(
+      [
+        { id: 'shop-a', data: { name: '店A', profile: {}, placementOptIn: true } },
+        { id: 'shop-b', data: { name: '店B', profile: {}, topFeatured: true } },
+      ],
+      { topPlacementPrice: 0 },
+    );
+    const shops = await listPublicShops(db, 'ev1');
+    const byId = new Map(shops.map((s) => [s.exhibitorId, s]));
+    expect(byId.get('shop-a')?.topFeatured).toBe(true);
+    expect(byId.get('shop-b')?.topFeatured).toBe(false);
+  });
+
+  it('有料のプロジェクトでは従来どおり topFeatured フラグで決まる', async () => {
+    const { db } = fakeShopDb(
+      [
+        { id: 'shop-a', data: { name: '店A', profile: {}, placementOptIn: true } },
+        { id: 'shop-b', data: { name: '店B', profile: {}, topFeatured: true } },
+      ],
+      { topPlacementPrice: 3000 },
+    );
+    const shops = await listPublicShops(db, 'ev1');
+    const byId = new Map(shops.map((s) => [s.exhibitorId, s]));
+    expect(byId.get('shop-a')?.topFeatured).toBe(false);
+    expect(byId.get('shop-b')?.topFeatured).toBe(true);
+  });
+});
+
+describe('listPublicShops の協賛アカウント除外', () => {
+  it('協賛（広告専用）アカウントは参加店一覧に出ない', async () => {
+    const { db } = fakeShopDb([
+      { id: 'shop-a', data: { name: '店A', profile: {} } },
+      {
+        id: 'sponsor-1',
+        data: { name: '協賛企業', profile: {}, kind: 'advertiser' },
+      },
+      { id: 'shop-b', data: { name: '店B', profile: {}, kind: 'shop' } },
+    ]);
+    const shops = await listPublicShops(db, 'ev1');
+    expect(shops.map((s) => s.exhibitorId)).toEqual(['shop-a', 'shop-b']);
   });
 });

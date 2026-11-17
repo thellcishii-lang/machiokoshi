@@ -12,8 +12,10 @@
 /** セレブレーションの判定に必要な無料クーポンの最小形。 */
 export interface CelebrationCouponLike {
   id: string;
-  /** 何周目の達成で発行されたか */
+  /** 何周目／何サイクル目の達成で発行されたか */
   round: number;
+  /** 発行元（'stamp' | 'login'。旧データでは未設定 = 'stamp'） */
+  kind?: string;
   /** 発行時点の特典スナップショット（旧データでは未設定 = 'free-dish'） */
   rewardType?: string;
   benefitText?: string;
@@ -27,6 +29,15 @@ export function celebrationRewardKind(
   coupon: Pick<CelebrationCouponLike, 'rewardType'>,
 ): CelebrationRewardKind {
   return coupon.rewardType === 'benefit' ? 'benefit' : 'free-dish';
+}
+
+export type CelebrationCouponKind = 'stamp' | 'login';
+
+/** クーポンの発行元（ログインボーナス導入前は 'stamp' に倒す）。 */
+export function celebrationCouponKind(
+  coupon: Pick<CelebrationCouponLike, 'kind'>,
+): CelebrationCouponKind {
+  return coupon.kind === 'login' ? 'login' : 'stamp';
 }
 
 /** 表示済みを localStorage に残すときのキー（クーポンごとに1キー）。 */

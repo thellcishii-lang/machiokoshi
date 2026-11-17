@@ -36,6 +36,13 @@ export async function PUT(
   const { eventId } = await params;
   const guard = await requireEventExhibitor(request, eventId);
   if ('error' in guard) return guard.error;
+  // 協賛（広告専用）アカウントは店舗プロフィールを持たない
+  if (guard.exhibitor.kind === 'advertiser') {
+    return NextResponse.json(
+      { error: '協賛アカウントは店舗プロフィールを編集できません' },
+      { status: 403 },
+    );
+  }
 
   let body: unknown;
   try {

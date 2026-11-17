@@ -35,6 +35,19 @@ import {
   parseTopPlacementPrice,
   receivesCapsPropagation,
   validateStampRewardSettings,
+  DEFAULT_AD_SLOTS,
+  DEFAULT_LOGIN_BONUS_DAYS,
+  isValidAdsSlots,
+  isValidLoginBonusDays,
+  normalizeAdsEnabled,
+  normalizeAdsPrice,
+  normalizeAdsSlots,
+  normalizeLoginBonusEnabled,
+  parseAdsEnabled,
+  parseAdsPrice,
+  parseAdsSlots,
+  parseLoginBonusDays,
+  parseLoginBonusEnabled,
 } from './event';
 import {
   normalizeGourmetDefinition,
@@ -80,6 +93,12 @@ function toEventConfig(id: string, data: FirebaseFirestore.DocumentData): EventC
     // トップ掲載の設定も導入前のイベントには項目が無いため既定値に倒す
     topPlacementEnabled: parseTopPlacementEnabled(data.topPlacementEnabled),
     topPlacementPrice: parseTopPlacementPrice(data.topPlacementPrice),
+    // ログインボーナス・広告の設定も同様に既定値（オフ・既定日数/枠数・未設定）に倒す
+    loginBonusEnabled: parseLoginBonusEnabled(data.loginBonusEnabled),
+    loginBonusDays: parseLoginBonusDays(data.loginBonusDays),
+    adsEnabled: parseAdsEnabled(data.adsEnabled),
+    adsSlots: parseAdsSlots(data.adsSlots),
+    adsPrice: parseAdsPrice(data.adsPrice),
     couponCap: data.couponCap ?? MAX_COUPONS_PER_EVENT,
     backupRetentionDays: data.backupRetentionDays ?? DEFAULT_BACKUP_RETENTION_DAYS,
     status: data.status,
@@ -113,6 +132,15 @@ export async function createEvent(input: CreateEventInput): Promise<EventConfig>
   ) {
     throw new Error('ランキングの最低レビュー件数は1〜20の整数で指定してください');
   }
+  if (
+    input.loginBonusDays !== undefined &&
+    !isValidLoginBonusDays(input.loginBonusDays)
+  ) {
+    throw new Error('ログインボーナスの達成日数は5〜20の整数で指定してください');
+  }
+  if (input.adsSlots !== undefined && !isValidAdsSlots(input.adsSlots)) {
+    throw new Error('広告の枠数は1〜50の整数で指定してください');
+  }
   // 達成特典は種類と内容を正規化し、組み合わせ（benefit なら内容必須）まで検証する
   const stampRewardType = normalizeStampRewardType(input.stampRewardType);
   const stampBenefitText = normalizeStampBenefitText(input.stampBenefitText);
@@ -144,6 +172,12 @@ export async function createEvent(input: CreateEventInput): Promise<EventConfig>
     // トップ掲載も作成時点では無効・料金未設定（特設サイト編集画面で設定する）
     topPlacementEnabled: false,
     topPlacementPrice: null,
+    // ログインボーナス・広告も作成時点では無効（設定画面で後から有効化する）
+    loginBonusEnabled: input.loginBonusEnabled ?? false,
+    loginBonusDays: input.loginBonusDays ?? DEFAULT_LOGIN_BONUS_DAYS,
+    adsEnabled: false,
+    adsSlots: DEFAULT_AD_SLOTS,
+    adsPrice: null,
     couponCap: input.couponCap ?? MAX_COUPONS_PER_EVENT,
     backupRetentionDays:
       input.backupRetentionDays ?? DEFAULT_BACKUP_RETENTION_DAYS,
@@ -315,6 +349,11 @@ export type UpdateEventInput = Partial<
     | 'siteNotes'
     | 'topPlacementEnabled'
     | 'topPlacementPrice'
+    | 'loginBonusEnabled'
+    | 'loginBonusDays'
+    | 'adsEnabled'
+    | 'adsSlots'
+    | 'adsPrice'
     | 'couponCap'
     | 'backupRetentionDays'
     | 'status'
@@ -409,6 +448,30 @@ export async function updateEvent(
     patch.topPlacementPrice !== undefined
       ? normalizeTopPlacementPrice(patch.topPlacementPrice)
       : undefined;
+  // ログインボーナス・広告の設定も検証・正規化してから保存する
+  if (
+    patch.loginBonusDays !== undefined &&
+    !isValidLoginBonusDays(patch.loginBonusDays)
+  ) {
+    throw new Error('ログインボーナスの達成日数は5〜20の整数で指定してください');
+  }
+  const loginBonusEnabled =
+    patch.loginBonusEnabled !== undefined
+      ? normalizeLoginBonusEnabled(patch.loginBonusEnabled)
+      : undefined;
+  if (patch.adsSlots !== undefined && !isValidAdsSlots(patch.adsSlots)) {
+    throw new Error('広告の枠数は1〜50の整数で指定してください');
+  }
+  const adsEnabled =
+    patch.adsEnabled !== undefined
+      ? normalizeAdsEnabled(patch.adsEnabled)
+      : undefined;
+  const adsSlots =
+    patch.adsSlots !== undefined
+      ? normalizeAdsSlots(patch.adsSlots)
+      : undefined;
+  const adsPrice =
+    patch.adsPrice !== undefined ? normalizeAdsPrice(patch.adsPrice) : undefined;
   if (
     patch.startDate !== undefined &&
     patch.endDate !== undefined &&
@@ -432,6 +495,10 @@ export async function updateEvent(
       ...(siteNotes !== undefined ? { siteNotes } : {}),
       ...(topPlacementEnabled !== undefined ? { topPlacementEnabled } : {}),
       ...(topPlacementPrice !== undefined ? { topPlacementPrice } : {}),
+      ...(loginBonusEnabled !== undefined ? { loginBonusEnabled } : {}),
+      ...(adsEnabled !== undefined ? { adsEnabled } : {}),
+      ...(adsSlots !== undefined ? { adsSlots } : {}),
+      ...(adsPrice !== undefined ? { adsPrice } : {}),
       updatedAt: FieldValue.serverTimestamp(),
     });
 }
