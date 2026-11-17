@@ -1223,11 +1223,29 @@ export const REDEEM_TEXT = {
     zh: '店铺介绍',
     ko: '매장 소개',
   },
+  profileCoverImage: {
+    ja: 'お店のトップ画像',
+    en: 'Shop top image',
+    zh: '店铺主图',
+    ko: '가게 대표 이미지',
+  },
+  profileCoverImageNote: {
+    ja: 'お店のページの先頭に表示される、お店の顔になる写真です（1枚）',
+    en: 'The photo shown at the top of your shop page — the face of your shop (1 photo).',
+    zh: '显示在店铺页面顶部、代表店铺形象的照片（1张）。',
+    ko: '가게 페이지 맨 위에 표시되는 가게의 대표 사진입니다(1장).',
+  },
+  profileCoverImageReplace: {
+    ja: '画像を変更',
+    en: 'Change image',
+    zh: '更换图片',
+    ko: '이미지 변경',
+  },
   profilePhotos: {
-    ja: '写真（最大3枚）',
-    en: 'Photos (up to 3)',
-    zh: '照片（最多3张）',
-    ko: '사진(최대 3장)',
+    ja: '料理の写真（最大3枚）',
+    en: 'Food photos (up to 3)',
+    zh: '菜品照片（最多3张）',
+    ko: '요리 사진(최대 3장)',
   },
   profilePhotoAdd: {
     ja: '写真を追加',

@@ -91,6 +91,12 @@ export interface ShopProfile {
   menuDescription: string;
   /** お店の紹介文 */
   description: string;
+  /**
+   * お店のトップ画像（1枚）。お店のページの先頭に出る「お店の顔」の
+   * 写真で、料理の写真（photoUrls）とは別に持つ。未設定は null。
+   */
+  coverImageUrl: string | null;
+  /** 料理の写真（最大3枚） */
   photoUrls: string[];
   instagramUrl: string;
   /**
@@ -156,6 +162,7 @@ export function emptyShopProfile(): ShopProfile {
     menuName: '',
     menuDescription: '',
     description: '',
+    coverImageUrl: null,
     photoUrls: [],
     instagramUrl: '',
     links: [],
@@ -170,6 +177,11 @@ export function emptyShopProfile(): ShopProfile {
 
 function readString(value: unknown, maxLength: number): string {
   return typeof value === 'string' ? value.slice(0, maxLength) : '';
+}
+
+/** 読み取り用: トップ画像。https の文字列なら採用し、それ以外は null。 */
+function readCoverImageUrl(value: unknown): string | null {
+  return typeof value === 'string' && isHttpsUrl(value) ? value : null;
 }
 
 function readPhotoUrls(value: unknown): string[] {
@@ -271,6 +283,7 @@ export function parseShopProfile(value: unknown): ShopProfile {
       SHOP_PROFILE_LIMITS.menuDescription,
     ),
     description: readString(source.description, SHOP_PROFILE_LIMITS.description),
+    coverImageUrl: readCoverImageUrl(source.coverImageUrl),
     photoUrls: readPhotoUrls(source.photoUrls),
     instagramUrl: readInstagramUrl(source.instagramUrl),
     links: readShopLinks(source.links),
@@ -314,6 +327,18 @@ export function toPublicShop(
     profile,
     topFeatured: topFeatured === true,
   };
+}
+
+/**
+ * お店のメイン画像（表示用フォールバック・純粋関数）。
+ * トップ画像があればそれを使い、無ければ料理の写真の1枚目で代用する。
+ * どちらも無ければ null。お店カードや先頭のビジュアルはこちらを使い、
+ * 料理の写真ギャラリーは photoUrls をそのまま出す。
+ */
+export function shopMainVisualUrl(
+  profile: Pick<ShopProfile, 'coverImageUrl' | 'photoUrls'>,
+): string | null {
+  return profile.coverImageUrl ?? profile.photoUrls[0] ?? null;
 }
 
 // ─── 純粋関数: 書き込み検証 ───
@@ -474,8 +499,9 @@ function validateLoginReward(
 
 /**
  * 店舗プロフィールの保存入力を検証して正規化する（書き込み用）。
- * 文字項目は任意（空でよい）で上限文字数まで。写真は最大3枚・https
- * のみ。Instagram URL は https のみ（空は可）。リンクは最大3件。
+ * 文字項目は任意（空でよい）で上限文字数まで。トップ画像は1枚・https
+ * のみ（空は可）。料理の写真は最大3枚・https のみ。Instagram URL は
+ * https のみ（空は可）。リンクは最大3件。
  * published は真偽値のみ（未指定は掲載）。
  * 座標（location）は店側の入力を一切使わないため、ここでは常に null
  * を返し、実際の値は保存時にサーバー側で決める（updateShopProfile）。
@@ -502,6 +528,25 @@ export function validateShopProfileInput(
     const result = validateTextField(source, field, label);
     if (!result.ok) return result;
     texts[field] = result.value;
+  }
+
+  // トップ画像: 未指定・null・空文字は未設定（null）。それ以外は
+  // https の文字列でなければならない（料理の写真と同じ規則）。
+  let coverImageUrl: string | null = null;
+  if (source.coverImageUrl !== undefined && source.coverImageUrl !== null) {
+    if (typeof source.coverImageUrl !== 'string') {
+      return { ok: false, error: 'トップ画像の形式が不正です' };
+    }
+    const trimmed = source.coverImageUrl.trim();
+    if (trimmed) {
+      if (!isHttpsUrl(trimmed)) {
+        return {
+          ok: false,
+          error: 'トップ画像は https:// で始まる必要があります',
+        };
+      }
+      coverImageUrl = trimmed;
+    }
   }
 
   let photoUrls: string[] = [];
@@ -549,6 +594,7 @@ export function validateShopProfileInput(
     ok: true,
     value: {
       ...texts,
+      coverImageUrl,
       photoUrls,
       instagramUrl,
       links: links.value,
@@ -592,6 +638,18 @@ export function shopLoginRewardPhotoStoragePath(
   fileName: string,
 ): string {
   return `events/${eventId}/shop-photos/${exhibitorId}/login-reward-${fileName}`;
+}
+
+/**
+ * お店のトップ画像の保存先パス。店舗写真と同じディレクトリに
+ * `cover-` 接頭辞で置く（無料の一品などと同じ作法）。
+ */
+export function shopCoverPhotoStoragePath(
+  eventId: string,
+  exhibitorId: string,
+  fileName: string,
+): string {
+  return `events/${eventId}/shop-photos/${exhibitorId}/cover-${fileName}`;
 }
 
 // ─── 課金による掲載停止（店舗課金オプション） ───
