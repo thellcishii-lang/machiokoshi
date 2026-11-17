@@ -36,6 +36,8 @@ function eventWith(status: EventConfig['status']): EventConfig {
     adsEnabled: false,
     adsSlots: 5,
     adsPrice: null,
+    couponIssuePrice: null,
+    pushPrice: null,
     couponCap: 100,
     backupRetentionDays: 30,
     status,

@@ -192,6 +192,27 @@ export interface EventConfig {
    */
   adsPrice: number | null;
   /**
+   * 参加店が自店のクーポンを発行するときの手数料（1件あたり・円）。
+   * 管理人が特設サイト編集画面で設定する。未設定（null）は 0 円
+   * （無料）として扱う。設定する場合は COUPON_ISSUE_PRICE_MIN〜
+   * COUPON_ISSUE_PRICE_MAX の整数。有料の間は管理人自身の Stripe で
+   * 支払いが完了するまでクーポンは公開されない
+   * （実体は lib/event-charges.ts）。
+   * 導入前に作られたプロジェクトには項目自体が無いため、読み取り時は
+   * null（＝無料）に倒す。
+   */
+  couponIssuePrice: number | null;
+  /**
+   * 参加店がプッシュ配信を申請するときの手数料（1回あたり・円）。
+   * 管理人が特設サイト編集画面で設定する。未設定（null）は 0 円
+   * （無料）として扱う。設定する場合は PUSH_PRICE_MIN〜PUSH_PRICE_MAX
+   * の整数。支払い（有料時）と管理人の承認を経て配信される
+   * （実体は lib/event-charges.ts / lib/event-push-request.ts）。
+   * 導入前に作られたプロジェクトには項目自体が無いため、読み取り時は
+   * null（＝無料）に倒す。
+   */
+  pushPrice: number | null;
+  /**
    * クーポン上限（プロジェクト全体の件数）。購読者上限と同じく契約枠の軸なので、
    * 変更は運営側のみ。既定は MAX_COUPONS_PER_EVENT。
    */
@@ -275,6 +296,8 @@ export interface CreateEventInput {
   adsEnabled?: boolean;
   adsSlots?: number;
   adsPrice?: number | null;
+  couponIssuePrice?: number | null;
+  pushPrice?: number | null;
   links?: EventLink[];
   couponCap?: number;
   backupRetentionDays?: number;
@@ -740,6 +763,78 @@ export function normalizeAdsPrice(input: unknown): number | null {
   if (!isValidAdsPrice(input)) {
     throw new Error(
       `広告の料金は${ADS_PRICE_MIN}円から${ADS_PRICE_MAX}円の整数で指定してください`,
+    );
+  }
+  return input as number;
+}
+
+/** クーポン発行手数料（1件あたり）の下限・上限（円）。0 は無料。 */
+export const COUPON_ISSUE_PRICE_MIN = 0;
+export const COUPON_ISSUE_PRICE_MAX = 1_000_000;
+
+/** クーポン発行手数料として有効な値かどうか（0〜1,000,000 の整数）。 */
+export function isValidCouponIssuePrice(value: unknown): boolean {
+  return (
+    typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= COUPON_ISSUE_PRICE_MIN &&
+    value <= COUPON_ISSUE_PRICE_MAX
+  );
+}
+
+/**
+ * 保存済みのクーポン発行手数料を防御的に読む（読み取り用。throw しない）。
+ * 未設定・不正な値は null（未設定＝無料）に倒す。0（無料）はそのまま 0。
+ */
+export function parseCouponIssuePrice(value: unknown): number | null {
+  return isValidCouponIssuePrice(value) ? (value as number) : null;
+}
+
+/**
+ * クーポン発行手数料の入力を検証して正規化する（書き込み用。不正なら throw）。
+ * 未指定・null は未設定（null）として扱う。0 は無料として有効。
+ */
+export function normalizeCouponIssuePrice(input: unknown): number | null {
+  if (input === undefined || input === null) return null;
+  if (!isValidCouponIssuePrice(input)) {
+    throw new Error(
+      `クーポン発行の料金は${COUPON_ISSUE_PRICE_MIN}円から${COUPON_ISSUE_PRICE_MAX}円の整数で指定してください`,
+    );
+  }
+  return input as number;
+}
+
+/** プッシュ配信手数料（1回あたり）の下限・上限（円）。0 は無料。 */
+export const PUSH_PRICE_MIN = 0;
+export const PUSH_PRICE_MAX = 1_000_000;
+
+/** プッシュ配信手数料として有効な値かどうか（0〜1,000,000 の整数）。 */
+export function isValidPushPrice(value: unknown): boolean {
+  return (
+    typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= PUSH_PRICE_MIN &&
+    value <= PUSH_PRICE_MAX
+  );
+}
+
+/**
+ * 保存済みのプッシュ配信手数料を防御的に読む（読み取り用。throw しない）。
+ * 未設定・不正な値は null（未設定＝無料）に倒す。0（無料）はそのまま 0。
+ */
+export function parsePushPrice(value: unknown): number | null {
+  return isValidPushPrice(value) ? (value as number) : null;
+}
+
+/**
+ * プッシュ配信手数料の入力を検証して正規化する（書き込み用。不正なら throw）。
+ * 未指定・null は未設定（null）として扱う。0 は無料として有効。
+ */
+export function normalizePushPrice(input: unknown): number | null {
+  if (input === undefined || input === null) return null;
+  if (!isValidPushPrice(input)) {
+    throw new Error(
+      `プッシュ配信の料金は${PUSH_PRICE_MIN}円から${PUSH_PRICE_MAX}円の整数で指定してください`,
     );
   }
   return input as number;

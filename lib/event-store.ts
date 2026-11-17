@@ -38,16 +38,22 @@ import {
   DEFAULT_AD_SLOTS,
   DEFAULT_LOGIN_BONUS_DAYS,
   isValidAdsSlots,
+  isValidCouponIssuePrice,
   isValidLoginBonusDays,
+  isValidPushPrice,
   normalizeAdsEnabled,
   normalizeAdsPrice,
   normalizeAdsSlots,
+  normalizeCouponIssuePrice,
   normalizeLoginBonusEnabled,
+  normalizePushPrice,
   parseAdsEnabled,
   parseAdsPrice,
   parseAdsSlots,
+  parseCouponIssuePrice,
   parseLoginBonusDays,
   parseLoginBonusEnabled,
+  parsePushPrice,
 } from './event';
 import {
   normalizeGourmetDefinition,
@@ -99,6 +105,9 @@ function toEventConfig(id: string, data: FirebaseFirestore.DocumentData): EventC
     adsEnabled: parseAdsEnabled(data.adsEnabled),
     adsSlots: parseAdsSlots(data.adsSlots),
     adsPrice: parseAdsPrice(data.adsPrice),
+    // 店舗のクーポン発行・プッシュ申請の手数料も同様に未設定（無料）に倒す
+    couponIssuePrice: parseCouponIssuePrice(data.couponIssuePrice),
+    pushPrice: parsePushPrice(data.pushPrice),
     couponCap: data.couponCap ?? MAX_COUPONS_PER_EVENT,
     backupRetentionDays: data.backupRetentionDays ?? DEFAULT_BACKUP_RETENTION_DAYS,
     status: data.status,
@@ -141,6 +150,20 @@ export async function createEvent(input: CreateEventInput): Promise<EventConfig>
   if (input.adsSlots !== undefined && !isValidAdsSlots(input.adsSlots)) {
     throw new Error('広告の枠数は1〜50の整数で指定してください');
   }
+  if (
+    input.couponIssuePrice !== undefined &&
+    input.couponIssuePrice !== null &&
+    !isValidCouponIssuePrice(input.couponIssuePrice)
+  ) {
+    throw new Error('クーポン発行の料金は0〜1,000,000円の整数で指定してください');
+  }
+  if (
+    input.pushPrice !== undefined &&
+    input.pushPrice !== null &&
+    !isValidPushPrice(input.pushPrice)
+  ) {
+    throw new Error('プッシュ配信の料金は0〜1,000,000円の整数で指定してください');
+  }
   // 達成特典は種類と内容を正規化し、組み合わせ（benefit なら内容必須）まで検証する
   const stampRewardType = normalizeStampRewardType(input.stampRewardType);
   const stampBenefitText = normalizeStampBenefitText(input.stampBenefitText);
@@ -178,6 +201,9 @@ export async function createEvent(input: CreateEventInput): Promise<EventConfig>
     adsEnabled: false,
     adsSlots: DEFAULT_AD_SLOTS,
     adsPrice: null,
+    // 店舗のクーポン発行・プッシュ申請の手数料は未設定（無料）で始める
+    couponIssuePrice: input.couponIssuePrice ?? null,
+    pushPrice: input.pushPrice ?? null,
     couponCap: input.couponCap ?? MAX_COUPONS_PER_EVENT,
     backupRetentionDays:
       input.backupRetentionDays ?? DEFAULT_BACKUP_RETENTION_DAYS,
@@ -354,6 +380,8 @@ export type UpdateEventInput = Partial<
     | 'adsEnabled'
     | 'adsSlots'
     | 'adsPrice'
+    | 'couponIssuePrice'
+    | 'pushPrice'
     | 'couponCap'
     | 'backupRetentionDays'
     | 'status'
@@ -472,6 +500,15 @@ export async function updateEvent(
       : undefined;
   const adsPrice =
     patch.adsPrice !== undefined ? normalizeAdsPrice(patch.adsPrice) : undefined;
+  // 店舗のクーポン発行・プッシュ申請の手数料も検証・正規化してから保存する
+  const couponIssuePrice =
+    patch.couponIssuePrice !== undefined
+      ? normalizeCouponIssuePrice(patch.couponIssuePrice)
+      : undefined;
+  const pushPrice =
+    patch.pushPrice !== undefined
+      ? normalizePushPrice(patch.pushPrice)
+      : undefined;
   if (
     patch.startDate !== undefined &&
     patch.endDate !== undefined &&
@@ -499,6 +536,8 @@ export async function updateEvent(
       ...(adsEnabled !== undefined ? { adsEnabled } : {}),
       ...(adsSlots !== undefined ? { adsSlots } : {}),
       ...(adsPrice !== undefined ? { adsPrice } : {}),
+      ...(couponIssuePrice !== undefined ? { couponIssuePrice } : {}),
+      ...(pushPrice !== undefined ? { pushPrice } : {}),
       updatedAt: FieldValue.serverTimestamp(),
     });
 }

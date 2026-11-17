@@ -276,6 +276,7 @@ export default function EventDashboardPage() {
     { href: `/event-admin/${eventId}/coupons`, label: adminText(locale, 'navCoupons') },
     { href: `/event-admin/${eventId}/site`, label: adminText(locale, 'navSiteEdit') },
     { href: `/event-admin/${eventId}/ads`, label: adminText(locale, 'navAds') },
+    { href: `/event-admin/${eventId}/push-requests`, label: adminText(locale, 'navPushRequests') },
     { href: specialSiteUrl(eventId), label: adminText(locale, 'specialSiteOpen'), external: true },
   ];
 

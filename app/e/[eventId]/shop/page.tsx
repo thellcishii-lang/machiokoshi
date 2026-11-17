@@ -114,6 +114,35 @@ const EMPTY_AD_CONTENT: ShopAdContent = {
   linkUrl: null,
 };
 
+interface ShopCouponItem {
+  id: string;
+  title: string;
+  description: string;
+  active: boolean;
+  paymentPending: boolean;
+  feeAmount: number | null;
+  createdAt: string;
+}
+
+interface ShopCouponsState {
+  fee: number;
+  coupons: ShopCouponItem[];
+}
+
+interface ShopPushRequestItem {
+  id: string;
+  title: string;
+  body: string;
+  status: 'unpaid' | 'pending' | 'sent' | 'rejected' | 'failed';
+  feeAmount: number;
+  createdAt: string;
+}
+
+interface ShopPushRequestsState {
+  fee: number;
+  requests: ShopPushRequestItem[];
+}
+
 const EMPTY_PROFILE: ShopProfile = {
   displayName: '',
   address: '',
@@ -228,6 +257,24 @@ export default function ExhibitorShopPage() {
   const [adBusy, setAdBusy] = useState(false);
   const [adMessage, setAdMessage] = useState('');
   const [adPhotoUploading, setAdPhotoUploading] = useState(false);
+  const [shopCoupons, setShopCoupons] = useState<ShopCouponsState | null>(null);
+  const [couponForm, setCouponForm] = useState({
+    title: '',
+    description: '',
+    keywords: '',
+  });
+  const [couponBusy, setCouponBusy] = useState(false);
+  const [couponMessage, setCouponMessage] = useState('');
+  const [shopPushRequests, setShopPushRequests] =
+    useState<ShopPushRequestsState | null>(null);
+  const [pushForm, setPushForm] = useState({ title: '', body: '' });
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushMessage, setPushMessage] = useState('');
+  const [chargeMessage, setChargeMessage] = useState('');
+  // Stripe Checkout から戻ってきたときの支払い確認は、ログイン状態が
+  // 揃ってから1回だけ行う（session_id をここに退避する）。
+  const chargeReturnRef = useRef<string | null>(null);
+  const chargeVerifiedRef = useRef(false);
   const [message, setMessage] = useState('');
   const [messageOk, setMessageOk] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -322,6 +369,24 @@ export default function ExhibitorShopPage() {
           } catch {
             setPlacement(null);
           }
+          // 自店クーポンとプッシュ申請の状態も同様（取れなければ
+          // カードを出さないだけ）。
+          try {
+            const couponsData = (await callApi(
+              `/api/events/${eventId}/shop-coupons`,
+            )) as ShopCouponsState;
+            setShopCoupons(couponsData);
+          } catch {
+            setShopCoupons(null);
+          }
+          try {
+            const pushData = (await callApi(
+              `/api/events/${eventId}/shop-push-requests`,
+            )) as ShopPushRequestsState;
+            setShopPushRequests(pushData);
+          } catch {
+            setShopPushRequests(null);
+          }
         }
         // 広告の状態も同様（取れなければ広告カードを出さないだけ）。
         // フォームの初期値は掲載版→申請版の順で引き継ぐ。
@@ -365,12 +430,175 @@ export default function ExhibitorShopPage() {
       } else if (adResult === 'canceled') {
         setAdMessage(redeemText(locale, 'adCheckoutCanceled'));
       }
+      // クーポン発行／プッシュ申請の1回払いから戻ってきた場合。
+      // 成功時は session_id を退避し、ログイン後にサーバーで確認する。
+      const chargeResult = params.get('charge');
+      if (chargeResult === 'success') {
+        const sessionId = params.get('session_id');
+        if (sessionId) chargeReturnRef.current = sessionId;
+      } else if (chargeResult === 'canceled') {
+        setChargeMessage(redeemText(locale, 'chargeCanceledMessage'));
+      }
     } catch {
       // 読めなければ案内なしで続行する
     }
     // 初回マウント時だけ（言語は初期値でよい）
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const reloadShopCoupons = useCallback(async () => {
+    const data = (await callApi(
+      `/api/events/${eventId}/shop-coupons`,
+    )) as ShopCouponsState;
+    setShopCoupons(data);
+    return data;
+  }, [callApi, eventId]);
+
+  const reloadShopPushRequests = useCallback(async () => {
+    const data = (await callApi(
+      `/api/events/${eventId}/shop-push-requests`,
+    )) as ShopPushRequestsState;
+    setShopPushRequests(data);
+    return data;
+  }, [callApi, eventId]);
+
+  // Checkout の成功リターン: サーバー側で支払いを確認し、対象
+  // （クーポンの有効化／プッシュ申請の承認待ち化）を反映する。
+  // Webhook でも同じ処理が走るため、二重に走っても問題ない。
+  useEffect(() => {
+    if (!user || !exhibitor || exhibitor.kind === 'advertiser') return;
+    const sessionId = chargeReturnRef.current;
+    if (!sessionId || chargeVerifiedRef.current) return;
+    chargeVerifiedRef.current = true;
+    (async () => {
+      try {
+        const data = await callApi(`/api/events/${eventId}/shop-charges/verify`, {
+          method: 'POST',
+          body: JSON.stringify({ sessionId }),
+        });
+        setChargeMessage(
+          redeemText(
+            locale,
+            data.kind === 'push-send'
+              ? 'chargeSuccessPushMessage'
+              : 'chargeSuccessCouponMessage',
+          ),
+        );
+      } catch {
+        setChargeMessage(redeemText(locale, 'chargeVerifyFailedMessage'));
+      }
+      try {
+        await reloadShopCoupons();
+      } catch {
+        // 一覧の再読込失敗は案内を妨げない
+      }
+      try {
+        await reloadShopPushRequests();
+      } catch {
+        // 同上
+      }
+    })();
+  }, [user, exhibitor, eventId, callApi, locale, reloadShopCoupons, reloadShopPushRequests]);
+
+  const handleCouponCreate = async () => {
+    setCouponBusy(true);
+    setCouponMessage('');
+    try {
+      const keywords = couponForm.keywords
+        .split(',')
+        .map((k) => k.trim())
+        .filter((k) => k.length > 0);
+      const data = await callApi(`/api/events/${eventId}/shop-coupons`, {
+        method: 'POST',
+        body: JSON.stringify({
+          title: couponForm.title,
+          description: couponForm.description,
+          keywords,
+        }),
+      });
+      if (typeof data.checkoutUrl === 'string') {
+        window.location.href = data.checkoutUrl;
+        return;
+      }
+      setCouponForm({ title: '', description: '', keywords: '' });
+      await reloadShopCoupons();
+      setCouponMessage(
+        data.coupon?.paymentPending
+          ? redeemText(locale, 'chargePayFailed')
+          : redeemText(locale, 'couponIssuedMessage'),
+      );
+    } catch (e) {
+      setCouponMessage(
+        e instanceof Error ? e.message : redeemText(locale, 'couponIssueFailed'),
+      );
+    } finally {
+      setCouponBusy(false);
+    }
+  };
+
+  const handleCouponPay = async (couponId: string) => {
+    setCouponBusy(true);
+    setCouponMessage('');
+    try {
+      const data = await callApi(
+        `/api/events/${eventId}/shop-coupons/${couponId}/checkout`,
+        { method: 'POST' },
+      );
+      if (typeof data.checkoutUrl !== 'string') throw new Error('no checkout url');
+      window.location.href = data.checkoutUrl;
+    } catch (e) {
+      setCouponMessage(
+        e instanceof Error ? e.message : redeemText(locale, 'chargePayFailed'),
+      );
+      setCouponBusy(false);
+    }
+  };
+
+  const handlePushRequestCreate = async () => {
+    setPushBusy(true);
+    setPushMessage('');
+    try {
+      const data = await callApi(`/api/events/${eventId}/shop-push-requests`, {
+        method: 'POST',
+        body: JSON.stringify({ title: pushForm.title, body: pushForm.body }),
+      });
+      if (typeof data.checkoutUrl === 'string') {
+        window.location.href = data.checkoutUrl;
+        return;
+      }
+      setPushForm({ title: '', body: '' });
+      await reloadShopPushRequests();
+      setPushMessage(
+        data.request?.status === 'unpaid'
+          ? redeemText(locale, 'chargePayFailed')
+          : redeemText(locale, 'pushRequestedMessage'),
+      );
+    } catch (e) {
+      setPushMessage(
+        e instanceof Error ? e.message : redeemText(locale, 'pushRequestFailed'),
+      );
+    } finally {
+      setPushBusy(false);
+    }
+  };
+
+  const handlePushRequestPay = async (requestId: string) => {
+    setPushBusy(true);
+    setPushMessage('');
+    try {
+      const data = await callApi(
+        `/api/events/${eventId}/shop-push-requests/${requestId}/checkout`,
+        { method: 'POST' },
+      );
+      if (typeof data.checkoutUrl !== 'string') throw new Error('no checkout url');
+      window.location.href = data.checkoutUrl;
+    } catch (e) {
+      setPushMessage(
+        e instanceof Error ? e.message : redeemText(locale, 'chargePayFailed'),
+      );
+      setPushBusy(false);
+    }
+  };
 
   const handlePlacementSubscribe = async () => {
     setPlacementBusy(true);
@@ -1718,6 +1946,287 @@ export default function ExhibitorShopPage() {
             <p style={{ fontSize: 13.5, fontWeight: 600, color: '#334155', marginTop: 16 }}>
               {placementMessage}
             </p>
+          )}
+
+          {!isAdvertiser && chargeMessage && (
+            <p style={{ fontSize: 13.5, fontWeight: 600, color: '#334155', marginTop: 16 }}>
+              {chargeMessage}
+            </p>
+          )}
+
+          {!isAdvertiser && shopCoupons && (
+            <section style={{ ...cardStyle, padding: 16, marginTop: 16 }}>
+              <h2 style={{ fontSize: 16.5, fontWeight: 800, margin: 0 }}>
+                {redeemText(locale, 'couponIssueTitle')}
+              </h2>
+              <p style={{ fontSize: 13.5, color: '#334155', marginTop: 8 }}>
+                {redeemText(locale, 'couponIssueNote')}
+              </p>
+              <p style={{ fontSize: 15, fontWeight: 800, marginTop: 8 }}>
+                {shopCoupons.fee > 0
+                  ? redeemText(locale, 'couponIssueFee', {
+                      price: shopCoupons.fee.toLocaleString('ja-JP'),
+                    })
+                  : redeemText(locale, 'freePriceLabel')}
+              </p>
+              {shopCoupons.fee > 0 && (
+                <p style={{ fontSize: 12.5, color: '#64748b', marginTop: 4 }}>
+                  {redeemText(locale, 'couponIssuePaidNote')}
+                </p>
+              )}
+              <label style={labelStyle}>
+                {redeemText(locale, 'couponTitleLabel')}
+                <input
+                  style={inputStyle}
+                  type="text"
+                  value={couponForm.title}
+                  onChange={(e) =>
+                    setCouponForm((current) => ({ ...current, title: e.target.value }))
+                  }
+                />
+              </label>
+              <label style={labelStyle}>
+                {redeemText(locale, 'couponDescriptionLabel')}
+                <textarea
+                  style={{ ...inputStyle, minHeight: 64 }}
+                  value={couponForm.description}
+                  onChange={(e) =>
+                    setCouponForm((current) => ({
+                      ...current,
+                      description: e.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label style={labelStyle}>
+                {redeemText(locale, 'couponKeywordsLabel')}
+                <input
+                  style={inputStyle}
+                  type="text"
+                  value={couponForm.keywords}
+                  onChange={(e) =>
+                    setCouponForm((current) => ({
+                      ...current,
+                      keywords: e.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <button
+                onClick={() => void handleCouponCreate()}
+                disabled={couponBusy || !couponForm.title.trim()}
+                style={{
+                  ...primaryButtonStyle,
+                  marginTop: 16,
+                  opacity: couponBusy || !couponForm.title.trim() ? 0.6 : 1,
+                }}
+              >
+                {redeemText(locale, 'couponIssueButton')}
+              </button>
+              {couponMessage && (
+                <p style={{ fontSize: 13.5, fontWeight: 600, color: '#334155', marginTop: 12 }}>
+                  {couponMessage}
+                </p>
+              )}
+              {shopCoupons.coupons.length > 0 && (
+                <div style={{ marginTop: 16 }}>
+                  <h3 style={{ fontSize: 14, fontWeight: 800, margin: 0 }}>
+                    {redeemText(locale, 'ownCouponsTitle')}
+                  </h3>
+                  {shopCoupons.coupons.map((coupon) => (
+                    <div
+                      key={coupon.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        flexWrap: 'wrap',
+                        borderTop: '1px solid #e2e8f0',
+                        paddingTop: 10,
+                        marginTop: 10,
+                      }}
+                    >
+                      <span style={{ fontSize: 14, fontWeight: 700 }}>{coupon.title}</span>
+                      <span
+                        style={{
+                          fontSize: 11.5,
+                          fontWeight: 700,
+                          color: '#ffffff',
+                          backgroundColor: coupon.paymentPending
+                            ? '#b45309'
+                            : coupon.active
+                              ? '#16a34a'
+                              : '#6b7280',
+                          borderRadius: 6,
+                          padding: '2px 8px',
+                        }}
+                      >
+                        {coupon.paymentPending
+                          ? redeemText(locale, 'couponStatusUnpaid')
+                          : coupon.active
+                            ? redeemText(locale, 'couponStatusActive')
+                            : redeemText(locale, 'couponStatusInactive')}
+                      </span>
+                      {coupon.paymentPending && (
+                        <button
+                          onClick={() => void handleCouponPay(coupon.id)}
+                          disabled={couponBusy}
+                          style={{
+                            marginLeft: 'auto',
+                            padding: '7px 14px',
+                            fontSize: 13,
+                            fontWeight: 700,
+                            borderRadius: 10,
+                            border: 'none',
+                            backgroundColor: VIOLET,
+                            color: '#ffffff',
+                            cursor: 'pointer',
+                            opacity: couponBusy ? 0.6 : 1,
+                          }}
+                        >
+                          {redeemText(locale, 'chargePayButton')}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
+          {!isAdvertiser && shopPushRequests && (
+            <section style={{ ...cardStyle, padding: 16, marginTop: 16 }}>
+              <h2 style={{ fontSize: 16.5, fontWeight: 800, margin: 0 }}>
+                {redeemText(locale, 'pushRequestTitle')}
+              </h2>
+              <p style={{ fontSize: 13.5, color: '#334155', marginTop: 8 }}>
+                {redeemText(locale, 'pushRequestNote')}
+              </p>
+              <p style={{ fontSize: 15, fontWeight: 800, marginTop: 8 }}>
+                {shopPushRequests.fee > 0
+                  ? redeemText(locale, 'pushRequestFee', {
+                      price: shopPushRequests.fee.toLocaleString('ja-JP'),
+                    })
+                  : redeemText(locale, 'freePriceLabel')}
+              </p>
+              {shopPushRequests.fee > 0 && (
+                <p style={{ fontSize: 12.5, color: '#64748b', marginTop: 4 }}>
+                  {redeemText(locale, 'pushRequestPaidNote')}
+                </p>
+              )}
+              <label style={labelStyle}>
+                {redeemText(locale, 'pushTitleLabel')}
+                <input
+                  style={inputStyle}
+                  type="text"
+                  value={pushForm.title}
+                  onChange={(e) =>
+                    setPushForm((current) => ({ ...current, title: e.target.value }))
+                  }
+                />
+              </label>
+              <label style={labelStyle}>
+                {redeemText(locale, 'pushBodyLabel')}
+                <textarea
+                  style={{ ...inputStyle, minHeight: 80 }}
+                  value={pushForm.body}
+                  onChange={(e) =>
+                    setPushForm((current) => ({ ...current, body: e.target.value }))
+                  }
+                />
+              </label>
+              <button
+                onClick={() => void handlePushRequestCreate()}
+                disabled={pushBusy || !pushForm.title.trim() || !pushForm.body.trim()}
+                style={{
+                  ...primaryButtonStyle,
+                  marginTop: 16,
+                  opacity:
+                    pushBusy || !pushForm.title.trim() || !pushForm.body.trim()
+                      ? 0.6
+                      : 1,
+                }}
+              >
+                {redeemText(locale, 'pushRequestButton')}
+              </button>
+              {pushMessage && (
+                <p style={{ fontSize: 13.5, fontWeight: 600, color: '#334155', marginTop: 12 }}>
+                  {pushMessage}
+                </p>
+              )}
+              {shopPushRequests.requests.length > 0 && (
+                <div style={{ marginTop: 16 }}>
+                  <h3 style={{ fontSize: 14, fontWeight: 800, margin: 0 }}>
+                    {redeemText(locale, 'ownPushRequestsTitle')}
+                  </h3>
+                  {shopPushRequests.requests.map((request) => (
+                    <div
+                      key={request.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        flexWrap: 'wrap',
+                        borderTop: '1px solid #e2e8f0',
+                        paddingTop: 10,
+                        marginTop: 10,
+                      }}
+                    >
+                      <span style={{ fontSize: 14, fontWeight: 700 }}>{request.title}</span>
+                      <span
+                        style={{
+                          fontSize: 11.5,
+                          fontWeight: 700,
+                          color: '#ffffff',
+                          backgroundColor:
+                            request.status === 'unpaid'
+                              ? '#b45309'
+                              : request.status === 'pending'
+                                ? '#d97706'
+                                : request.status === 'sent'
+                                  ? '#16a34a'
+                                  : request.status === 'rejected'
+                                    ? '#6b7280'
+                                    : '#b91c1c',
+                          borderRadius: 6,
+                          padding: '2px 8px',
+                        }}
+                      >
+                        {request.status === 'unpaid'
+                          ? redeemText(locale, 'pushStatusUnpaid')
+                          : request.status === 'pending'
+                            ? redeemText(locale, 'pushStatusPending')
+                            : request.status === 'sent'
+                              ? redeemText(locale, 'pushStatusSent')
+                              : request.status === 'rejected'
+                                ? redeemText(locale, 'pushStatusRejected')
+                                : redeemText(locale, 'pushStatusFailed')}
+                      </span>
+                      {request.status === 'unpaid' && (
+                        <button
+                          onClick={() => void handlePushRequestPay(request.id)}
+                          disabled={pushBusy}
+                          style={{
+                            marginLeft: 'auto',
+                            padding: '7px 14px',
+                            fontSize: 13,
+                            fontWeight: 700,
+                            borderRadius: 10,
+                            border: 'none',
+                            backgroundColor: VIOLET,
+                            color: '#ffffff',
+                            cursor: 'pointer',
+                            opacity: pushBusy ? 0.6 : 1,
+                          }}
+                        >
+                          {redeemText(locale, 'chargePayButton')}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
           )}
         </>
       )}

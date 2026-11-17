@@ -14,14 +14,20 @@ import {
   isValidStampRewardType,
   isValidAdsPrice,
   isValidAdsSlots,
+  isValidCouponIssuePrice,
   isValidLoginBonusDays,
+  isValidPushPrice,
   normalizeAdsPrice,
   normalizeAdsSlots,
+  normalizeCouponIssuePrice,
+  normalizePushPrice,
   normalizeStampBenefitText,
   normalizeStampRewardType,
   parseAdsPrice,
   parseAdsSlots,
+  parseCouponIssuePrice,
   parseLoginBonusDays,
+  parsePushPrice,
   parseRankingMinReviews,
   parseStampBenefitText,
   parseStampGoalCount,
@@ -393,5 +399,63 @@ describe('広告設定（adsEnabled / adsSlots / adsPrice）', () => {
     expect(normalizeAdsPrice(5000)).toBe(5000);
     expect(() => normalizeAdsPrice(-1)).toThrow();
     expect(() => normalizeAdsPrice(100.5)).toThrow();
+  });
+});
+
+describe('店舗手数料（couponIssuePrice / pushPrice）', () => {
+  it('クーポン発行手数料は 0（無料）を含む 0 以上の整数だけを受け付ける', () => {
+    expect(isValidCouponIssuePrice(0)).toBe(true);
+    expect(isValidCouponIssuePrice(500)).toBe(true);
+    expect(isValidCouponIssuePrice(1000000)).toBe(true);
+    expect(isValidCouponIssuePrice(1000001)).toBe(false);
+    expect(isValidCouponIssuePrice(-1)).toBe(false);
+    expect(isValidCouponIssuePrice(100.5)).toBe(false);
+    expect(isValidCouponIssuePrice('500')).toBe(false);
+    expect(isValidCouponIssuePrice(null)).toBe(false);
+  });
+
+  it('クーポン発行手数料の parse は 0 を 0 として読み、不正値は null（未設定）', () => {
+    expect(parseCouponIssuePrice(0)).toBe(0);
+    expect(parseCouponIssuePrice(500)).toBe(500);
+    expect(parseCouponIssuePrice(undefined)).toBeNull();
+    expect(parseCouponIssuePrice(null)).toBeNull();
+    expect(parseCouponIssuePrice(-100)).toBeNull();
+  });
+
+  it('クーポン発行手数料の normalize は未指定を null、0 を 0 として通す', () => {
+    expect(normalizeCouponIssuePrice(undefined)).toBeNull();
+    expect(normalizeCouponIssuePrice(null)).toBeNull();
+    expect(normalizeCouponIssuePrice(0)).toBe(0);
+    expect(normalizeCouponIssuePrice(500)).toBe(500);
+    expect(() => normalizeCouponIssuePrice(-1)).toThrow();
+    expect(() => normalizeCouponIssuePrice(100.5)).toThrow();
+  });
+
+  it('プッシュ配信手数料は 0（無料）を含む 0 以上の整数だけを受け付ける', () => {
+    expect(isValidPushPrice(0)).toBe(true);
+    expect(isValidPushPrice(3000)).toBe(true);
+    expect(isValidPushPrice(1000000)).toBe(true);
+    expect(isValidPushPrice(1000001)).toBe(false);
+    expect(isValidPushPrice(-1)).toBe(false);
+    expect(isValidPushPrice(100.5)).toBe(false);
+    expect(isValidPushPrice('3000')).toBe(false);
+    expect(isValidPushPrice(null)).toBe(false);
+  });
+
+  it('プッシュ配信手数料の parse は 0 を 0 として読み、不正値は null（未設定）', () => {
+    expect(parsePushPrice(0)).toBe(0);
+    expect(parsePushPrice(3000)).toBe(3000);
+    expect(parsePushPrice(undefined)).toBeNull();
+    expect(parsePushPrice(null)).toBeNull();
+    expect(parsePushPrice(-100)).toBeNull();
+  });
+
+  it('プッシュ配信手数料の normalize は未指定を null、0 を 0 として通す', () => {
+    expect(normalizePushPrice(undefined)).toBeNull();
+    expect(normalizePushPrice(null)).toBeNull();
+    expect(normalizePushPrice(0)).toBe(0);
+    expect(normalizePushPrice(3000)).toBe(3000);
+    expect(() => normalizePushPrice(-1)).toThrow();
+    expect(() => normalizePushPrice(100.5)).toThrow();
   });
 });

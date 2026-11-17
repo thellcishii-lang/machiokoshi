@@ -8,6 +8,7 @@ import {
   filterCoupons,
   isCouponCapReached,
   memberIdForPhone,
+  parseCouponIssuedBy,
   parseExhibitorKind,
   tallyClaimsByCoupon,
 } from './event-coupon';
@@ -22,6 +23,9 @@ const couponA: EventCoupon = {
   descriptionI18n: {},
   keywords: ['飲み物', '無料'],
   active: true,
+  issuedBy: 'admin',
+  paymentPending: false,
+  feeAmount: null,
 };
 const couponB: EventCoupon = {
   id: 'coupon-b',
@@ -33,6 +37,9 @@ const couponB: EventCoupon = {
   descriptionI18n: {},
   keywords: ['グッズ'],
   active: true,
+  issuedBy: 'admin',
+  paymentPending: false,
+  feeAmount: null,
 };
 const claimedClaim: Pick<EventClaim, 'status'> = { status: 'claimed' };
 const redeemedClaim: Pick<EventClaim, 'status'> = { status: 'redeemed' };
@@ -152,5 +159,16 @@ describe('parseExhibitorKind（アカウントの種類）', () => {
     expect(parseExhibitorKind(null)).toBe('shop');
     expect(parseExhibitorKind('other')).toBe('shop');
     expect(parseExhibitorKind(1)).toBe('shop');
+  });
+});
+
+describe('parseCouponIssuedBy（クーポンの発行元）', () => {
+  it("'shop' だけを店舗発行とし、それ以外は管理人発行に倒す", () => {
+    expect(parseCouponIssuedBy('shop')).toBe('shop');
+    expect(parseCouponIssuedBy('admin')).toBe('admin');
+    // 旧ドキュメント（項目なし）は管理人発行
+    expect(parseCouponIssuedBy(undefined)).toBe('admin');
+    expect(parseCouponIssuedBy(null)).toBe('admin');
+    expect(parseCouponIssuedBy('other')).toBe('admin');
   });
 });

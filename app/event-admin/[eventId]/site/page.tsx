@@ -172,6 +172,8 @@ export default function SiteEditAdminPage() {
   const [adsEnabled, setAdsEnabled] = useState(false);
   const [adsSlots, setAdsSlots] = useState('5');
   const [adsPrice, setAdsPrice] = useState('');
+  const [couponIssuePrice, setCouponIssuePrice] = useState('');
+  const [pushPrice, setPushPrice] = useState('');
   const [uploading, setUploading] = useState(false);
   const [imageMessage, setImageMessage] = useState('');
   const [iconUploading, setIconUploading] = useState(false);
@@ -253,6 +255,14 @@ export default function SiteEditAdminPage() {
       );
       setAdsPrice(
         typeof siteData.adsPrice === 'number' ? String(siteData.adsPrice) : '',
+      );
+      setCouponIssuePrice(
+        typeof siteData.couponIssuePrice === 'number'
+          ? String(siteData.couponIssuePrice)
+          : '',
+      );
+      setPushPrice(
+        typeof siteData.pushPrice === 'number' ? String(siteData.pushPrice) : '',
       );
       setLoadMessage('');
     } catch (e) {
@@ -361,6 +371,8 @@ export default function SiteEditAdminPage() {
     try {
       const priceText = topPlacementPrice.trim();
       const adsPriceText = adsPrice.trim();
+      const couponIssuePriceText = couponIssuePrice.trim();
+      const pushPriceText = pushPrice.trim();
       const data = await callApi(`/api/events/${eventId}/site-settings`, {
         method: 'PUT',
         body: JSON.stringify({
@@ -375,6 +387,9 @@ export default function SiteEditAdminPage() {
           adsEnabled,
           adsSlots: adsSlots.trim() === '' ? null : Number(adsSlots),
           adsPrice: adsPriceText === '' ? null : Number(adsPriceText),
+          couponIssuePrice:
+            couponIssuePriceText === '' ? null : Number(couponIssuePriceText),
+          pushPrice: pushPriceText === '' ? null : Number(pushPriceText),
         }),
       });
       // サーバー側で正規化された値（空行の除去など）をそのまま表示に戻す
@@ -410,6 +425,14 @@ export default function SiteEditAdminPage() {
       );
       setAdsPrice(
         typeof data.adsPrice === 'number' ? String(data.adsPrice) : '',
+      );
+      setCouponIssuePrice(
+        typeof data.couponIssuePrice === 'number'
+          ? String(data.couponIssuePrice)
+          : '',
+      );
+      setPushPrice(
+        typeof data.pushPrice === 'number' ? String(data.pushPrice) : '',
       );
       setSaveMessage(adminText(locale, 'savedMessage'));
     } catch (e) {
@@ -858,6 +881,41 @@ export default function SiteEditAdminPage() {
             <p style={noteTextStyle}>{adminText(locale, 'siteFreePriceNote')}</p>
           )}
           <p style={noteTextStyle}>{adminText(locale, 'siteAdsCancelNote')}</p>
+        </div>
+      </section>
+
+      <section style={{ marginTop: 32 }}>
+        <h2 style={sectionTitleStyle}>{adminText(locale, 'siteShopChargesTitle')}</h2>
+        <p style={noteTextStyle}>{adminText(locale, 'siteShopChargesNote')}</p>
+        <div style={{ ...cardStyle, marginTop: 12, padding: 24 }}>
+          <label style={{ ...labelStyle, marginTop: 0, marginBottom: 0 }}>
+            {adminText(locale, 'siteCouponIssuePriceLabel')}
+            <input
+              style={inputStyle}
+              type="number"
+              min={0}
+              max={1000000}
+              step={100}
+              inputMode="numeric"
+              placeholder="500"
+              value={couponIssuePrice}
+              onChange={(e) => setCouponIssuePrice(e.target.value)}
+            />
+          </label>
+          <label style={{ ...labelStyle, marginTop: 16, marginBottom: 0 }}>
+            {adminText(locale, 'sitePushPriceLabel')}
+            <input
+              style={inputStyle}
+              type="number"
+              min={0}
+              max={1000000}
+              step={100}
+              inputMode="numeric"
+              placeholder="3000"
+              value={pushPrice}
+              onChange={(e) => setPushPrice(e.target.value)}
+            />
+          </label>
         </div>
       </section>
 
