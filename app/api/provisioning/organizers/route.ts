@@ -77,6 +77,8 @@ export async function POST(request: Request) {
     // lib/provisioning.ts の無害化に任せる（不正値・未送信は既存値を変えない）。
     billingOptionEnabled:
       typeof body.billingOptionEnabled === 'boolean' ? body.billingOptionEnabled : undefined,
+    adsOptionEnabled:
+      typeof body.adsOptionEnabled === 'boolean' ? body.adsOptionEnabled : undefined,
     worldName: typeof body.worldName === 'string' ? body.worldName : undefined,
     agencyCode: typeof body.agencyCode === 'string' ? body.agencyCode : null,
   });

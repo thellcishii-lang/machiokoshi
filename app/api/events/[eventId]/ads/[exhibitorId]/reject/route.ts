@@ -4,7 +4,11 @@
 import { NextResponse } from 'next/server';
 import { requireEventOwner } from '@/lib/event-auth';
 import { db } from '@/lib/firebase-admin';
-import { rejectShopAd } from '@/lib/event-ads';
+import {
+  isAdsActionAllowed,
+  rejectShopAd,
+  resolveAdsOptionEnabled,
+} from '@/lib/event-ads';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +19,20 @@ export async function POST(
   const { eventId, exhibitorId } = await params;
   const guard = await requireEventOwner(request, eventId);
   if ('error' in guard) return guard.error;
+
+  // 広告オプション（契約）が無効な間は却下もできない。
+  const adsOptionEnabled = await resolveAdsOptionEnabled(guard.event.ownerUid);
+  if (
+    !isAdsActionAllowed('review', {
+      adsOptionEnabled,
+      adsEnabled: guard.event.adsEnabled,
+    })
+  ) {
+    return NextResponse.json(
+      { error: '広告オプションが有効でないため、広告を却下できません' },
+      { status: 403 },
+    );
+  }
 
   const result = await rejectShopAd(db, eventId, exhibitorId);
   if (!result.ok) {

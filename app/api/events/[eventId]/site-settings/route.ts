@@ -9,6 +9,7 @@
 import { NextResponse } from 'next/server';
 import { requireEventOwner } from '@/lib/event-auth';
 import { updateEvent } from '@/lib/event-store';
+import { isAdsActionAllowed, resolveAdsOptionEnabled } from '@/lib/event-ads';
 import {
   normalizeGourmetDefinition,
   normalizeHeroImageUrl,
@@ -46,6 +47,12 @@ interface SiteSettingsResponse extends SiteSettings {
   couponIssuePrice: number | null;
   /** プッシュ配信手数料（1回あたり・円）。未設定は null（無料扱い）。0 も無料 */
   pushPrice: number | null;
+  /**
+   * 広告オプション（本家との別料金契約）が有効かどうか（読み取り専用）。
+   * プロジェクト設定ではなく契約者レコードの値。無効な間は広告を
+   * 有効にできず、既存の adsEnabled も効かない（表示・申請・掲載が止まる）。
+   */
+  adsOptionEnabled: boolean;
 }
 
 function currentSettings(event: {
@@ -62,7 +69,7 @@ function currentSettings(event: {
   adsPrice: number | null;
   couponIssuePrice: number | null;
   pushPrice: number | null;
-}): SiteSettingsResponse {
+}): Omit<SiteSettingsResponse, 'adsOptionEnabled'> {
   return {
     siteDescription: event.siteDescription,
     gourmetDefinition: event.gourmetDefinition,
@@ -87,7 +94,8 @@ export async function GET(
   const { eventId } = await params;
   const guard = await requireEventOwner(request, eventId);
   if ('error' in guard) return guard.error;
-  return NextResponse.json(currentSettings(guard.event));
+  const adsOptionEnabled = await resolveAdsOptionEnabled(guard.event.ownerUid);
+  return NextResponse.json({ ...currentSettings(guard.event), adsOptionEnabled });
 }
 
 export async function PUT(
@@ -108,7 +116,9 @@ export async function PUT(
     );
   }
 
-  let settings: SiteSettingsResponse;
+  const adsOptionEnabled = await resolveAdsOptionEnabled(guard.event.ownerUid);
+
+  let settings: Omit<SiteSettingsResponse, 'adsOptionEnabled'>;
   try {
     settings = {
       siteDescription: normalizeSiteDescription(body.siteDescription),
@@ -146,6 +156,23 @@ export async function PUT(
     );
   }
 
+  // 広告オプション（契約）が無効な間は、広告を新たに有効にできない。
+  // 既に有効な設定はそのまま保持する（オプションが戻れば再び効くが、
+  // 無効な間は表示・申請・掲載のすべてが止まる）。
+  if (
+    settings.adsEnabled &&
+    !guard.event.adsEnabled &&
+    !isAdsActionAllowed('enable-setting', {
+      adsOptionEnabled,
+      adsEnabled: guard.event.adsEnabled,
+    })
+  ) {
+    return NextResponse.json(
+      { error: '広告を有効にするには、広告オプションの契約が必要です' },
+      { status: 403 },
+    );
+  }
+
   try {
     await updateEvent(eventId, settings);
   } catch (error) {
@@ -155,5 +182,5 @@ export async function PUT(
       { status: 500 },
     );
   }
-  return NextResponse.json(settings);
+  return NextResponse.json({ ...settings, adsOptionEnabled });
 }

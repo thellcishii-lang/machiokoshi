@@ -53,6 +53,13 @@ export interface Organizer {
    */
   billingOptionEnabled: boolean;
   /**
+   * 広告オプション（別料金）が有効かどうか。既定は無効（false）。
+   * 有効な契約でのみ、特設サイト広告（設定・申請・承認・掲載）が動く。
+   * 設定はプロビジョニング（本家接続）または運営側の変更で行う。
+   * 旧レコード（フィールド自体が無い）は false 扱い。
+   */
+  adsOptionEnabled: boolean;
+  /**
    * 世界観の名前（例: 飯能カレー）。申込時に本家から送られてくる希望名で、
    * プロジェクト作成フォームのプロジェクト名の初期値に使う。
    * 旧レコード（フィールド自体が無い）は '' 扱い。
@@ -82,6 +89,7 @@ function toOrganizer(id: string, data: FirebaseFirestore.DocumentData): Organize
       typeof data.restoredSubscriberCap === 'number' ? data.restoredSubscriberCap : null,
     agencyCode: (data.agencyCode as string | null) ?? null,
     billingOptionEnabled: data.billingOptionEnabled === true,
+    adsOptionEnabled: data.adsOptionEnabled === true,
     worldName: typeof data.worldName === 'string' ? data.worldName : '',
     createdAt: data.createdAt?.toDate?.().toISOString() ?? '',
     updatedAt: data.updatedAt?.toDate?.().toISOString() ?? '',
@@ -153,6 +161,7 @@ export async function updateOrganizer(
     couponCap?: number;
     status?: OrganizerStatus;
     billingOptionEnabled?: boolean;
+    adsOptionEnabled?: boolean;
   },
 ): Promise<boolean> {
   const ref = db.collection(ORGANIZERS_COLLECTION).doc(contractId);
@@ -175,6 +184,7 @@ export interface CreateOrganizerData {
   restoredSubscriberCap?: number | null;
   agencyCode?: string | null;
   billingOptionEnabled?: boolean;
+  adsOptionEnabled?: boolean;
   worldName?: string;
   mustChangePassword?: boolean;
 }
@@ -201,6 +211,7 @@ export async function createOrganizerRecord(
       restoredSubscriberCap: data.restoredSubscriberCap ?? null,
       agencyCode: data.agencyCode ?? null,
       billingOptionEnabled: data.billingOptionEnabled ?? false,
+      adsOptionEnabled: data.adsOptionEnabled ?? false,
       worldName: data.worldName ?? '',
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
@@ -231,6 +242,8 @@ export interface ProvisioningProfilePatch {
   restoredSubscriberCap?: number | null;
   /** 店舗課金オプションの ON/OFF。送られた場合だけ反映する */
   billingOptionEnabled?: boolean;
+  /** 広告オプションの ON/OFF。送られた場合だけ反映する */
+  adsOptionEnabled?: boolean;
   /** 世界観の名前。送られた場合だけ反映する */
   worldName?: string;
 }

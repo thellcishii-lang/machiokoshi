@@ -172,6 +172,9 @@ export default function SiteEditAdminPage() {
   const [adsEnabled, setAdsEnabled] = useState(false);
   const [adsSlots, setAdsSlots] = useState('5');
   const [adsPrice, setAdsPrice] = useState('');
+  // 広告オプション（本家との別料金契約）。読み取り専用で、契約状態は
+  // 本家側からプロビジョニングで届く。無効な間は広告を有効にできない。
+  const [adsOptionEnabled, setAdsOptionEnabled] = useState(false);
   const [couponIssuePrice, setCouponIssuePrice] = useState('');
   const [pushPrice, setPushPrice] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -250,6 +253,7 @@ export default function SiteEditAdminPage() {
           : '',
       );
       setAdsEnabled(siteData.adsEnabled === true);
+      setAdsOptionEnabled(siteData.adsOptionEnabled === true);
       setAdsSlots(
         typeof siteData.adsSlots === 'number' ? String(siteData.adsSlots) : '5',
       );
@@ -420,6 +424,7 @@ export default function SiteEditAdminPage() {
           : '',
       );
       setAdsEnabled(data.adsEnabled === true);
+      setAdsOptionEnabled(data.adsOptionEnabled === true);
       setAdsSlots(
         typeof data.adsSlots === 'number' ? String(data.adsSlots) : '5',
       );
@@ -830,6 +835,11 @@ export default function SiteEditAdminPage() {
       <section style={{ marginTop: 32 }}>
         <h2 style={sectionTitleStyle}>{adminText(locale, 'siteAdsTitle')}</h2>
         <p style={noteTextStyle}>{adminText(locale, 'siteAdsNote')}</p>
+        {!adsOptionEnabled && (
+          <p style={{ ...noteTextStyle, color: '#b91c1c', fontWeight: 700 }}>
+            {adminText(locale, 'siteAdsOptionRequiredNote')}
+          </p>
+        )}
         <div style={{ ...cardStyle, marginTop: 12, padding: 24 }}>
           <label
             style={{
@@ -845,6 +855,7 @@ export default function SiteEditAdminPage() {
               type="checkbox"
               checked={adsEnabled}
               onChange={(e) => setAdsEnabled(e.target.checked)}
+              disabled={!adsOptionEnabled && !adsEnabled}
               style={{ width: 18, height: 18 }}
             />
             {adminText(locale, 'siteAdsEnabledLabel')}
