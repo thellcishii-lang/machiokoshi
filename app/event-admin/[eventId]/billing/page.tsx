@@ -208,7 +208,15 @@ export default function EventBillingAdminPage() {
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsMessage, setSettingsMessage] = useState('');
 
-  const [exhibitors, setExhibitors] = useState<Array<{ id: string; name: string }>>([]);
+  const [exhibitors, setExhibitors] = useState<
+    Array<{
+      id: string;
+      name: string;
+      delistedAt?: string | null;
+      closedAt?: string | null;
+      source?: string;
+    }>
+  >([]);
   const [billings, setBillings] = useState<ShopBillingItem[]>([]);
   const [payments, setPayments] = useState<BillingPaymentItem[]>([]);
   const [summary, setSummary] = useState<BillingSummary | null>(null);
@@ -271,7 +279,15 @@ export default function EventBillingAdminPage() {
     if (!user) return;
     try {
       const data = await callApi(`/api/events/${eventId}/shop-billings`);
-      setExhibitors((data.exhibitors as Array<{ id: string; name: string }>) ?? []);
+      setExhibitors(
+        (data.exhibitors as Array<{
+          id: string;
+          name: string;
+          delistedAt?: string | null;
+          closedAt?: string | null;
+          source?: string;
+        }>) ?? [],
+      );
       const loadedBillings = (data.billings as ShopBillingItem[]) ?? [];
       setBillings(loadedBillings);
       setPayments((data.payments as BillingPaymentItem[]) ?? []);
@@ -689,6 +705,41 @@ export default function EventBillingAdminPage() {
                       <span style={{ fontSize: 12.5, color: '#64748b' }}>
                         {adminText(locale, 'billingPeriodEndLabel', {
                           date: formatDate(billing.currentPeriodEnd, locale),
+                        })}
+                      </span>
+                    )}
+                    {exhibitor.source === 'self' && (
+                      <span
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 700,
+                          padding: '3px 10px',
+                          borderRadius: 999,
+                          color: '#475569',
+                          backgroundColor: '#f1f5f9',
+                        }}
+                      >
+                        {adminText(locale, 'billingSelfBadge')}
+                      </span>
+                    )}
+                    {exhibitor.closedAt && (
+                      <span
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 700,
+                          padding: '3px 10px',
+                          borderRadius: 999,
+                          color: '#475569',
+                          backgroundColor: '#f1f5f9',
+                        }}
+                      >
+                        {adminText(locale, 'billingClosedBadge')}
+                      </span>
+                    )}
+                    {exhibitor.delistedAt && !exhibitor.closedAt && (
+                      <span style={{ fontSize: 12.5, color: '#b91c1c' }}>
+                        {adminText(locale, 'billingDelistedSince', {
+                          date: formatDate(exhibitor.delistedAt, locale),
                         })}
                       </span>
                     )}

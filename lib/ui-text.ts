@@ -787,6 +787,108 @@ export const UI_TEXT = {
     zh: '取消',
     ko: '취소',
   },
+  applyShopTitle: {
+    ja: '参加店の登録',
+    en: 'Shop registration',
+    zh: '参展店铺注册',
+    ko: '참가 점포 등록',
+  },
+  applyShopLead: {
+    ja: '「{eventName}」に参加店として登録します。登録が完了すると、ログイン用のパスワードをメールでお送りします。ログイン後にお店の情報を入力すると、特設サイトに掲載されます。',
+    en: 'Register as a participating shop in "{eventName}". When your registration is complete, we will email you a login password. After logging in and entering your shop details, your shop will appear on the special site.',
+    zh: '注册成为“{eventName}”的参展店铺。注册完成后，我们会通过电子邮件发送登录密码。登录并填写店铺信息后，您的店铺将显示在特设网站上。',
+    ko: '"{eventName}"의 참가 점포로 등록합니다. 등록이 완료되면 로그인 비밀번호를 이메일로 보내드립니다. 로그인 후 점포 정보를 입력하면 특설 사이트에 게재됩니다.',
+  },
+  applyAdTitle: {
+    ja: '広告のお申し込み',
+    en: 'Advertise with us',
+    zh: '广告申请',
+    ko: '광고 신청',
+  },
+  applyAdLead: {
+    ja: '「{eventName}」の特設サイトに広告を掲載します。お申し込みが完了すると、広告編集画面へのログイン情報をメールでお送りします。広告の内容は管理人の確認後に掲載されます。',
+    en: 'Place an ad on the "{eventName}" special site. When your application is complete, we will email you login details for the ad editor. Your ad will be published after the organizer reviews it.',
+    zh: '在“{eventName}”特设网站上投放广告。申请完成后，我们会通过电子邮件发送广告编辑页面的登录信息。广告内容经主办方确认后发布。',
+    ko: '"{eventName}" 특설 사이트에 광고를 게재합니다. 신청이 완료되면 광고 편집 화면 로그인 정보를 이메일로 보내드립니다. 광고 내용은 관리자 확인 후 게재됩니다.',
+  },
+  applyNameLabel: {
+    ja: 'お店・事業者の名前',
+    en: 'Shop / business name',
+    zh: '店铺・商家名称',
+    ko: '점포・사업자 이름',
+  },
+  applyEmailLabel: {
+    ja: 'メールアドレス',
+    en: 'Email address',
+    zh: '电子邮箱',
+    ko: '이메일 주소',
+  },
+  applyMonthlyFee: {
+    ja: '月額 {amount} 円',
+    en: '{amount} JPY / month',
+    zh: '每月 {amount} 日元',
+    ko: '월 {amount}엔',
+  },
+  applyFree: {
+    ja: '無料',
+    en: 'Free',
+    zh: '免费',
+    ko: '무료',
+  },
+  applySubmitButton: {
+    ja: '申し込む',
+    en: 'Apply',
+    zh: '申请',
+    ko: '신청하기',
+  },
+  applyPayButton: {
+    ja: 'お支払いへ進む',
+    en: 'Proceed to payment',
+    zh: '前往付款',
+    ko: '결제로 이동',
+  },
+  applyNotAvailable: {
+    ja: '現在お申し込みは受け付けていません。',
+    en: 'Applications are not being accepted at the moment.',
+    zh: '目前暂不接受申请。',
+    ko: '현재 신청을 받고 있지 않습니다.',
+  },
+  applyCompletedTitle: {
+    ja: 'お申し込みが完了しました',
+    en: 'Your application is complete',
+    zh: '申请已完成',
+    ko: '신청이 완료되었습니다',
+  },
+  applyCompletedBody: {
+    ja: 'ログイン用のパスワードをメールでお送りしました。メールが届かない場合は、迷惑メールフォルダをご確認ください。',
+    en: 'We have emailed you a login password. If you do not see it, please check your spam folder.',
+    zh: '登录密码已通过电子邮件发送。如果没有收到，请检查垃圾邮件文件夹。',
+    ko: '로그인 비밀번호를 이메일로 보내드렸습니다. 메일이 보이지 않으면 스팸 폴더를 확인해 주세요.',
+  },
+  applyVerifying: {
+    ja: 'お支払いを確認しています…',
+    en: 'Confirming your payment…',
+    zh: '正在确认付款…',
+    ko: '결제를 확인하고 있습니다…',
+  },
+  applyCanceled: {
+    ja: 'お支払いがキャンセルされました。もう一度お申し込みいただけます。',
+    en: 'Payment was canceled. You can apply again.',
+    zh: '付款已取消。您可以重新申请。',
+    ko: '결제가 취소되었습니다. 다시 신청하실 수 있습니다.',
+  },
+  applyFailed: {
+    ja: '申し込みの受付に失敗しました。時間をおいて再度お試しください。',
+    en: 'Failed to accept your application. Please try again later.',
+    zh: '申请受理失败。请稍后再试。',
+    ko: '신청 접수에 실패했습니다. 잠시 후 다시 시도해 주세요.',
+  },
+  applyAdLoginLink: {
+    ja: '登録済みの方はこちら（店舗ページ）',
+    en: 'Already registered? Log in here (shop page)',
+    zh: '已注册？点此登录（店铺页面）',
+    ko: '이미 등록하셨나요? 여기서 로그인 (점포 페이지)',
+  },
 } as const satisfies Record<string, Record<Locale, string>>;
 
 export type UiTextKey = keyof typeof UI_TEXT;
@@ -3249,6 +3351,18 @@ export const ADMIN_TEXT = {
     zh: '推送发送手续费（每次・日元）',
     ko: '푸시 발송 수수료(1회・엔)',
   },
+  siteShopMonthlyPriceLabel: {
+    ja: '参加店の月額料金（自己登録・円）',
+    en: 'Shop monthly fee (self-registration, JPY)',
+    zh: '参展店铺月费（自助注册・日元）',
+    ko: '참가 점포 월 요금(셀프 등록・엔)',
+  },
+  siteShopMonthlyPriceNote: {
+    ja: '参加店が公開の登録ページから自分で申し込むときの月額です。空欄にすると自己登録は受け付けません（管理画面からの登録は今までどおりできます）。0円にすると無料で登録できます。',
+    en: 'Monthly fee when a shop registers itself from the public registration page. Leave blank to close self-registration (you can still register shops from the admin console). Set 0 to make registration free.',
+    zh: '店铺从公开注册页面自行注册时的月费。留空则不接受自助注册（仍可从管理页面注册）。设为0日元可免费注册。',
+    ko: '점포가 공개 등록 페이지에서 직접 등록할 때의 월 요금입니다. 비워 두면 셀프 등록을 받지 않습니다(관리 화면에서의 등록은 기존대로 가능합니다). 0엔으로 하면 무료로 등록할 수 있습니다.',
+  },
   loginBonusSettingsTitle: {
     ja: 'ログインボーナス設定',
     en: 'Login bonus settings',
@@ -4076,6 +4190,24 @@ export const ADMIN_TEXT = {
     en: 'Canceled',
     zh: '已解约',
     ko: '해지됨',
+  },
+  billingDelistedSince: {
+    ja: '掲載停止日: {date}（情報は保存されています）',
+    en: 'Delisted since: {date} (shop data is preserved)',
+    zh: '停止展示日期：{date}（店铺信息已保存）',
+    ko: '게재 중지일: {date} (점포 정보는 보존되어 있습니다)',
+  },
+  billingClosedBadge: {
+    ja: '閉店扱い',
+    en: 'Closed',
+    zh: '已关店处理',
+    ko: '폐점 처리됨',
+  },
+  billingSelfBadge: {
+    ja: '自己申込',
+    en: 'Self-registered',
+    zh: '自助注册',
+    ko: '셀프 등록',
   },
   billingCancelButton: {
     ja: '解約する',

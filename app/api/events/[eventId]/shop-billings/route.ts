@@ -44,6 +44,12 @@ export async function GET(
       .map((exhibitor) => ({
         id: exhibitor.id,
         name: exhibitor.name,
+        // 未払い確定で掲載停止になった日時（停止中でなければ null）。
+        // 停止から3ヶ月を過ぎると閉店扱いになり新規登録が通る。
+        delistedAt: exhibitor.delistedAt,
+        closedAt: exhibitor.closedAt,
+        // 登録の入口（管理人発行 'admin' / 自己申込 'self'）
+        source: exhibitor.source,
       })),
     billings,
     payments: recentPayments,

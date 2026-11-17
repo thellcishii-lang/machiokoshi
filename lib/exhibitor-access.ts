@@ -196,6 +196,11 @@ email: string | null;
 accessCodeHash: string | null;
 /** アカウントの種類（参加店／協賛）。旧ドキュメントは 'shop' */
 kind: ExhibitorKind;
+/**
+ * 閉店扱い（掲載停止から3ヶ月経過後の新規登録で付けられる印）かどうか。
+ * 閉店レコードは重複判定・ログイン照合の対象から外れる。
+ */
+closed: boolean;
 }
 
 /** このモジュールが使う保存層の最小インターフェース（テストで差し替え可能にする）。 */
@@ -210,7 +215,16 @@ exhibitorId: string,
 ): Promise<StoredExhibitorAccess | null>;
 createExhibitor(
 eventId: string,
-input: { name: string; email: string; lang: Locale; kind: ExhibitorKind},
+input: {
+name: string;
+email: string;
+lang: Locale;
+kind: ExhibitorKind;
+/** 登録の入口。未指定は管理人発行（'admin'） */
+source?: 'admin' | 'self';
+/** ドキュメントIDを先に決める場合（自己申込の事前採番） */
+id?: string;
+},
 ): Promise<{ id: string}>;
 setAccessCodeHash(
 eventId: string,
@@ -243,18 +257,24 @@ typeof data.accessCode === 'string' && data.accessCode
 ? data.accessCode
 : null,
 kind: parseExhibitorKind(data.kind),
+closed: typeof data.closedAt === 'string' && data.closedAt.length > 0,
 };
 }
 
 export const firestoreExhibitorAccessStore: ExhibitorAccessStore = {
 async findByEmail(eventId, email) {
+// 同じメールは原則1件だけだが、閉店→新規登録の移行後は旧レコード
+// （閉店印つき）が残るため、閉店でないものを優先して返す。
+// 閉店レコードしか無ければ「登録なし」として扱う（重複判定で
+// 弾かず、ログインも通さない）。
 const snap = await exhibitorsRef(eventId)
 .where('email', '==', email)
-.limit(1)
 .get();
-if (snap.empty) return null;
-const doc = snap.docs[0];
-return mapStored(doc.id, doc.data());
+for (const doc of snap.docs) {
+const stored = mapStored(doc.id, doc.data());
+if (!stored.closed) return stored;
+}
+return null;
 },
 async getById(eventId, exhibitorId) {
 const doc = await exhibitorsRef(eventId).doc(exhibitorId).get();
@@ -262,7 +282,14 @@ if (!doc.exists) return null;
 return mapStored(doc.id, doc.data()!);
 },
 async createExhibitor(eventId, input) {
-const exhibitor: EventExhibitor = await createExhibitor(eventId, input);
+const exhibitor: EventExhibitor = await createExhibitor(eventId, {
+name: input.name,
+email: input.email,
+lang: input.lang,
+kind: input.kind,
+source: input.source,
+id: input.id,
+});
 return { id: exhibitor.id};
 },
 async setAccessCodeHash(eventId, exhibitorId, encodedHash) {
@@ -319,12 +346,16 @@ eventName?: string | null;
 code: string;
 loginUrl: string;
 reissued: boolean;
+/** 自己申込（申込ページから自分で登録）かどうか。未指定は管理人発行 */
+selfServed?: boolean;
 }): string {
 const eventPart = input.eventName
 ? `プロジェクト「${escapeHtml(input.eventName)}」`
 : 'Push-taro 町おこし のプロジェクト';
 const lead = input.reissued
 ? `<p>${eventPart}の消込ログイン用パスワードを再発行しました。今までのパスワードは使えなくなります。</p>`
+: input.selfServed
+? `<p>${eventPart}へのお申し込み（ご登録）が完了しました。</p>`
 : `<p>Push-taro 町おこし の管理人により、${eventPart}の参加店として登録されました。</p>`;
 return `
 <p>${escapeHtml(input.exhibitorName)} 様</p>
@@ -356,6 +387,8 @@ eventName?: string | null;
 eventId: string;
 code: string;
 kind?: ExhibitorKind;
+/** 登録の入口。自己申込（'self'）では冒頭の文面が申込完了の案内になる */
+source?: 'admin' | 'self';
 }): { subject: string; html: string} {
 return {
 subject: '参加店ログイン用パスワードのお知らせ',
@@ -365,6 +398,7 @@ eventName: input.eventName,
 code: input.code,
 loginUrl: exhibitorLoginUrl(input.eventId, input.kind ?? 'shop'),
 reissued: false,
+selfServed: input.source === 'self',
 }),
 };
 }
@@ -413,6 +447,13 @@ lang?: Locale;
 eventName?: string | null;
 /** アカウントの種類。未指定は参加店（'shop'）。協賛は 'advertiser' */
 kind?: ExhibitorKind;
+/** 登録の入口。未指定は管理人発行（'admin'）。自己申込は 'self' */
+source?: 'admin' | 'self';
+/**
+ * ドキュメントIDを先に決める場合に指定する。自己申込では支払い確認前に
+ * 課金レコードを同じ ID で作るため、申込時点で採番した ID を渡す。
+ */
+exhibitorId?: string;
 },
 deps: ExhibitorAccessDeps = defaultDeps,
 ): Promise<RegisterExhibitorResult> {
@@ -438,6 +479,8 @@ name,
 email,
 lang: resolveLocale(input.lang),
 kind: input.kind ?? 'shop',
+source: input.source,
+id: input.exhibitorId,
 });
 const code = generateAccessCode();
 await deps.store.setAccessCodeHash(
@@ -452,6 +495,7 @@ eventName: input.eventName,
 eventId: input.eventId,
 code,
 kind: input.kind ?? 'shop',
+source: input.source,
 });
 let mailSent = false;
 try {

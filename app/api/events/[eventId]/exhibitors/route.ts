@@ -63,6 +63,9 @@ export async function POST(
       hasAccessCode: true,
       lang: guard.event.defaultLocale,
       kind,
+      source: 'admin' as const,
+      delistedAt: null,
+      closedAt: null,
     };
     // コード自体はレスポンスに含めない（メールでのみ出店者に渡る）。
     // メール送信の成否は mailSent で返す（失敗しても登録は成立しているので、

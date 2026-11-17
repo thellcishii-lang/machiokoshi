@@ -748,6 +748,35 @@ export async function setShopBillingSuspended(
   return true;
 }
 
+/**
+ * 掲載停止の日時（delistedAt）の付け替え（店舗課金の Webhook 処理から使う）。
+ * billingSuspended と同じくプロフィールの外に持つ。
+ * - 停止時（at = ISO文字列）: 既に日時が付いていれば最初の停止日時を
+ *   維持する（3ヶ月の起算点が後ろにずれないように）。
+ * - 復旧時（at = null）: 日時を取り除く。
+ * 店が無ければ false。
+ */
+export async function setShopDelistedAt(
+  db: Firestore,
+  eventId: string,
+  exhibitorId: string,
+  at: string | null,
+): Promise<boolean> {
+  const ref = exhibitorRef(db, eventId, exhibitorId);
+  const snap = await ref.get();
+  if (!snap.exists) return false;
+  if (at === null) {
+    if (snap.data()?.delistedAt) {
+      await ref.update({ delistedAt: null });
+    }
+    return true;
+  }
+  if (!snap.data()?.delistedAt) {
+    await ref.update({ delistedAt: at });
+  }
+  return true;
+}
+
 // ─── トップ掲載フラグ（トップ掲載課金） ───
 //
 // billingSuspended と同じ考え方で、参加店ドキュメントのトップレベル項目

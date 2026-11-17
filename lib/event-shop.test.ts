@@ -12,6 +12,7 @@ import {
   parseShopProfile,
   resolveShopLocation,
   resolveTopFeatured,
+  setShopDelistedAt,
   shopFreeDishPhotoStoragePath,
   shopLoginRewardPhotoStoragePath,
   shopPhotoStoragePath,
@@ -880,5 +881,55 @@ describe('listPublicShops の協賛アカウント除外', () => {
     ]);
     const shops = await listPublicShops(db, 'ev1');
     expect(shops.map((s) => s.exhibitorId)).toEqual(['shop-a', 'shop-b']);
+  });
+});
+
+describe('setShopDelistedAt（掲載停止の日時の付け替え）', () => {
+  const delistedOf = (updates: Array<{ value: unknown }>) =>
+    updates.map(
+      (u) => (u.value as { delistedAt?: string | null }).delistedAt,
+    );
+
+  it('停止時に日時を付け、既にある場合は最初の日時を維持する', async () => {
+    const { db, updates } = fakeShopDb([
+      { id: 'shop-a', data: { name: '店A', profile: {} } },
+    ]);
+    await expect(
+      setShopDelistedAt(db, 'ev1', 'shop-a', '2026-11-01T00:00:00.000Z'),
+    ).resolves.toBe(true);
+    expect(delistedOf(updates)).toEqual(['2026-11-01T00:00:00.000Z']);
+
+    const second = fakeShopDb([
+      {
+        id: 'shop-a',
+        data: {
+          name: '店A',
+          profile: {},
+          delistedAt: '2026-11-01T00:00:00.000Z',
+        },
+      },
+    ]);
+    await setShopDelistedAt(second.db, 'ev1', 'shop-a', '2026-12-01T00:00:00.000Z');
+    expect(second.updates).toHaveLength(0);
+  });
+
+  it('復旧時（null）は日時を取り除き、店が無ければ false', async () => {
+    const { db, updates } = fakeShopDb([
+      {
+        id: 'shop-a',
+        data: {
+          name: '店A',
+          profile: {},
+          delistedAt: '2026-11-01T00:00:00.000Z',
+        },
+      },
+    ]);
+    await expect(setShopDelistedAt(db, 'ev1', 'shop-a', null)).resolves.toBe(
+      true,
+    );
+    expect(delistedOf(updates)).toEqual([null]);
+    await expect(
+      setShopDelistedAt(db, 'ev1', 'missing', '2026-11-01T00:00:00.000Z'),
+    ).resolves.toBe(false);
   });
 });

@@ -65,6 +65,7 @@ function fakeDeps(seed: FakeRecord[] = []) {
           accessCodeHash: null,
           lang: input.lang,
           kind: input.kind,
+          closed: false,
         });
         return { id };
       },
@@ -355,6 +356,7 @@ describe('authenticateExhibitor', () => {
         accessCodeHash: null,
         lang: 'ja',
         kind: 'shop',
+        closed: false,
       },
     ]);
     await registerExhibitor(
@@ -413,6 +415,7 @@ describe('reissueExhibitorPassword', () => {
         accessCodeHash: null,
         lang: 'ja',
         kind: 'shop',
+        closed: false,
       },
     ]);
     const result = await reissueExhibitorPassword(
@@ -433,6 +436,7 @@ describe('reissueExhibitorPassword', () => {
         accessCodeHash: null,
         lang: 'ja',
         kind: 'shop',
+        closed: false,
       },
     ]);
     await expect(
