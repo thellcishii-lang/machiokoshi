@@ -41,12 +41,14 @@ import {
   isValidCouponIssuePrice,
   isValidLoginBonusDays,
   isValidPushPrice,
+  isValidShopMonthlyPrice,
   normalizeAdsEnabled,
   normalizeAdsPrice,
   normalizeAdsSlots,
   normalizeCouponIssuePrice,
   normalizeLoginBonusEnabled,
   normalizePushPrice,
+  normalizeShopMonthlyPrice,
   parseAdsEnabled,
   parseAdsPrice,
   parseAdsSlots,
@@ -54,6 +56,7 @@ import {
   parseLoginBonusDays,
   parseLoginBonusEnabled,
   parsePushPrice,
+  parseShopMonthlyPrice,
 } from './event';
 import {
   normalizeGourmetDefinition,
@@ -108,6 +111,8 @@ function toEventConfig(id: string, data: FirebaseFirestore.DocumentData): EventC
     // 店舗のクーポン発行・プッシュ申請の手数料も同様に未設定（無料）に倒す
     couponIssuePrice: parseCouponIssuePrice(data.couponIssuePrice),
     pushPrice: parsePushPrice(data.pushPrice),
+    // 自己登録の月額料金も同様に未設定（受け付けない）に倒す
+    shopMonthlyPrice: parseShopMonthlyPrice(data.shopMonthlyPrice),
     couponCap: data.couponCap ?? MAX_COUPONS_PER_EVENT,
     backupRetentionDays: data.backupRetentionDays ?? DEFAULT_BACKUP_RETENTION_DAYS,
     status: data.status,
@@ -164,6 +169,13 @@ export async function createEvent(input: CreateEventInput): Promise<EventConfig>
   ) {
     throw new Error('プッシュ配信の料金は0〜1,000,000円の整数で指定してください');
   }
+  if (
+    input.shopMonthlyPrice !== undefined &&
+    input.shopMonthlyPrice !== null &&
+    !isValidShopMonthlyPrice(input.shopMonthlyPrice)
+  ) {
+    throw new Error('参加店の月額料金は0〜1,000,000円の整数で指定してください');
+  }
   // 達成特典は種類と内容を正規化し、組み合わせ（benefit なら内容必須）まで検証する
   const stampRewardType = normalizeStampRewardType(input.stampRewardType);
   const stampBenefitText = normalizeStampBenefitText(input.stampBenefitText);
@@ -204,6 +216,8 @@ export async function createEvent(input: CreateEventInput): Promise<EventConfig>
     // 店舗のクーポン発行・プッシュ申請の手数料は未設定（無料）で始める
     couponIssuePrice: input.couponIssuePrice ?? null,
     pushPrice: input.pushPrice ?? null,
+    // 自己登録の月額料金は未設定（受け付けない）で始める
+    shopMonthlyPrice: input.shopMonthlyPrice ?? null,
     couponCap: input.couponCap ?? MAX_COUPONS_PER_EVENT,
     backupRetentionDays:
       input.backupRetentionDays ?? DEFAULT_BACKUP_RETENTION_DAYS,
@@ -382,6 +396,7 @@ export type UpdateEventInput = Partial<
     | 'adsPrice'
     | 'couponIssuePrice'
     | 'pushPrice'
+    | 'shopMonthlyPrice'
     | 'couponCap'
     | 'backupRetentionDays'
     | 'status'
@@ -509,6 +524,10 @@ export async function updateEvent(
     patch.pushPrice !== undefined
       ? normalizePushPrice(patch.pushPrice)
       : undefined;
+  const shopMonthlyPrice =
+    patch.shopMonthlyPrice !== undefined
+      ? normalizeShopMonthlyPrice(patch.shopMonthlyPrice)
+      : undefined;
   if (
     patch.startDate !== undefined &&
     patch.endDate !== undefined &&
@@ -538,6 +557,7 @@ export async function updateEvent(
       ...(adsPrice !== undefined ? { adsPrice } : {}),
       ...(couponIssuePrice !== undefined ? { couponIssuePrice } : {}),
       ...(pushPrice !== undefined ? { pushPrice } : {}),
+      ...(shopMonthlyPrice !== undefined ? { shopMonthlyPrice } : {}),
       updatedAt: FieldValue.serverTimestamp(),
     });
 }

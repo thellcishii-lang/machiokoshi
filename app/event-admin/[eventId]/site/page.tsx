@@ -177,6 +177,7 @@ export default function SiteEditAdminPage() {
   const [adsOptionEnabled, setAdsOptionEnabled] = useState(false);
   const [couponIssuePrice, setCouponIssuePrice] = useState('');
   const [pushPrice, setPushPrice] = useState('');
+  const [shopMonthlyPrice, setShopMonthlyPrice] = useState('');
   const [uploading, setUploading] = useState(false);
   const [imageMessage, setImageMessage] = useState('');
   const [iconUploading, setIconUploading] = useState(false);
@@ -267,6 +268,11 @@ export default function SiteEditAdminPage() {
       );
       setPushPrice(
         typeof siteData.pushPrice === 'number' ? String(siteData.pushPrice) : '',
+      );
+      setShopMonthlyPrice(
+        typeof siteData.shopMonthlyPrice === 'number'
+          ? String(siteData.shopMonthlyPrice)
+          : '',
       );
       setLoadMessage('');
     } catch (e) {
@@ -377,6 +383,7 @@ export default function SiteEditAdminPage() {
       const adsPriceText = adsPrice.trim();
       const couponIssuePriceText = couponIssuePrice.trim();
       const pushPriceText = pushPrice.trim();
+      const shopMonthlyPriceText = shopMonthlyPrice.trim();
       const data = await callApi(`/api/events/${eventId}/site-settings`, {
         method: 'PUT',
         body: JSON.stringify({
@@ -394,6 +401,8 @@ export default function SiteEditAdminPage() {
           couponIssuePrice:
             couponIssuePriceText === '' ? null : Number(couponIssuePriceText),
           pushPrice: pushPriceText === '' ? null : Number(pushPriceText),
+          shopMonthlyPrice:
+            shopMonthlyPriceText === '' ? null : Number(shopMonthlyPriceText),
         }),
       });
       // サーバー側で正規化された値（空行の除去など）をそのまま表示に戻す
@@ -438,6 +447,11 @@ export default function SiteEditAdminPage() {
       );
       setPushPrice(
         typeof data.pushPrice === 'number' ? String(data.pushPrice) : '',
+      );
+      setShopMonthlyPrice(
+        typeof data.shopMonthlyPrice === 'number'
+          ? String(data.shopMonthlyPrice)
+          : '',
       );
       setSaveMessage(adminText(locale, 'savedMessage'));
     } catch (e) {
@@ -927,6 +941,21 @@ export default function SiteEditAdminPage() {
               onChange={(e) => setPushPrice(e.target.value)}
             />
           </label>
+          <label style={{ ...labelStyle, marginTop: 16, marginBottom: 0 }}>
+            {adminText(locale, 'siteShopMonthlyPriceLabel')}
+            <input
+              style={inputStyle}
+              type="number"
+              min={0}
+              max={1000000}
+              step={100}
+              inputMode="numeric"
+              placeholder="3000"
+              value={shopMonthlyPrice}
+              onChange={(e) => setShopMonthlyPrice(e.target.value)}
+            />
+          </label>
+          <p style={noteTextStyle}>{adminText(locale, 'siteShopMonthlyPriceNote')}</p>
         </div>
       </section>
 

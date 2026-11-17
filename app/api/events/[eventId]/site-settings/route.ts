@@ -3,7 +3,8 @@
 // 保存先はプロジェクトドキュメントのトップレベル項目
 // （siteDescription / gourmetDefinition / heroImageUrl / siteIconUrl /
 // themeColor / siteNotes / topPlacementEnabled / topPlacementPrice /
-// adsEnabled / adsSlots / adsPrice / couponIssuePrice / pushPrice）。
+// adsEnabled / adsSlots / adsPrice / couponIssuePrice / pushPrice /
+// shopMonthlyPrice）。
 // 検証・正規化は lib/event-site.ts と lib/event.ts の純粋関数に寄せ、
 // updateEvent 経由で保存する（リンク等の既存項目と同じ経路）。
 import { NextResponse } from 'next/server';
@@ -25,6 +26,7 @@ import {
   normalizeAdsSlots,
   normalizeCouponIssuePrice,
   normalizePushPrice,
+  normalizeShopMonthlyPrice,
   normalizeTopPlacementEnabled,
   normalizeTopPlacementPrice,
 } from '@/lib/event';
@@ -47,6 +49,8 @@ interface SiteSettingsResponse extends SiteSettings {
   couponIssuePrice: number | null;
   /** プッシュ配信手数料（1回あたり・円）。未設定は null（無料扱い）。0 も無料 */
   pushPrice: number | null;
+  /** 参加店の自己登録の月額料金（円）。未設定は null（自己登録を受け付けない）。0 は無料 */
+  shopMonthlyPrice: number | null;
   /**
    * 広告オプション（本家との別料金契約）が有効かどうか（読み取り専用）。
    * プロジェクト設定ではなく契約者レコードの値。無効な間は広告を
@@ -69,6 +73,7 @@ function currentSettings(event: {
   adsPrice: number | null;
   couponIssuePrice: number | null;
   pushPrice: number | null;
+  shopMonthlyPrice: number | null;
 }): Omit<SiteSettingsResponse, 'adsOptionEnabled'> {
   return {
     siteDescription: event.siteDescription,
@@ -84,6 +89,7 @@ function currentSettings(event: {
     adsPrice: event.adsPrice,
     couponIssuePrice: event.couponIssuePrice,
     pushPrice: event.pushPrice,
+    shopMonthlyPrice: event.shopMonthlyPrice,
   };
 }
 
@@ -136,6 +142,7 @@ export async function PUT(
       adsPrice: normalizeAdsPrice(body.adsPrice),
       couponIssuePrice: normalizeCouponIssuePrice(body.couponIssuePrice),
       pushPrice: normalizePushPrice(body.pushPrice),
+      shopMonthlyPrice: normalizeShopMonthlyPrice(body.shopMonthlyPrice),
     };
     // トップ掲載を有効にするなら料金が必須（料金なしでは店が買えない）。
     // 0（無料）は料金として有効（参加表明で掲載される）。

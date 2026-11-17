@@ -139,6 +139,9 @@ describe('協賛（広告専用）アカウントのガード', () => {
     hasAccessCode: true,
     lang: 'ja',
     kind: 'advertiser',
+    source: 'admin',
+    delistedAt: null,
+    closedAt: null,
   };
 
   it('協賛アカウントはスタンプを押せない（403）', async () => {
