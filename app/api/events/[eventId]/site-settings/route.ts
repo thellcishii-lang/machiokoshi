@@ -3,7 +3,7 @@
 // 保存先はプロジェクトドキュメントのトップレベル項目
 // （siteDescription / gourmetDefinition / heroImageUrl / siteIconUrl /
 // themeColor / siteNotes / topPlacementEnabled / topPlacementPrice /
-// adsEnabled / adsSlots / adsPrice）。
+// adsEnabled / adsSlots / adsPrice / couponIssuePrice / pushPrice）。
 // 検証・正規化は lib/event-site.ts と lib/event.ts の純粋関数に寄せ、
 // updateEvent 経由で保存する（リンク等の既存項目と同じ経路）。
 import { NextResponse } from 'next/server';
@@ -22,6 +22,8 @@ import {
   normalizeAdsEnabled,
   normalizeAdsPrice,
   normalizeAdsSlots,
+  normalizeCouponIssuePrice,
+  normalizePushPrice,
   normalizeTopPlacementEnabled,
   normalizeTopPlacementPrice,
 } from '@/lib/event';
@@ -40,6 +42,10 @@ interface SiteSettingsResponse extends SiteSettings {
   adsSlots: number;
   /** 広告の月額料金（円）。未設定は null。0 は無料 */
   adsPrice: number | null;
+  /** クーポン発行手数料（1件あたり・円）。未設定は null（無料扱い）。0 も無料 */
+  couponIssuePrice: number | null;
+  /** プッシュ配信手数料（1回あたり・円）。未設定は null（無料扱い）。0 も無料 */
+  pushPrice: number | null;
 }
 
 function currentSettings(event: {
@@ -54,6 +60,8 @@ function currentSettings(event: {
   adsEnabled: boolean;
   adsSlots: number;
   adsPrice: number | null;
+  couponIssuePrice: number | null;
+  pushPrice: number | null;
 }): SiteSettingsResponse {
   return {
     siteDescription: event.siteDescription,
@@ -67,6 +75,8 @@ function currentSettings(event: {
     adsEnabled: event.adsEnabled,
     adsSlots: event.adsSlots,
     adsPrice: event.adsPrice,
+    couponIssuePrice: event.couponIssuePrice,
+    pushPrice: event.pushPrice,
   };
 }
 
@@ -114,6 +124,8 @@ export async function PUT(
       adsEnabled: normalizeAdsEnabled(body.adsEnabled),
       adsSlots: normalizeAdsSlots(body.adsSlots),
       adsPrice: normalizeAdsPrice(body.adsPrice),
+      couponIssuePrice: normalizeCouponIssuePrice(body.couponIssuePrice),
+      pushPrice: normalizePushPrice(body.pushPrice),
     };
     // トップ掲載を有効にするなら料金が必須（料金なしでは店が買えない）。
     // 0（無料）は料金として有効（参加表明で掲載される）。

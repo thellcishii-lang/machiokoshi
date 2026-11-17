@@ -236,6 +236,7 @@ export function AdminNav({
         // とは別物なので、並べて置く。
         { key: '⑧', href: `/event-admin/${eventId}/site`, label: adminText(locale, 'navSiteEdit'), icon: siteEditIcon },
         { key: '⑨', href: `/event-admin/${eventId}/ads`, label: adminText(locale, 'navAds'), icon: adsIcon },
+        { key: '⑩', href: `/event-admin/${eventId}/push-requests`, label: adminText(locale, 'navPushRequests'), icon: pushIcon },
         // 特設サイトは本家（push-taro.com）上の公開ページ。宣伝に使う
         // URL へすぐ飛べるよう、末尾に外部リンクとして置く。
         {
