@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   requireEventOwner: vi.fn(),
   updateEvent: vi.fn(),
+  resolveAdsOptionEnabled: vi.fn(),
 }));
 
 vi.mock('@/lib/event-auth', () => ({
@@ -15,6 +16,11 @@ vi.mock('@/lib/event-auth', () => ({
 vi.mock('@/lib/event-store', () => ({
   updateEvent: mocks.updateEvent,
 }));
+// 広告オプションの判定だけ差し替える（ゲートの純粋関数は実物を使う）。
+vi.mock('@/lib/event-ads', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/event-ads')>();
+  return { ...actual, resolveAdsOptionEnabled: mocks.resolveAdsOptionEnabled };
+});
 
 import { GET, PUT } from './route';
 
@@ -52,6 +58,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.requireEventOwner.mockResolvedValue({ uid: 'owner-1', event: EVENT });
   mocks.updateEvent.mockResolvedValue(undefined);
+  // 既定では広告オプションは有効（従来の検証をそのまま通すため）
+  mocks.resolveAdsOptionEnabled.mockResolvedValue(true);
 });
 
 describe('GET /api/events/[eventId]/site-settings', () => {
@@ -69,6 +77,14 @@ describe('GET /api/events/[eventId]/site-settings', () => {
     expect(body.gourmetDefinition).toBe(
       '地元産野菜を使うこと。\n味噌ベースのルー。',
     );
+  });
+
+  it('広告オプションの状態を含めて返す', async () => {
+    mocks.resolveAdsOptionEnabled.mockResolvedValue(false);
+    const response = await callGet();
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.adsOptionEnabled).toBe(false);
   });
 });
 
@@ -210,5 +226,67 @@ describe('PUT /api/events/[eventId]/site-settings', () => {
     });
     expect(response.status).toBe(400);
     expect(mocks.updateEvent).not.toHaveBeenCalled();
+  });
+
+  it('広告オプションが無効なら、広告を新たに有効にはできない（403・保存しない）', async () => {
+    mocks.resolveAdsOptionEnabled.mockResolvedValue(false);
+    const response = await callPut({
+      siteDescription: '',
+      heroImageUrl: null,
+      siteIconUrl: null,
+      siteNotes: [],
+      topPlacementEnabled: false,
+      topPlacementPrice: null,
+      adsEnabled: true,
+      adsSlots: 5,
+      adsPrice: 0,
+    });
+    expect(response.status).toBe(403);
+    expect(mocks.updateEvent).not.toHaveBeenCalled();
+  });
+
+  it('広告オプションが有効なら、広告を有効にして保存できる', async () => {
+    const response = await callPut({
+      siteDescription: '',
+      heroImageUrl: null,
+      siteIconUrl: null,
+      siteNotes: [],
+      topPlacementEnabled: false,
+      topPlacementPrice: null,
+      adsEnabled: true,
+      adsSlots: 5,
+      adsPrice: 0,
+    });
+    expect(response.status).toBe(200);
+    expect(mocks.updateEvent).toHaveBeenCalledWith(
+      EVENT_ID,
+      expect.objectContaining({ adsEnabled: true }),
+    );
+    const body = await response.json();
+    expect(body.adsOptionEnabled).toBe(true);
+  });
+
+  it('既に有効な広告は、オプションが無効でも設定ごと保持して保存できる', async () => {
+    mocks.requireEventOwner.mockResolvedValue({
+      uid: 'owner-1',
+      event: { ...EVENT, adsEnabled: true, adsSlots: 5, adsPrice: 0 },
+    });
+    mocks.resolveAdsOptionEnabled.mockResolvedValue(false);
+    const response = await callPut({
+      siteDescription: '紹介文を更新',
+      heroImageUrl: null,
+      siteIconUrl: null,
+      siteNotes: [],
+      topPlacementEnabled: false,
+      topPlacementPrice: null,
+      adsEnabled: true,
+      adsSlots: 5,
+      adsPrice: 0,
+    });
+    expect(response.status).toBe(200);
+    expect(mocks.updateEvent).toHaveBeenCalledWith(
+      EVENT_ID,
+      expect.objectContaining({ adsEnabled: true }),
+    );
   });
 });

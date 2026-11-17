@@ -90,6 +90,8 @@ interface ShopAdContent {
 
 interface ShopAdState {
   enabled: boolean;
+  /** 広告オプション（管理人の契約）が有効かどうか。無効な間は申請・掲載が止まる */
+  optionEnabled: boolean;
   price: number | null;
   slots: number;
   freeMode: boolean;
@@ -1749,6 +1751,11 @@ export default function ExhibitorShopPage() {
               <p style={{ fontSize: 13.5, color: '#334155', marginTop: 8 }}>
                 {redeemText(locale, 'adNote')}
               </p>
+              {!shopAd.optionEnabled && (
+                <p style={{ fontSize: 13.5, fontWeight: 700, color: '#b91c1c', marginTop: 8 }}>
+                  {redeemText(locale, 'adOptionStoppedNote')}
+                </p>
+              )}
               {shopAd.freeMode ? (
                 <p style={{ fontSize: 13.5, color: '#334155', marginTop: 8 }}>
                   {redeemText(locale, 'adFreeNote')}
@@ -1929,8 +1936,8 @@ export default function ExhibitorShopPage() {
                 )}
                 <button
                   onClick={() => void handleAdSubmit()}
-                  disabled={adBusy}
-                  style={{ ...primaryButtonStyle, marginTop: 16, opacity: adBusy ? 0.6 : 1 }}
+                  disabled={adBusy || !shopAd.optionEnabled}
+                  style={{ ...primaryButtonStyle, marginTop: 16, opacity: adBusy || !shopAd.optionEnabled ? 0.6 : 1 }}
                 >
                   {redeemText(locale, 'adSubmitButton')}
                 </button>

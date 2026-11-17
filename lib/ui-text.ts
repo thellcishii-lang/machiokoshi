@@ -1601,6 +1601,12 @@ export const REDEEM_TEXT = {
     zh: '免费。无需签约，提交内容并获得管理人批准后即可展示。',
     ko: '요금은 무료입니다. 신청 절차 없이 내용을 제출하고 관리인 승인을 받으면 게재됩니다.',
   },
+  adOptionStoppedNote: {
+    ja: '現在、広告は停止中です。主催者の広告オプションが有効になると、申請と掲載を再開できます。',
+    en: 'Ads are currently suspended. Submissions and display resume once the organizer’s ads option is active.',
+    zh: '目前广告已暂停。管理人的广告选项启用后，即可恢复申请和展示。',
+    ko: '현재 광고가 중단 중입니다. 주최자의 광고 옵션이 활성화되면 신청과 게재를 재개할 수 있습니다.',
+  },
   advertiserNote: {
     ja: '協賛アカウントです。この画面では広告の掲載だけを行えます。',
     en: 'This is a sponsor account. You can only publish ads here.',
@@ -3207,6 +3213,12 @@ export const ADMIN_TEXT = {
     zh: '广告费用（月额・日元）',
     ko: '광고 요금(월액・엔)',
   },
+  siteAdsOptionRequiredNote: {
+    ja: '広告を有効にするには、広告オプションの契約が必要です。オプションが無効な間は、広告の設定がオンでも申請・承認・掲載はすべて止まります。',
+    en: 'An ads option contract is required to enable ads. While the option is inactive, submissions, approvals and display are all stopped even if the ads setting is on.',
+    zh: '启用广告需要签约广告选项。选项未启用期间，即使广告设置已开启，申请、批准和展示都会停止。',
+    ko: '광고를 활성화하려면 광고 옵션 계약이 필요합니다. 옵션이 비활성화된 동안은 광고 설정을 켜도 신청・승인・게재가 모두 중단됩니다.',
+  },
   siteAdsCancelNote: {
     ja: 'オフにすると新規の申し込みと広告ページへの掲載が止まりますが、契約中のサブスクリプションは自動では解約されません（解約は参加店が店舗ページから行います）。料金を変更しても、契約中の金額は変わりません。',
     en: 'Turning this off stops new applications and display on the ad page, but existing subscriptions are not cancelled automatically (shops cancel from their shop page). Changing the price does not change what existing subscribers pay.',
@@ -3362,6 +3374,12 @@ export const ADMIN_TEXT = {
     en: 'Ads are currently off. Enable them in the site editor so shops can submit ads.',
     zh: '广告目前已关闭。在"特设网站编辑"中启用后，参与店铺即可投放广告。',
     ko: '광고는 현재 꺼져 있습니다. "특설 사이트 편집"에서 활성화하면 참여 매장이 광고를 낼 수 있습니다.',
+  },
+  adsOptionRequiredNote: {
+    ja: '広告オプションが無効のため、広告の承認・却下はできません。広告オプションの契約が必要です。',
+    en: 'The ads option is not active, so ads cannot be approved or rejected. An ads option contract is required.',
+    zh: '广告选项未启用，无法批准或拒绝广告。需要签约广告选项。',
+    ko: '광고 옵션이 비활성화되어 있어 광고를 승인하거나 거부할 수 없습니다. 광고 옵션 계약이 필요합니다.',
   },
   adsLiveBadge: {
     ja: '掲載中',

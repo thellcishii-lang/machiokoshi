@@ -126,6 +126,31 @@ describe('buildProvisioningUpdate', () => {
     it('billingOptionEnabled が送られなければ含めない（既存値を変えない）', () => {
       expect(buildProvisioningUpdate({ companyName: '' })).toEqual({});
     });
+    it('adsOptionEnabled は boolean が送られた場合だけ含める', () => {
+      expect(buildProvisioningUpdate({ companyName: '', adsOptionEnabled: true })).toEqual({
+        adsOptionEnabled: true,
+      });
+      expect(buildProvisioningUpdate({ companyName: '', adsOptionEnabled: false })).toEqual({
+        adsOptionEnabled: false,
+      });
+    });
+    it('adsOptionEnabled が boolean でなければ無視する', () => {
+      expect(
+        buildProvisioningUpdate({
+          companyName: '',
+          adsOptionEnabled: 'true' as unknown as boolean,
+        }),
+      ).toEqual({});
+      expect(
+        buildProvisioningUpdate({
+          companyName: '',
+          adsOptionEnabled: 1 as unknown as boolean,
+        }),
+      ).toEqual({});
+    });
+    it('adsOptionEnabled が送られなければ含めない（既存値を変えない）', () => {
+      expect(buildProvisioningUpdate({ companyName: '' })).toEqual({});
+    });
     it('worldName は前後の空白を除いて含める', () => {
       expect(buildProvisioningUpdate({ companyName: '', worldName: ' 飯能カレー ' })).toEqual({
         worldName: '飯能カレー',

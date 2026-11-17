@@ -7,11 +7,13 @@ import {
   approveAdTransition,
   emptyShopAd,
   isAdEligible,
+  isAdsActionAllowed,
   parseShopAd,
   rejectAdTransition,
   selectPublicAds,
   submitAdTransition,
   validateAdContentInput,
+  type AdsGatedAction,
   type PublicAdCandidate,
   type ShopAd,
   type ShopAdContent,
@@ -180,6 +182,49 @@ describe('isAdEligible（掲載可否）', () => {
     expect(
       isAdEligible({ adsEnabled: true, adsPrice: 3000, subscriptionStatus: null }),
     ).toBe(false);
+  });
+});
+
+describe('isAdsActionAllowed（広告オプションのゲート）', () => {
+  const ACTIONS: AdsGatedAction[] = [
+    'enable-setting',
+    'submit',
+    'checkout',
+    'review',
+    'public-list',
+  ];
+
+  it('オプション無効なら、設定が ON でもすべての操作ができない', () => {
+    for (const action of ACTIONS) {
+      expect(
+        isAdsActionAllowed(action, { adsOptionEnabled: false, adsEnabled: true }),
+      ).toBe(false);
+      expect(
+        isAdsActionAllowed(action, { adsOptionEnabled: false, adsEnabled: false }),
+      ).toBe(false);
+    }
+  });
+
+  it('オプション有効＋設定 ON なら、すべての操作ができる', () => {
+    for (const action of ACTIONS) {
+      expect(
+        isAdsActionAllowed(action, { adsOptionEnabled: true, adsEnabled: true }),
+      ).toBe(true);
+    }
+  });
+
+  it('オプション有効＋設定 OFF では、有効化だけができて他はできない', () => {
+    expect(
+      isAdsActionAllowed('enable-setting', {
+        adsOptionEnabled: true,
+        adsEnabled: false,
+      }),
+    ).toBe(true);
+    for (const action of ACTIONS.filter((a) => a !== 'enable-setting')) {
+      expect(
+        isAdsActionAllowed(action, { adsOptionEnabled: true, adsEnabled: false }),
+      ).toBe(false);
+    }
   });
 });
 

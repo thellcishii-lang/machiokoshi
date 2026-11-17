@@ -15,6 +15,11 @@
 //   （lib/event-billing.ts）を使い、Checkout の metadata.kind =
 //   'ad-placement' で区別する。契約記録はトップ掲載と同じ形で
 //   adPlacements/{exhibitorId} に持つ。
+// - 前提条件として、管理人の契約に「広告オプション」（本家との別料金
+//   契約、organizers.adsOptionEnabled）が必要。オプションが無効な間は
+//   プロジェクト設定（adsEnabled）が ON でも、設定の有効化・申請・
+//   申込・承認・掲載のすべてが止まる（判定は isAdsActionAllowed）。
+//   既存の広告・契約データは消さず、表示だけが止まる。
 // - 掲載可否（公開API）はここで算出する: 有料の間は契約状態
 //   （active / past_due）が必要、無料（料金 0）の間は承認だけでよい。
 import type { Firestore } from 'firebase-admin/firestore';
@@ -261,6 +266,50 @@ export function rejectAdTransition(
     pendingSubmittedAt: null,
     lastRejectedAt: nowIso,
   };
+}
+
+// ─── 純粋関数: 広告オプション（契約）のゲート ───
+
+/** 広告オプションのゲートがかかる操作。 */
+export type AdsGatedAction =
+  /** 管理人がプロジェクト設定で広告を有効にしようとする操作 */
+  | 'enable-setting'
+  /** 店・協賛が広告内容を保存（申請）する操作 */
+  | 'submit'
+  /** 店・協賛が広告の新規契約（Checkout）を始める操作 */
+  | 'checkout'
+  /** 管理人が広告を承認／却下する操作 */
+  | 'review'
+  /** 公開一覧（特設サイト）へ広告を出す判定 */
+  | 'public-list';
+
+/**
+ * 広告オプション × プロジェクト設定の広告 ON/OFF で、各操作が
+ * できるかどうかを決める（純粋関数）。
+ * - 広告オプションが無効なら、すべての操作ができない。
+ * - 「有効化」だけはオプションさえあればできる（設定がまだ OFF でも
+ *   ON にする操作そのものは許可する）。
+ * - それ以外の操作は、オプションと設定の両方が必要。
+ */
+export function isAdsActionAllowed(
+  action: AdsGatedAction,
+  input: { adsOptionEnabled: boolean; adsEnabled: boolean },
+): boolean {
+  if (!input.adsOptionEnabled) return false;
+  if (action === 'enable-setting') return true;
+  return input.adsEnabled;
+}
+
+/**
+ * プロジェクトの所有者（ownerUid）から、広告オプションが有効な
+ * 契約かどうかを引く。契約者レコードが無い・フィールドが無い場合は
+ * 未契約（false）として扱う（店舗課金オプションと同じ倒し方）。
+ */
+export async function resolveAdsOptionEnabled(
+  ownerUid: string,
+): Promise<boolean> {
+  const organizer = await findOrganizerByOwnerUid(ownerUid);
+  return organizer?.adsOptionEnabled === true;
 }
 
 // ─── 純粋関数: 掲載可否と公開一覧の選定 ───
@@ -523,6 +572,9 @@ export async function listPublicAds(
 ): Promise<PublicAd[]> {
   const event = await getEvent(eventId);
   if (!event || !event.adsEnabled) return [];
+  // 広告オプション（管理人の契約）が無効な間は、掲載中の広告が
+  // あっても公開しない（データは消さず、表示だけ止める）。
+  if (!(await resolveAdsOptionEnabled(event.ownerUid))) return [];
   const [exhibitorsSnap, placementsSnap] = await Promise.all([
     db
       .collection('events')

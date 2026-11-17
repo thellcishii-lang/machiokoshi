@@ -50,6 +50,12 @@ export interface ProvisionOrganizerInput {
    */
   billingOptionEnabled?: boolean;
   /**
+   * 広告オプションの ON/OFF。任意項目:
+   * boolean が送られた場合だけ反映し、送られなければ既存値を変えない。
+   * boolean 以外は無視する。
+   */
+  adsOptionEnabled?: boolean;
+  /**
    * 世界観の名前（申込時の希望名、例: 飯能カレー）。任意項目:
    * 送られなければ既存値を変えない。空文字・上限超は無視する
    * （無害化は sanitizeWorldName）。
@@ -138,6 +144,7 @@ export function buildProvisioningUpdate(
     | 'tempSubscriberCapUntil'
     | 'restoredSubscriberCap'
     | 'billingOptionEnabled'
+    | 'adsOptionEnabled'
     | 'worldName'
   >,
 ): ProvisioningProfilePatch {
@@ -160,6 +167,10 @@ export function buildProvisioningUpdate(
   // 店舗課金オプションは boolean が送られた場合だけ反映する。
   if (typeof input.billingOptionEnabled === 'boolean') {
     patch.billingOptionEnabled = input.billingOptionEnabled;
+  }
+  // 広告オプションも boolean が送られた場合だけ反映する。
+  if (typeof input.adsOptionEnabled === 'boolean') {
+    patch.adsOptionEnabled = input.adsOptionEnabled;
   }
   const worldName = sanitizeWorldName(input.worldName);
   if (worldName !== undefined) patch.worldName = worldName;
@@ -288,6 +299,8 @@ export async function provisionOrganizer(
     agencyCode: input.agencyCode ?? null,
     // 店舗課金オプションは boolean のときだけ有効として保存（それ以外は無効）。
     billingOptionEnabled: input.billingOptionEnabled === true,
+    // 広告オプションも boolean のときだけ有効として保存（それ以外は無効）。
+    adsOptionEnabled: input.adsOptionEnabled === true,
     // 世界観の名前は無害化した値だけを保持する。
     worldName: sanitizeWorldName(input.worldName) ?? '',
     // 初期パスワードは初回ログインで必ず変更させる。

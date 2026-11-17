@@ -196,6 +196,8 @@ export default function EventAdsAdminPage() {
   const [eventName, setEventName] = useState('');
   const [ads, setAds] = useState<AdminAdItem[]>([]);
   const [adsEnabled, setAdsEnabled] = useState(false);
+  // 広告オプション（本家との別料金契約）。無効な間は承認・却下できない。
+  const [adsOptionEnabled, setAdsOptionEnabled] = useState(true);
   const [message, setMessage] = useState('');
   const [loadMessage, setLoadMessage] = useState('');
   const [busy, setBusy] = useState(false);
@@ -236,6 +238,7 @@ export default function EventAdsAdminPage() {
       const data = await callApi(`/api/events/${eventId}/ads`);
       setAds((data.ads as AdminAdItem[]) ?? []);
       setAdsEnabled(data.adsEnabled === true);
+      setAdsOptionEnabled(data.adsOptionEnabled === true);
       setLoadMessage('');
     } catch (e) {
       setLoadMessage(e instanceof Error ? e.message : adminText(locale, 'loadFailed'));
@@ -338,6 +341,9 @@ export default function EventAdsAdminPage() {
       {!adsEnabled && (
         <p style={adminFeedbackStyle}>{adminText(locale, 'adsSettingsOffNote')}</p>
       )}
+      {!adsOptionEnabled && (
+        <p style={adminErrorTextStyle}>{adminText(locale, 'adsOptionRequiredNote')}</p>
+      )}
       {loadMessage && <p style={adminErrorTextStyle}>{loadMessage}</p>}
       {actionMessage && <p style={adminFeedbackStyle}>{actionMessage}</p>}
 
@@ -373,8 +379,8 @@ export default function EventAdsAdminPage() {
               <span style={{ flex: 1 }} />
               <button
                 onClick={() => void handleAction(item, 'approve')}
-                disabled={actingId === item.exhibitorId}
-                style={{ ...approveButtonStyle, opacity: actingId === item.exhibitorId ? 0.6 : 1 }}
+                disabled={actingId === item.exhibitorId || !adsOptionEnabled}
+                style={{ ...approveButtonStyle, opacity: actingId === item.exhibitorId || !adsOptionEnabled ? 0.6 : 1 }}
               >
                 <span style={adminButtonContentStyle}>
                   {actingId === item.exhibitorId && <ButtonSpinner />}
@@ -383,8 +389,8 @@ export default function EventAdsAdminPage() {
               </button>
               <button
                 onClick={() => void handleAction(item, 'reject')}
-                disabled={actingId === item.exhibitorId}
-                style={{ ...rejectButtonStyle, opacity: actingId === item.exhibitorId ? 0.6 : 1 }}
+                disabled={actingId === item.exhibitorId || !adsOptionEnabled}
+                style={{ ...rejectButtonStyle, opacity: actingId === item.exhibitorId || !adsOptionEnabled ? 0.6 : 1 }}
               >
                 {adminText(locale, 'adsRejectButton')}
               </button>

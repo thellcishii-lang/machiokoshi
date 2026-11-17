@@ -9,7 +9,9 @@ import { requireEventExhibitor } from '@/lib/event-auth';
 import { db } from '@/lib/firebase-admin';
 import {
   getAdPlacement,
+  isAdsActionAllowed,
   resolveAdAvailability,
+  resolveAdsOptionEnabled,
   startAdPlacement,
 } from '@/lib/event-ads';
 
@@ -28,6 +30,21 @@ export async function POST(
     return NextResponse.json(
       { error: '現在広告のお申し込みは受け付けていません' },
       { status: 404 },
+    );
+  }
+
+  // 広告オプション（管理人の契約）が無効な間は新規の申込はできない
+  // （既存の契約の解約は shop-ad/cancel 側で引き続き可能）。
+  const adsOptionEnabled = await resolveAdsOptionEnabled(event.ownerUid);
+  if (
+    !isAdsActionAllowed('checkout', {
+      adsOptionEnabled,
+      adsEnabled: event.adsEnabled,
+    })
+  ) {
+    return NextResponse.json(
+      { error: '広告オプションが有効でないため、現在広告のお申し込みは受け付けていません' },
+      { status: 403 },
     );
   }
 

@@ -13,7 +13,9 @@ import {
   getShopAd,
   isAdEligible,
   isAdSubscribedForStatus,
+  isAdsActionAllowed,
   resolveAdAvailability,
+  resolveAdsOptionEnabled,
   submitShopAd,
   validateAdContentInput,
 } from '@/lib/event-ads';
@@ -29,26 +31,37 @@ export async function GET(
   if ('error' in guard) return guard.error;
   const { event, exhibitor } = guard;
 
-  const [ad, placement] = await Promise.all([
+  const [ad, placement, adsOptionEnabled] = await Promise.all([
     getShopAd(db, eventId, exhibitor.id),
     getAdPlacement(db, eventId, exhibitor.id),
+    resolveAdsOptionEnabled(event.ownerUid),
   ]);
-  const freeMode = event.adsEnabled && event.adsPrice === 0;
+  // 広告オプション（管理人の契約）が無効な間は、プロジェクト設定が
+  // ON でも広告機能はすべて止まる（申請・申込・掲載のいずれも不可）。
+  const adsUsable = isAdsActionAllowed('submit', {
+    adsOptionEnabled,
+    adsEnabled: event.adsEnabled,
+  });
+  const freeMode = adsUsable && event.adsPrice === 0;
   // 有料の間だけ、課金レール（オプション＋Stripe）が揃っているかを見る
   let purchasable = false;
-  if (event.adsEnabled && event.adsPrice !== null && event.adsPrice > 0) {
+  if (adsUsable && event.adsPrice !== null && event.adsPrice > 0) {
     const availability = await resolveAdAvailability(db, event.ownerUid);
     purchasable = availability.available;
   }
-  const eligible = isAdEligible({
-    adsEnabled: event.adsEnabled,
-    adsPrice: event.adsPrice,
-    subscriptionStatus: placement?.status ?? null,
-  });
+  const eligible =
+    adsUsable &&
+    isAdEligible({
+      adsEnabled: event.adsEnabled,
+      adsPrice: event.adsPrice,
+      subscriptionStatus: placement?.status ?? null,
+    });
 
   return NextResponse.json({
     // プロジェクトの広告設定（公開情報と同じ値）
     enabled: event.adsEnabled,
+    // 広告オプション（管理人の契約）が有効かどうか
+    optionEnabled: adsOptionEnabled,
     price: event.adsPrice,
     slots: event.adsSlots,
     // 料金 0: 課金なしで承認だけで掲載される
@@ -78,6 +91,19 @@ export async function PUT(
   if (!event.adsEnabled) {
     return NextResponse.json(
       { error: 'このプロジェクトでは広告を受け付けていません' },
+      { status: 403 },
+    );
+  }
+  // 広告オプション（管理人の契約）が無効な間は申請できない。
+  const adsOptionEnabled = await resolveAdsOptionEnabled(event.ownerUid);
+  if (
+    !isAdsActionAllowed('submit', {
+      adsOptionEnabled,
+      adsEnabled: event.adsEnabled,
+    })
+  ) {
+    return NextResponse.json(
+      { error: '広告オプションが有効でないため、広告を申請できません' },
       { status: 403 },
     );
   }
