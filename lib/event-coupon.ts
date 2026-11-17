@@ -72,6 +72,14 @@ function mapExhibitor(
   };
 }
 
+/** クーポンの発行元。'admin' = 管理人（従来どおり無料・即時）、'shop' = 参加店自身。 */
+export type CouponIssuedBy = 'admin' | 'shop';
+
+/** 保存済みの発行元を防御的に読む（読み取り用）。旧ドキュメントは 'admin'。 */
+export function parseCouponIssuedBy(value: unknown): CouponIssuedBy {
+  return value === 'shop' ? 'shop' : 'admin';
+}
+
 export interface EventCoupon {
   id: string;
   exhibitorId: string;
@@ -84,6 +92,21 @@ export interface EventCoupon {
   descriptionI18n: Partial<Record<Locale, string>>;
   keywords: string[];
   active: boolean;
+  /** 発行元。旧ドキュメント（項目なし）は 'admin' として扱う */
+  issuedBy: CouponIssuedBy;
+  /**
+   * 店舗発行で発行手数料の支払い待ちかどうか。true の間は active=false で
+   * 保存され、来場者には見えず取得もできない。支払いが確認できたら
+   * activatePaidCoupon で active=true・false に切り替わる。
+   * 管理人発行と無料の店舗発行では常に false。
+   */
+  paymentPending: boolean;
+  /**
+   * 店舗発行で作成時点に固定された発行手数料（円）。支払いの検証で
+   * Checkout の金額と突き合わせるためのスナップショット。
+   * 管理人発行・無料発行は null。
+   */
+  feeAmount: number | null;
 }
 
 export interface EventClaim {
@@ -230,6 +253,16 @@ export async function createCoupon(
     title: string;
     description?: string;
     keywords?: string[];
+    /**
+     * 発行元。未指定は 'admin'（管理人発行: 従来どおり無料・即時・有効）。
+     * 'shop'（参加店発行）で発行手数料が有料のときは paymentPending: true を
+     * 付けると、支払いが確認されるまで無効（非公開・取得不可）で作られる。
+     */
+    issuedBy?: CouponIssuedBy;
+    /** 支払い待ちとして作るかどうか（店舗発行・有料時のみ true） */
+    paymentPending?: boolean;
+    /** 作成時点の発行手数料スナップショット（円）。支払い待ちのときだけ付ける */
+    feeAmount?: number | null;
   },
 ): Promise<EventCoupon> {
   const exhibitor = await getExhibitor(eventId, input.exhibitorId);
@@ -254,6 +287,7 @@ export async function createCoupon(
     translateText(title),
     translateText(description),
   ]);
+  const paymentPending = input.paymentPending === true;
   const coupon: EventCoupon = {
     id: ref.id,
     exhibitorId: exhibitor.id,
@@ -263,39 +297,20 @@ export async function createCoupon(
     titleI18n,
     descriptionI18n,
     keywords: (input.keywords ?? []).map((k) => k.trim()).filter(Boolean),
-    active: true,
+    // 支払い待ちの間は無効で作る（来場者に見せず、取得もさせない）
+    active: !paymentPending,
+    issuedBy: input.issuedBy ?? 'admin',
+    paymentPending,
+    feeAmount: paymentPending ? (input.feeAmount ?? null) : null,
   };
   await ref.set({ ...coupon, createdAt: FieldValue.serverTimestamp() });
   return coupon;
 }
 
-export async function listCoupons(eventId: string): Promise<EventCoupon[]> {
-  const snap = await couponsRef(eventId).get();
-  return snap.docs.map((doc) => {
-    const data = doc.data();
-    return {
-      id: doc.id,
-      exhibitorId: String(data.exhibitorId ?? ''),
-      exhibitorName: String(data.exhibitorName ?? ''),
-      title: String(data.title ?? ''),
-      description: String(data.description ?? ''),
-      titleI18n: parseLocalizedTexts(data.titleI18n),
-      descriptionI18n: parseLocalizedTexts(data.descriptionI18n),
-      keywords: Array.isArray(data.keywords) ? (data.keywords as string[]) : [],
-      active: data.active !== false,
-    };
-  });
-}
-
-export async function getCoupon(
-  eventId: string,
-  couponId: string,
-): Promise<EventCoupon | null> {
-  const doc = await couponsRef(eventId).doc(couponId).get();
-  if (!doc.exists) return null;
-  const data = doc.data()!;
+/** 保存済みクーポンを防御的に読む（listCoupons / getCoupon 共用）。 */
+function mapCoupon(id: string, data: Record<string, unknown>): EventCoupon {
   return {
-    id: doc.id,
+    id,
     exhibitorId: String(data.exhibitorId ?? ''),
     exhibitorName: String(data.exhibitorName ?? ''),
     title: String(data.title ?? ''),
@@ -304,7 +319,41 @@ export async function getCoupon(
     descriptionI18n: parseLocalizedTexts(data.descriptionI18n),
     keywords: Array.isArray(data.keywords) ? (data.keywords as string[]) : [],
     active: data.active !== false,
+    issuedBy: parseCouponIssuedBy(data.issuedBy),
+    paymentPending: data.paymentPending === true,
+    feeAmount: typeof data.feeAmount === 'number' ? data.feeAmount : null,
   };
+}
+
+export async function listCoupons(eventId: string): Promise<EventCoupon[]> {
+  const snap = await couponsRef(eventId).get();
+  return snap.docs.map((doc) => mapCoupon(doc.id, doc.data()));
+}
+
+export async function getCoupon(
+  eventId: string,
+  couponId: string,
+): Promise<EventCoupon | null> {
+  const doc = await couponsRef(eventId).doc(couponId).get();
+  if (!doc.exists) return null;
+  return mapCoupon(doc.id, doc.data()!);
+}
+
+/**
+ * 支払い待ちクーポンを有効化する（発行手数料の支払い確認後に呼ぶ）。
+ * 既に有効化済みなら何もしない（冪等）。戻り値は「今回有効化したか」。
+ * クーポンが無い・支払い待ちでない場合は false。
+ */
+export async function activatePaidCoupon(
+  eventId: string,
+  couponId: string,
+): Promise<boolean> {
+  const ref = couponsRef(eventId).doc(couponId);
+  const doc = await ref.get();
+  if (!doc.exists) return false;
+  if (doc.data()?.paymentPending !== true) return false;
+  await ref.update({ active: true, paymentPending: false });
+  return true;
 }
 
 // ─── 取得 ───
