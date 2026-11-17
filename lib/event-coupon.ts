@@ -27,6 +27,21 @@ import { uiText } from './ui-text';
 export const EVENT_EXHIBITORS_COLLECTION = 'exhibitors';
 export const EVENT_COUPONS_COLLECTION = 'coupons';
 
+/**
+ * アカウントの種類。
+ * - 'shop': 参加店（従来の出店者。プロフィール・スタンプ・レビュー・
+ *   トップ掲載など、参加店としての全機能の対象）
+ * - 'advertiser': 協賛（広告専用）。参加店としては一切現れず、
+ *   広告の掲載だけを行う。
+ * 旧ドキュメント（項目なし）は 'shop' として扱う。
+ */
+export type ExhibitorKind = 'shop' | 'advertiser';
+
+/** 保存済みの種類を防御的に読む（読み取り用）。'advertiser' のみ協賛。 */
+export function parseExhibitorKind(value: unknown): ExhibitorKind {
+  return value === 'advertiser' ? 'advertiser' : 'shop';
+}
+
 export interface EventExhibitor {
   id: string;
   name: string;
@@ -37,6 +52,8 @@ export interface EventExhibitor {
   hasAccessCode: boolean;
   /** 表示言語（個人の選択）。未設定ならイベントのデフォルト言語 */
   lang: Locale;
+  /** アカウントの種類（参加店／協賛）。旧ドキュメントは 'shop' */
+  kind: ExhibitorKind;
 }
 
 function mapExhibitor(
@@ -51,6 +68,7 @@ function mapExhibitor(
     hasAccessCode:
       typeof data.accessCode === 'string' && data.accessCode.length > 0,
     lang: normalizeLocale(data.lang),
+    kind: parseExhibitorKind(data.kind),
   };
 }
 
@@ -157,7 +175,12 @@ export async function updateExhibitorLanguage(
 
 export async function createExhibitor(
   eventId: string,
-  input: { name: string; email?: string | null; lang?: Locale },
+  input: {
+    name: string;
+    email?: string | null;
+    lang?: Locale;
+    kind?: ExhibitorKind;
+  },
 ): Promise<EventExhibitor> {
   const name = input.name.trim();
   if (!name) throw new Error('出店者名が必要です');
@@ -170,6 +193,7 @@ export async function createExhibitor(
     email,
     hasAccessCode: false,
     lang: resolveLocale(input.lang, event?.defaultLocale),
+    kind: input.kind ?? 'shop',
   };
   // hasAccessCode はドキュメントの accessCode フィールドから導く表示用の値で、
   // 保存するのは実フィールド（email / lang）だけ。
@@ -210,6 +234,9 @@ export async function createCoupon(
 ): Promise<EventCoupon> {
   const exhibitor = await getExhibitor(eventId, input.exhibitorId);
   if (!exhibitor) throw new Error('出店者が見つかりません');
+  if (exhibitor.kind === 'advertiser') {
+    throw new Error('協賛アカウントにはクーポンを登録できません');
+  }
   const title = input.title.trim();
   if (!title) throw new Error('クーポンのタイトルが必要です');
 

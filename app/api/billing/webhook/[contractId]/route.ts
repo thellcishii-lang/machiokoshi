@@ -1,7 +1,8 @@
 // app/api/billing/webhook/[contractId]/route.ts
 // 店舗課金オプションの Stripe Webhook 受信口。
-// 店舗課金とトップ掲載（特設サイトの先頭5枠）で共用し、
-// metadata.kind = 'top-placement' のイベントはトップ掲載側へ振り分ける。
+// 店舗課金とトップ掲載（特設サイトの先頭5枠）と広告で共用し、
+// metadata.kind = 'top-placement' / 'ad-placement' のイベントは
+// それぞれの処理へ振り分ける。
 // パスで管理人（契約）を特定し、その管理人自身の Webhook シークレットで
 // 署名を検証する。検証は生ボディに対して行う（JSON に変換してからでは
 // 署名が一致しない）。署名検証に失敗したら 400。
@@ -21,6 +22,10 @@ import {
   stripeEventKind,
   TOP_PLACEMENT_KIND,
 } from '@/lib/event-placement';
+import {
+  applyAdWebhookEffect,
+  AD_PLACEMENT_KIND,
+} from '@/lib/event-ads';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,12 +64,15 @@ export async function POST(
   }
 
   // metadata.kind で振り分ける: 'top-placement' はトップ掲載、
-  // それ以外（kind なし）は店舗課金として処理する。
+  // 'ad-placement' は広告、それ以外（kind なし）は店舗課金として処理する。
   const eventLike = event as unknown as StripeWebhookEventLike;
+  const kind = stripeEventKind(eventLike);
   const result =
-    stripeEventKind(eventLike) === TOP_PLACEMENT_KIND
+    kind === TOP_PLACEMENT_KIND
       ? await applyTopPlacementWebhookEffect(db, contractId, eventLike)
-      : await applyStripeWebhookEffect(db, contractId, eventLike);
+      : kind === AD_PLACEMENT_KIND
+        ? await applyAdWebhookEffect(db, contractId, eventLike)
+        : await applyStripeWebhookEffect(db, contractId, eventLike);
   return NextResponse.json({
     received: true,
     applied: result.applied,

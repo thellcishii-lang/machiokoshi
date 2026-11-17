@@ -5,7 +5,7 @@
 // 出店者は Firebase Auth のアカウントを持たない。
 import { NextResponse } from 'next/server';
 import { requireEventOwner } from '@/lib/event-auth';
-import { listExhibitors } from '@/lib/event-coupon';
+import { listExhibitors, parseExhibitorKind } from '@/lib/event-coupon';
 import {
   ExhibitorAccessError,
   registerExhibitor,
@@ -43,6 +43,9 @@ export async function POST(
     return NextResponse.json({ error: '出店者名が必要です' }, { status: 400 });
   }
   const email = typeof body.email === 'string' ? body.email : '';
+  // アカウントの種類: 'advertiser'（協賛・広告専用）だけを特別扱いし、
+  // それ以外は参加店（'shop'）として発行する。
+  const kind = parseExhibitorKind(body.kind);
 
   try {
     const result = await registerExhibitor({
@@ -50,6 +53,7 @@ export async function POST(
       name,
       email,
       eventName: guard.event.name,
+      kind,
     });
     const exhibitors = await listExhibitors(eventId);
     const exhibitor = exhibitors.find((e) => e.id === result.exhibitorId) ?? {
@@ -58,6 +62,7 @@ export async function POST(
       email: result.email,
       hasAccessCode: true,
       lang: guard.event.defaultLocale,
+      kind,
     };
     // コード自体はレスポンスに含めない（メールでのみ出店者に渡る）。
     // メール送信の成否は mailSent で返す（失敗しても登録は成立しているので、

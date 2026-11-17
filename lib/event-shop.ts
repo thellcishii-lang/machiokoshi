@@ -11,8 +11,11 @@
 //   （events/{eventId}/shop-photos/{exhibitorId}/...）。検証は
 //   レビュー写真と同じ純粋関数（lib/event-review.ts）を使う。
 import type { Firestore } from 'firebase-admin/firestore';
-import { EVENT_EXHIBITORS_COLLECTION } from './event-coupon';
-import { isHttpsUrl } from './event';
+import {
+  EVENT_EXHIBITORS_COLLECTION,
+  parseExhibitorKind,
+} from './event-coupon';
+import { isHttpsUrl, parseTopPlacementPrice } from './event';
 import { geocodeAddress, type GeoPoint, type GeocodeFn } from './geocode';
 
 export const SHOP_PROFILE_PHOTO_MAX_COUNT = 3;
@@ -40,6 +43,11 @@ export const SHOP_FREE_DISH_LIMITS = {
   description: 200,
 } as const;
 
+export const SHOP_LOGIN_REWARD_LIMITS = {
+  name: 50,
+  description: 200,
+} as const;
+
 /**
  * スタンプ達成で無料になる自店の一品（特典の種類が「1軒無料」の
  * プロジェクトで意味を持つ）。店が店舗専用ページで登録し、特設サイトの
@@ -50,6 +58,13 @@ export interface ShopFreeDish {
   description: string;
   photoUrl: string | null;
 }
+
+/**
+ * ログインボーナスクーポンで貰える自店の特典。形は無料の一品と同じ
+ * （名前・説明・写真）。店が店舗専用ページで登録し、特設サイトの
+ * 「毎日ログインでお得をゲット！」ページ等に写真付きで出す。未登録は null。
+ */
+export type ShopLoginReward = ShopFreeDish;
 
 /** 店舗リンク1件（表示名＋URL）。特設サイトの店舗ページに並べて表示する。 */
 export interface ShopLink {
@@ -88,6 +103,8 @@ export interface ShopProfile {
   location: ShopLocation | null;
   /** 達成で無料になる自店の一品。未登録は null */
   freeDish: ShopFreeDish | null;
+  /** ログインボーナスクーポンで貰える自店の特典。未登録は null */
+  loginReward: ShopLoginReward | null;
   /** 掲載するかどうか。既定は掲載する（true） */
   published: boolean;
 }
@@ -99,11 +116,35 @@ export interface PublicShop {
   name: string;
   profile: ShopProfile;
   /**
-   * 特設サイトのトップ掲載（先頭5枠）の対象かどうか。参加店ドキュメントの
-   * トップレベル項目 `topFeatured` が正で、課金側（lib/event-placement.ts）
-   * が掲載中と判断している間だけ true。未設定の旧ドキュメントは false。
+   * 特設サイトのトップ掲載（先頭5枠）の対象かどうか（算出済みの真偽値。
+   * 本家はこの値だけを見ればよい）。
+   * - 料金が有料（> 0）: 参加店ドキュメントのトップレベル項目
+   *   `topFeatured` が正（課金側 lib/event-placement.ts が掲載中と
+   *   判断している間だけ立つ）。
+   * - 料金が無料（= 0）: 店の参加表明 `placementOptIn` が正。
+   * 未設定の旧ドキュメントは false。
    */
   topFeatured: boolean;
+}
+
+/**
+ * トップ掲載の対象かどうかを決める（純粋関数）。
+ * 有料の間は課金側が管理する topFeatured フラグだけを見て、参加表明は
+ * 無視する。無料（料金 0）の間は参加表明だけを見て、課金フラグは
+ * 無視する（料金の切り替えで過去の状態が混ざらないように）。
+ */
+export function resolveTopFeatured(input: {
+  /** プロジェクトのトップ掲載料金。null（未設定）は有料扱い（従来動作） */
+  topPlacementPrice: number | null;
+  /** 課金側が管理する掲載フラグ（参加店ドキュメントの topFeatured） */
+  topFeatured: unknown;
+  /** 無料時の参加表明（参加店ドキュメントの placementOptIn） */
+  placementOptIn: unknown;
+}): boolean {
+  if (input.topPlacementPrice === 0) {
+    return input.placementOptIn === true;
+  }
+  return input.topFeatured === true;
 }
 
 export function emptyShopProfile(): ShopProfile {
@@ -120,6 +161,7 @@ export function emptyShopProfile(): ShopProfile {
     links: [],
     location: null,
     freeDish: null,
+    loginReward: null,
     published: true,
   };
 }
@@ -164,26 +206,38 @@ function readShopLinks(value: unknown): ShopLink[] {
 }
 
 /**
- * 読み取り用: 無料の一品。名前が無いものは「未登録」として null に倒す
- * （名前なしでは表示できないため）。写真は https のときだけ採用する。
+ * 読み取り用: 無料の一品／ログインボーナス特典（同じ形）。
+ * 名前が無いものは「未登録」として null に倒す（名前なしでは表示
+ * できないため）。写真は https のときだけ採用する。
  */
-function readFreeDish(value: unknown): ShopFreeDish | null {
+function readDish(
+  value: unknown,
+  limits: { name: number; description: number },
+): ShopFreeDish | null {
   if (typeof value !== 'object' || value === null) return null;
   const record = value as Record<string, unknown>;
   const name =
     typeof record.name === 'string'
-      ? record.name.trim().slice(0, SHOP_FREE_DISH_LIMITS.name)
+      ? record.name.trim().slice(0, limits.name)
       : '';
   if (!name) return null;
   const description =
     typeof record.description === 'string'
-      ? record.description.trim().slice(0, SHOP_FREE_DISH_LIMITS.description)
+      ? record.description.trim().slice(0, limits.description)
       : '';
   const photoUrl =
     typeof record.photoUrl === 'string' && isHttpsUrl(record.photoUrl)
       ? record.photoUrl
       : null;
   return { name, description, photoUrl };
+}
+
+function readFreeDish(value: unknown): ShopFreeDish | null {
+  return readDish(value, SHOP_FREE_DISH_LIMITS);
+}
+
+function readLoginReward(value: unknown): ShopLoginReward | null {
+  return readDish(value, SHOP_LOGIN_REWARD_LIMITS);
 }
 
 /** 読み取り用: 座標。数値の組で範囲内なら採用し、それ以外は null に倒す。 */
@@ -222,6 +276,7 @@ export function parseShopProfile(value: unknown): ShopProfile {
     links: readShopLinks(source.links),
     location: readShopLocation(source.location),
     freeDish: readFreeDish(source.freeDish),
+    loginReward: readLoginReward(source.loginReward),
     published: source.published !== false,
   };
 }
@@ -352,54 +407,69 @@ function validateShopLinks(
 }
 
 /**
- * 保存時検証: 無料の一品。
+ * 保存時検証: 無料の一品／ログインボーナス特典（同じ形・同じ規則）。
  * - 未指定・null・全項目が空なら未登録（null）
  * - 説明や写真だけあって名前が無いものはエラー（名前なしでは表示できない）
  * - 名前は最大50文字、説明は最大200文字、写真は https のみ
+ * label はエラーメッセージに使う品目名（無料メニュー／ログインボーナス特典）。
  */
-function validateFreeDish(
+function validateDish(
   raw: unknown,
+  limits: { name: number; description: number },
+  label: string,
 ): { ok: true; value: ShopFreeDish | null } | { ok: false; error: string } {
   if (raw === undefined || raw === null) return { ok: true, value: null };
   if (typeof raw !== 'object') {
-    return { ok: false, error: '無料メニューの形式が不正です' };
+    return { ok: false, error: `${label}の形式が不正です` };
   }
   const record = raw as Record<string, unknown>;
   const nameRaw = record.name === undefined ? '' : record.name;
   const descriptionRaw = record.description === undefined ? '' : record.description;
   const photoRaw = record.photoUrl === undefined ? null : record.photoUrl;
   if (typeof nameRaw !== 'string' || typeof descriptionRaw !== 'string') {
-    return { ok: false, error: '無料メニューの形式が不正です' };
+    return { ok: false, error: `${label}の形式が不正です` };
   }
   if (photoRaw !== null && typeof photoRaw !== 'string') {
-    return { ok: false, error: '無料メニューの形式が不正です' };
+    return { ok: false, error: `${label}の形式が不正です` };
   }
   const name = nameRaw.trim();
   const description = descriptionRaw.trim();
   const photoUrl = typeof photoRaw === 'string' ? photoRaw.trim() : null;
   if (!name && !description && !photoUrl) return { ok: true, value: null };
   if (!name) {
-    return { ok: false, error: '無料メニューの名前を入力してください' };
+    return { ok: false, error: `${label}の名前を入力してください` };
   }
-  if (name.length > SHOP_FREE_DISH_LIMITS.name) {
+  if (name.length > limits.name) {
     return {
       ok: false,
-      error: `無料メニューの名前は${SHOP_FREE_DISH_LIMITS.name}文字以内で入力してください`,
+      error: `${label}の名前は${limits.name}文字以内で入力してください`,
     };
   }
-  if (description.length > SHOP_FREE_DISH_LIMITS.description) {
+  if (description.length > limits.description) {
     return {
       ok: false,
-      error: `無料メニューの説明は${SHOP_FREE_DISH_LIMITS.description}文字以内で入力してください`,
+      error: `${label}の説明は${limits.description}文字以内で入力してください`,
     };
   }
   if (photoUrl && !isHttpsUrl(photoUrl)) {
     return {
       ok: false,
-      error: '無料メニューの写真は https:// で始まる必要があります',
+      error: `${label}の写真は https:// で始まる必要があります`,
     };
   }
   return { ok: true, value: { name, description, photoUrl: photoUrl || null } };
+}
+
+function validateFreeDish(
+  raw: unknown,
+): { ok: true; value: ShopFreeDish | null } | { ok: false; error: string } {
+  return validateDish(raw, SHOP_FREE_DISH_LIMITS, '無料メニュー');
+}
+
+function validateLoginReward(
+  raw: unknown,
+): { ok: true; value: ShopLoginReward | null } | { ok: false; error: string } {
+  return validateDish(raw, SHOP_LOGIN_REWARD_LIMITS, 'ログインボーナス特典');
 }
 
 /**
@@ -468,6 +538,9 @@ export function validateShopProfileInput(
   const freeDish = validateFreeDish(source.freeDish);
   if (!freeDish.ok) return freeDish;
 
+  const loginReward = validateLoginReward(source.loginReward);
+  if (!loginReward.ok) return loginReward;
+
   if (source.published !== undefined && typeof source.published !== 'boolean') {
     return { ok: false, error: '掲載設定の形式が不正です' };
   }
@@ -482,6 +555,7 @@ export function validateShopProfileInput(
       // 座標はサーバー側でのみ決める（クライアントの値は無視する）
       location: null,
       freeDish: freeDish.value,
+      loginReward: loginReward.value,
       published: source.published !== false,
     },
   };
@@ -506,6 +580,18 @@ export function shopFreeDishPhotoStoragePath(
   fileName: string,
 ): string {
   return `events/${eventId}/shop-photos/${exhibitorId}/free-dish-${fileName}`;
+}
+
+/**
+ * ログインボーナス特典の写真の保存先パス。無料の一品と同じ考え方で、
+ * 同じディレクトリに `login-reward-` 接頭辞で置く。
+ */
+export function shopLoginRewardPhotoStoragePath(
+  eventId: string,
+  exhibitorId: string,
+  fileName: string,
+): string {
+  return `events/${eventId}/shop-photos/${exhibitorId}/login-reward-${fileName}`;
 }
 
 // ─── 課金による掲載停止（店舗課金オプション） ───
@@ -611,17 +697,30 @@ export async function listPublicShops(
   db: Firestore,
   eventId: string,
 ): Promise<PublicShop[]> {
+  // トップ掲載の対象判定は料金で切り替わる（有料=課金フラグ／無料=参加
+  // 表明）ため、プロジェクトの料金を先に読む。読めなければ従来動作
+  // （有料扱い）に倒す。
+  const eventSnap = await db.collection('events').doc(eventId).get();
+  const topPlacementPrice = parseTopPlacementPrice(
+    eventSnap.data()?.topPlacementPrice,
+  );
   const snap = await db
     .collection('events')
     .doc(eventId)
     .collection(EVENT_EXHIBITORS_COLLECTION)
     .get();
   return snap.docs
+    // 協賛（広告専用）アカウントは参加店の一覧には出さない
+    .filter((doc) => parseExhibitorKind(doc.data().kind) === 'shop')
     .map((doc) => ({
       shop: toPublicShop(
         { id: doc.id, name: String(doc.data().name ?? '') },
         doc.data().profile,
-        doc.data().topFeatured,
+        resolveTopFeatured({
+          topPlacementPrice,
+          topFeatured: doc.data().topFeatured,
+          placementOptIn: doc.data().placementOptIn,
+        }),
       ),
       billingSuspended: doc.data().billingSuspended,
     }))
@@ -671,4 +770,39 @@ export async function setShopTopFeatured(
   if (!snap.exists) return false;
   await ref.update({ topFeatured: featured });
   return true;
+}
+
+// ─── トップ掲載の参加表明（料金が無料のとき用） ───
+//
+// 料金 0 の間は課金が発生しないため、掲載の意思は店自身の参加表明
+// （参加店ドキュメントのトップレベル項目 `placementOptIn`）で持つ。
+// topFeatured と同じくプロフィールの外に置き、プロフィール保存で
+// 消えないようにする。付け替えは店舗ページの参加表明 API だけが行う
+// （有料の間は resolveTopFeatured がこの値を無視する）。
+
+/**
+ * トップ掲載への参加表明の付け替え。プロフィールには触れない。
+ * 店が無ければ false。
+ */
+export async function setShopPlacementOptIn(
+  db: Firestore,
+  eventId: string,
+  exhibitorId: string,
+  optedIn: boolean,
+): Promise<boolean> {
+  const ref = exhibitorRef(db, eventId, exhibitorId);
+  const snap = await ref.get();
+  if (!snap.exists) return false;
+  await ref.update({ placementOptIn: optedIn });
+  return true;
+}
+
+/** 参加表明の現在値（未設定の旧ドキュメントは false）。 */
+export async function getShopPlacementOptIn(
+  db: Firestore,
+  eventId: string,
+  exhibitorId: string,
+): Promise<boolean> {
+  const snap = await exhibitorRef(db, eventId, exhibitorId).get();
+  return snap.data()?.placementOptIn === true;
 }

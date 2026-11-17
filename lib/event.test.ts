@@ -12,8 +12,16 @@ import {
   isValidRankingMinReviews,
   isValidStampGoalCount,
   isValidStampRewardType,
+  isValidAdsPrice,
+  isValidAdsSlots,
+  isValidLoginBonusDays,
+  normalizeAdsPrice,
+  normalizeAdsSlots,
   normalizeStampBenefitText,
   normalizeStampRewardType,
+  parseAdsPrice,
+  parseAdsSlots,
+  parseLoginBonusDays,
   parseRankingMinReviews,
   parseStampBenefitText,
   parseStampGoalCount,
@@ -316,5 +324,74 @@ describe('スタンプ達成特典（stampRewardType / stampBenefitText）', () 
     expect(() =>
       validateStampRewardSettings('free-dish', '残っている文面'),
     ).not.toThrow();
+  });
+});
+
+describe('ログインボーナス設定（loginBonusEnabled / loginBonusDays）', () => {
+  it('必要日数は 5〜20 の整数だけを受け付ける', () => {
+    expect(isValidLoginBonusDays(5)).toBe(true);
+    expect(isValidLoginBonusDays(7)).toBe(true);
+    expect(isValidLoginBonusDays(20)).toBe(true);
+    expect(isValidLoginBonusDays(4)).toBe(false);
+    expect(isValidLoginBonusDays(21)).toBe(false);
+    expect(isValidLoginBonusDays(7.5)).toBe(false);
+    expect(isValidLoginBonusDays('7')).toBe(false);
+    expect(isValidLoginBonusDays(null)).toBe(false);
+  });
+
+  it('読み取り用 parse は不正値を既定の 7 に倒す', () => {
+    expect(parseLoginBonusDays(10)).toBe(10);
+    expect(parseLoginBonusDays(undefined)).toBe(7);
+    expect(parseLoginBonusDays(4)).toBe(7);
+    expect(parseLoginBonusDays(21)).toBe(7);
+    expect(parseLoginBonusDays('10')).toBe(7);
+  });
+
+});
+
+describe('広告設定（adsEnabled / adsSlots / adsPrice）', () => {
+  it('枠数は 1〜50 の整数だけを受け付ける', () => {
+    expect(isValidAdsSlots(1)).toBe(true);
+    expect(isValidAdsSlots(5)).toBe(true);
+    expect(isValidAdsSlots(50)).toBe(true);
+    expect(isValidAdsSlots(0)).toBe(false);
+    expect(isValidAdsSlots(51)).toBe(false);
+    expect(isValidAdsSlots(2.5)).toBe(false);
+  });
+
+  it('枠数の parse は不正値を既定の 5 に倒し、normalize は throw', () => {
+    expect(parseAdsSlots(12)).toBe(12);
+    expect(parseAdsSlots(undefined)).toBe(5);
+    expect(parseAdsSlots(0)).toBe(5);
+    expect(normalizeAdsSlots(undefined)).toBe(5);
+    expect(normalizeAdsSlots(3)).toBe(3);
+    expect(() => normalizeAdsSlots(0)).toThrow();
+    expect(() => normalizeAdsSlots(51)).toThrow();
+  });
+
+  it('広告料金は 0（無料）を含む 0 以上の整数だけを受け付ける', () => {
+    expect(isValidAdsPrice(0)).toBe(true);
+    expect(isValidAdsPrice(3000)).toBe(true);
+    expect(isValidAdsPrice(-1)).toBe(false);
+    expect(isValidAdsPrice(100.5)).toBe(false);
+    expect(isValidAdsPrice('3000')).toBe(false);
+    expect(isValidAdsPrice(null)).toBe(false);
+  });
+
+  it('広告料金の parse は 0 を 0 として読み、不正値は null（未設定）', () => {
+    expect(parseAdsPrice(0)).toBe(0);
+    expect(parseAdsPrice(3000)).toBe(3000);
+    expect(parseAdsPrice(undefined)).toBeNull();
+    expect(parseAdsPrice(null)).toBeNull();
+    expect(parseAdsPrice(-100)).toBeNull();
+  });
+
+  it('広告料金の normalize は未指定を null、0 を 0 として通す', () => {
+    expect(normalizeAdsPrice(undefined)).toBeNull();
+    expect(normalizeAdsPrice(null)).toBeNull();
+    expect(normalizeAdsPrice(0)).toBe(0);
+    expect(normalizeAdsPrice(5000)).toBe(5000);
+    expect(() => normalizeAdsPrice(-1)).toThrow();
+    expect(() => normalizeAdsPrice(100.5)).toThrow();
   });
 });

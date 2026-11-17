@@ -23,8 +23,20 @@ export async function POST(
   const guard = await requireEventExhibitor(request, eventId);
   if ('error' in guard) return guard.error;
   const { event, exhibitor } = guard;
+  // 協賛（広告専用）アカウントはトップ掲載の対象外
+  if (exhibitor.kind === 'advertiser') {
+    return NextResponse.json(
+      { error: '協賛アカウントはトップ掲載を利用できません' },
+      { status: 403 },
+    );
+  }
 
-  if (!event.topPlacementEnabled || event.topPlacementPrice === null) {
+  if (
+    !event.topPlacementEnabled ||
+    event.topPlacementPrice === null ||
+    event.topPlacementPrice <= 0
+  ) {
+    // 料金 0（無料）の間は課金自体が無い（参加表明で掲載される）
     return NextResponse.json(
       { error: '現在トップ掲載のお申し込みは受け付けていません' },
       { status: 404 },

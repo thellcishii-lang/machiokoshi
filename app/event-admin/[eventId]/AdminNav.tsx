@@ -112,6 +112,14 @@ const siteEditIcon = (
   </NavIcon>
 );
 
+const adsIcon = (
+  <NavIcon>
+    <path d="M3 11l14-6v14L3 13v-2z" />
+    <path d="M7 13v5a2 2 0 0 0 4 0v-3.6" />
+    <path d="M17 8a4 4 0 0 1 0 6" />
+  </NavIcon>
+);
+
 const externalIcon = (
   <NavIcon>
     <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
@@ -227,6 +235,7 @@ export function AdminNav({
         // 追加事項）を編集する画面。下の外部リンク（公開ページそのもの）
         // とは別物なので、並べて置く。
         { key: '⑧', href: `/event-admin/${eventId}/site`, label: adminText(locale, 'navSiteEdit'), icon: siteEditIcon },
+        { key: '⑨', href: `/event-admin/${eventId}/ads`, label: adminText(locale, 'navAds'), icon: adsIcon },
         // 特設サイトは本家（push-taro.com）上の公開ページ。宣伝に使う
         // URL へすぐ飛べるよう、末尾に外部リンクとして置く。
         {

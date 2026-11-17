@@ -47,5 +47,10 @@ export async function POST(
       { status: result.status },
     );
   }
-  return NextResponse.json({ ok: true, freeCouponId: result.freeCouponId });
+  // kind（'stamp' | 'login'）で消込画面の表示文を出し分ける
+  return NextResponse.json({
+    ok: true,
+    freeCouponId: result.freeCouponId,
+    kind: result.kind,
+  });
 }

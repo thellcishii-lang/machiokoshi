@@ -8,6 +8,7 @@ import {
   filterCoupons,
   isCouponCapReached,
   memberIdForPhone,
+  parseExhibitorKind,
   tallyClaimsByCoupon,
 } from './event-coupon';
 
@@ -139,5 +140,17 @@ describe('ID生成', () => {
   });
   it('claimId は memberId と couponId の組み合わせ', () => {
     expect(claimIdFor('m1', 'c1')).toBe('m1_c1');
+  });
+});
+
+describe('parseExhibitorKind（アカウントの種類）', () => {
+  it("'advertiser' だけを協賛とし、それ以外は参加店に倒す", () => {
+    expect(parseExhibitorKind('advertiser')).toBe('advertiser');
+    expect(parseExhibitorKind('shop')).toBe('shop');
+    // 旧ドキュメント（項目なし）は参加店
+    expect(parseExhibitorKind(undefined)).toBe('shop');
+    expect(parseExhibitorKind(null)).toBe('shop');
+    expect(parseExhibitorKind('other')).toBe('shop');
+    expect(parseExhibitorKind(1)).toBe('shop');
   });
 });

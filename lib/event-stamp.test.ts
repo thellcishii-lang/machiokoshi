@@ -2,11 +2,15 @@
 // スタンプの純粋ロジック: ドキュメントID構成、達成判定、現在の周の解決、
 // 取消し可否。Firestore を使う処理（grantStamp 等）はルートテスト側で
 // lib をモックして検証する。
+import type { Firestore } from 'firebase-admin/firestore';
 import { describe, expect, it } from 'vitest';
+import type { EventExhibitor } from './event-coupon';
 import {
   buildStampRewardSnapshot,
   evaluateStampCancel,
+  grantStamp,
   isRoundCompleted,
+  redeemFreeCoupon,
   resolveCurrentRound,
   stampIdFor,
 } from './event-stamp';
@@ -121,5 +125,39 @@ describe('buildStampRewardSnapshot（発行クーポンへの特典スナップ�
       rewardType: 'benefit',
       benefitText: '発行時点の特典',
     });
+  });
+});
+
+describe('協賛（広告専用）アカウントのガード', () => {
+  // 種別ガードは Firestore やプロジェクト取得より前に効くため、
+  // db は使われない（null を渡してそれを担保する）。
+  const noDb = null as unknown as Firestore;
+  const advertiser: EventExhibitor = {
+    id: 'sponsor-1',
+    name: '協賛企業',
+    email: 'sponsor@example.com',
+    hasAccessCode: true,
+    lang: 'ja',
+    kind: 'advertiser',
+  };
+
+  it('協賛アカウントはスタンプを押せない（403）', async () => {
+    const result = await grantStamp(noDb, {
+      eventId: 'event-1',
+      exhibitor: advertiser,
+      memberId: 'member-a',
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.status).toBe(403);
+  });
+
+  it('協賛アカウントは無料クーポンを消し込めない（403）', async () => {
+    const result = await redeemFreeCoupon(noDb, {
+      eventId: 'event-1',
+      exhibitor: advertiser,
+      freeCouponId: 'fc-1',
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.status).toBe(403);
   });
 });

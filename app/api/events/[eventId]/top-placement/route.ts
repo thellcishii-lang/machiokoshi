@@ -13,6 +13,7 @@ import {
   isTopFeaturedForStatus,
   resolveTopPlacementAvailability,
 } from '@/lib/event-placement';
+import { getShopPlacementOptIn } from '@/lib/event-shop';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,26 +25,48 @@ export async function GET(
   const guard = await requireEventExhibitor(request, eventId);
   if ('error' in guard) return guard.error;
   const { event, exhibitor } = guard;
+  // 協賛（広告専用）アカウントはトップ掲載の対象外
+  if (exhibitor.kind === 'advertiser') {
+    return NextResponse.json(
+      { error: '協賛アカウントはトップ掲載を利用できません' },
+      { status: 403 },
+    );
+  }
 
   const placement = await getTopPlacement(db, eventId, exhibitor.id);
   const availability = await resolveTopPlacementAvailability(
     db,
     event.ownerUid,
   );
+  const freeMode =
+    event.topPlacementEnabled && event.topPlacementPrice === 0;
   const purchasable =
     event.topPlacementEnabled &&
     event.topPlacementPrice !== null &&
+    event.topPlacementPrice > 0 &&
     availability.available;
+  const optedIn = freeMode
+    ? await getShopPlacementOptIn(db, eventId, exhibitor.id)
+    : false;
 
   return NextResponse.json({
     // プロジェクトのトップ掲載設定（公開情報と同じ値）
     enabled: event.topPlacementEnabled,
     price: event.topPlacementPrice,
+    // 料金 0: 課金なしで参加表明だけで掲載される
+    freeMode,
+    // 無料時の自店の参加表明（有料の間は常に false で、意味を持たない）
+    optedIn,
     // 今この店が買える状態かどうか（設定・オプション・Stripe が全部揃っている）
     available: purchasable,
     // 自店の契約状態（未申込なら status は null）
     status: placement?.status ?? null,
-    featured: placement ? isTopFeaturedForStatus(placement.status) : false,
+    // 掲載中かどうかは料金で切り替わる（有料=契約状態／無料=参加表明）
+    featured: freeMode
+      ? optedIn
+      : placement
+        ? isTopFeaturedForStatus(placement.status)
+        : false,
     monthlyAmount: placement?.monthlyAmount ?? null,
   });
 }

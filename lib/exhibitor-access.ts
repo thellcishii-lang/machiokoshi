@@ -27,7 +27,9 @@ import { db} from './firebase-admin';
 import {
 EVENT_EXHIBITORS_COLLECTION,
 createExhibitor,
+parseExhibitorKind,
 type EventExhibitor,
+type ExhibitorKind,
 } from './event-coupon';
 import { resolveLocale, type Locale} from './i18n';
 import { sendEmail} from './mailer';
@@ -192,6 +194,8 @@ name: string;
 email: string | null;
 /** エンコード済みハッシュ。未発行なら null。 */
 accessCodeHash: string | null;
+/** アカウントの種類（参加店／協賛）。旧ドキュメントは 'shop' */
+kind: ExhibitorKind;
 }
 
 /** このモジュールが使う保存層の最小インターフェース（テストで差し替え可能にする）。 */
@@ -206,7 +210,7 @@ exhibitorId: string,
 ): Promise<StoredExhibitorAccess | null>;
 createExhibitor(
 eventId: string,
-input: { name: string; email: string; lang: Locale},
+input: { name: string; email: string; lang: Locale; kind: ExhibitorKind},
 ): Promise<{ id: string}>;
 setAccessCodeHash(
 eventId: string,
@@ -238,6 +242,7 @@ accessCodeHash:
 typeof data.accessCode === 'string' && data.accessCode
 ? data.accessCode
 : null,
+kind: parseExhibitorKind(data.kind),
 };
 }
 
@@ -334,12 +339,23 @@ ${lead}
 `;
 }
 
+/** ログイン先 URL。協賛（広告専用）は広告コンソール（店舗ページ）に着地させる。 */
+export function exhibitorLoginUrl(
+eventId: string,
+kind: ExhibitorKind = 'shop',
+): string {
+return kind === 'advertiser'
+? `${resolveAppOrigin()}/e/${encodeURIComponent(eventId)}/shop`
+: exhibitorRedeemUrl(eventId);
+}
+
 /** 登録時のパスワード通知メール。文面は日本語固定、表記は「パスワード」。 */
 export function buildExhibitorPasswordEmail(input: {
 exhibitorName: string;
 eventName?: string | null;
 eventId: string;
 code: string;
+kind?: ExhibitorKind;
 }): { subject: string; html: string} {
 return {
 subject: '参加店ログイン用パスワードのお知らせ',
@@ -347,7 +363,7 @@ html: buildPasswordEmailHtml({
 exhibitorName: input.exhibitorName,
 eventName: input.eventName,
 code: input.code,
-loginUrl: exhibitorRedeemUrl(input.eventId),
+loginUrl: exhibitorLoginUrl(input.eventId, input.kind ?? 'shop'),
 reissued: false,
 }),
 };
@@ -359,6 +375,7 @@ exhibitorName: string;
 eventName?: string | null;
 eventId: string;
 code: string;
+kind?: ExhibitorKind;
 }): { subject: string; html: string} {
 return {
 subject: '参加店ログイン用パスワード再発行のお知らせ',
@@ -366,7 +383,7 @@ html: buildPasswordEmailHtml({
 exhibitorName: input.exhibitorName,
 eventName: input.eventName,
 code: input.code,
-loginUrl: exhibitorRedeemUrl(input.eventId),
+loginUrl: exhibitorLoginUrl(input.eventId, input.kind ?? 'shop'),
 reissued: true,
 }),
 };
@@ -394,6 +411,8 @@ name: string;
 email: string;
 lang?: Locale;
 eventName?: string | null;
+/** アカウントの種類。未指定は参加店（'shop'）。協賛は 'advertiser' */
+kind?: ExhibitorKind;
 },
 deps: ExhibitorAccessDeps = defaultDeps,
 ): Promise<RegisterExhibitorResult> {
@@ -418,6 +437,7 @@ const created = await deps.store.createExhibitor(input.eventId, {
 name,
 email,
 lang: resolveLocale(input.lang),
+kind: input.kind ?? 'shop',
 });
 const code = generateAccessCode();
 await deps.store.setAccessCodeHash(
@@ -431,6 +451,7 @@ exhibitorName: name,
 eventName: input.eventName,
 eventId: input.eventId,
 code,
+kind: input.kind ?? 'shop',
 });
 let mailSent = false;
 try {
@@ -539,6 +560,7 @@ exhibitorName: exhibitor.name,
 eventName: input.eventName,
 eventId: input.eventId,
 code,
+kind: exhibitor.kind,
 });
 let mailSent = false;
 try {

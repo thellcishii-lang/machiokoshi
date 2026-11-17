@@ -108,7 +108,12 @@ export default function EventCouponListPrintPage() {
       const exData = await exRes.json();
       const cpData = await cpRes.json();
       setEventName(typeof evData.event?.name === 'string' ? evData.event.name : '');
-      setExhibitors(exData.exhibitors ?? []);
+      // 協賛（広告専用）アカウントはクーポンを持たないため印刷対象にしない
+      setExhibitors(
+        (exData.exhibitors ?? []).filter(
+          (e: { kind?: string }) => e.kind !== 'advertiser',
+        ),
+      );
       setCoupons(cpData.coupons ?? []);
       setPrintedAt(
         new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }),

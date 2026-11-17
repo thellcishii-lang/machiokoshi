@@ -50,7 +50,12 @@ function fakeDeps(seed: FakeRecord[] = []) {
     createExhibitor: vi.fn(
       async (
         _eventId: string,
-        input: { name: string; email: string; lang: 'ja' },
+        input: {
+          name: string;
+          email: string;
+          lang: 'ja';
+          kind: 'shop' | 'advertiser';
+        },
       ) => {
         const id = `exhibitor-${nextId++}`;
         records.set(id, {
@@ -59,6 +64,7 @@ function fakeDeps(seed: FakeRecord[] = []) {
           email: input.email,
           accessCodeHash: null,
           lang: input.lang,
+          kind: input.kind,
         });
         return { id };
       },
@@ -179,6 +185,32 @@ describe('registerExhibitor', () => {
     expect(sent[0].to).toBe(EMAIL);
     const code = codeFromMail(sent[0].html);
     await expect(verifyAccessCode(code, record!.accessCodeHash)).resolves.toBe(true);
+  });
+
+  it('種類を指定しなければ参加店（shop）として作成される', async () => {
+    const { deps, records } = fakeDeps();
+    const result = await registerExhibitor(
+      { eventId: EVENT_ID, name: 'テスト出店者', email: EMAIL },
+      deps,
+    );
+    expect(records.get(result.exhibitorId)?.kind).toBe('shop');
+  });
+
+  it('協賛（advertiser）として作成でき、招待メールのログインURLが店舗ページになる', async () => {
+    const { deps, records, sent } = fakeDeps();
+    const result = await registerExhibitor(
+      {
+        eventId: EVENT_ID,
+        name: '協賛企業',
+        email: EMAIL,
+        kind: 'advertiser',
+      },
+      deps,
+    );
+    expect(records.get(result.exhibitorId)?.kind).toBe('advertiser');
+    expect(sent).toHaveLength(1);
+    expect(sent[0].html).toContain(`/e/${EVENT_ID}/shop`);
+    expect(sent[0].html).not.toContain(`/e/${EVENT_ID}/redeem`);
   });
 
   it('同一イベント内で同じメールは重複登録できない（大文字小文字を問わない）', async () => {
@@ -322,6 +354,7 @@ describe('authenticateExhibitor', () => {
         email: 'legacy@example.com',
         accessCodeHash: null,
         lang: 'ja',
+        kind: 'shop',
       },
     ]);
     await registerExhibitor(
@@ -379,6 +412,7 @@ describe('reissueExhibitorPassword', () => {
         email: null,
         accessCodeHash: null,
         lang: 'ja',
+        kind: 'shop',
       },
     ]);
     const result = await reissueExhibitorPassword(
@@ -398,6 +432,7 @@ describe('reissueExhibitorPassword', () => {
         email: null,
         accessCodeHash: null,
         lang: 'ja',
+        kind: 'shop',
       },
     ]);
     await expect(
