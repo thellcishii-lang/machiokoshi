@@ -96,6 +96,16 @@ export interface EventConfig {
    */
   rankingMinReviews: number;
   /**
+   * レビューの項目別評価の項目名（1〜REVIEW_CATEGORY_MAX_COUNT 件）。
+   * 管理人がプロジェクトごとに内容と数を変えられる。お客さんの書き込み
+   * フォームはこの項目で星を付け、投稿されたレビューには投稿時点の
+   * 項目名がスナップショットとして残る（後から設定を変えても過去の
+   * レビューの表示は変わらない。実体は lib/event-review.ts）。
+   * 導入前に作られたプロジェクトには項目自体が無いため、読み取り時は
+   * DEFAULT_REVIEW_CATEGORIES（味・接客・雰囲気・盛り付け）に倒す。
+   */
+  reviewCategories: string[];
+  /**
    * 主催者リンク（最大 MAX_EVENT_LINKS 件）。設定画面で登録し、来場者画面に
    * タイトル付きで表示する（案内PDFと同じく登録前でも見える位置）。
    * 未登録なら空配列で、来場者画面には何も出ない。
@@ -291,6 +301,7 @@ export interface CreateEventInput {
   stampRewardType?: StampRewardType;
   stampBenefitText?: string;
   rankingMinReviews?: number;
+  reviewCategories?: string[];
   loginBonusEnabled?: boolean;
   loginBonusDays?: number;
   adsEnabled?: boolean;
@@ -633,6 +644,73 @@ export function parseRankingMinReviews(value: unknown): number {
   return isValidRankingMinReviews(value)
     ? (value as number)
     : DEFAULT_RANKING_MIN_REVIEWS;
+}
+
+/** レビューの項目別評価の項目数の下限・上限（件）。 */
+export const REVIEW_CATEGORY_MIN_COUNT = 1;
+export const REVIEW_CATEGORY_MAX_COUNT = 6;
+/** レビューの項目別評価の項目名の最大文字数。 */
+export const REVIEW_CATEGORY_LABEL_MAX_LENGTH = 10;
+/**
+ * レビューの項目別評価の既定の項目（従来の固定4項目）。
+ * 管理人が項目を変えていないプロジェクトはこの並びになる。
+ */
+export const DEFAULT_REVIEW_CATEGORIES: string[] = [
+  '味',
+  '接客',
+  '雰囲気',
+  '盛り付け',
+];
+
+/**
+ * レビューの項目別評価の項目として有効な値かどうか。
+ * 1〜6件の配列で、各項目名は前後の空白を除いて1〜10文字、重複なし。
+ */
+export function isValidReviewCategories(value: unknown): boolean {
+  if (!Array.isArray(value)) return false;
+  if (
+    value.length < REVIEW_CATEGORY_MIN_COUNT ||
+    value.length > REVIEW_CATEGORY_MAX_COUNT
+  ) {
+    return false;
+  }
+  const seen = new Set<string>();
+  for (const item of value) {
+    if (typeof item !== 'string') return false;
+    const label = item.trim();
+    if (!label || label.length > REVIEW_CATEGORY_LABEL_MAX_LENGTH) {
+      return false;
+    }
+    if (seen.has(label)) return false;
+    seen.add(label);
+  }
+  return true;
+}
+
+/**
+ * 保存済みのレビュー項目を防御的に読む（読み取り用。throw しない）。
+ * 項目が無い旧プロジェクトや不正な値は既定の4項目に倒す。
+ * 有効な値は前後の空白を落とした新しい配列で返す。
+ */
+export function parseReviewCategories(value: unknown): string[] {
+  if (!isValidReviewCategories(value)) return [...DEFAULT_REVIEW_CATEGORIES];
+  return (value as string[]).map((label) => label.trim());
+}
+
+/**
+ * レビュー項目の入力を検証して正規化する（書き込み用。不正なら throw）。
+ * 未指定は既定の4項目。前後の空白は落とす。
+ */
+export function normalizeReviewCategories(input: unknown): string[] {
+  if (input === undefined || input === null) {
+    return [...DEFAULT_REVIEW_CATEGORIES];
+  }
+  if (!isValidReviewCategories(input)) {
+    throw new Error(
+      `レビューの項目は${REVIEW_CATEGORY_MIN_COUNT}〜${REVIEW_CATEGORY_MAX_COUNT}件で、各項目${REVIEW_CATEGORY_LABEL_MAX_LENGTH}文字以内・重複なしで指定してください`,
+    );
+  }
+  return (input as string[]).map((label) => label.trim());
 }
 
 /** ログインボーナスの達成日数の下限・上限（累計日数）。 */

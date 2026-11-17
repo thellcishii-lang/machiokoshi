@@ -49,6 +49,7 @@ const EDITABLE_FIELDS: Array<keyof UpdateEventInput> = [
   'stampRewardType',
   'stampBenefitText',
   'rankingMinReviews',
+  'reviewCategories',
   'loginBonusEnabled',
   'loginBonusDays',
   'links',

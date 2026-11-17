@@ -22,12 +22,14 @@ import {
   isValidRankingMinReviews,
   isValidStampGoalCount,
   normalizeEventLinks,
+  normalizeReviewCategories,
   normalizeStampBenefitText,
   normalizeStampRewardType,
   normalizeTopPlacementEnabled,
   normalizeTopPlacementPrice,
   parseEventLinks,
   parseRankingMinReviews,
+  parseReviewCategories,
   parseStampBenefitText,
   parseStampGoalCount,
   parseStampRewardType,
@@ -92,6 +94,8 @@ function toEventConfig(id: string, data: FirebaseFirestore.DocumentData): EventC
     stampBenefitText: parseStampBenefitText(data.stampBenefitText),
     // ランキングの最低レビュー件数も同様に既定値に倒す
     rankingMinReviews: parseRankingMinReviews(data.rankingMinReviews),
+    // レビューの項目別評価の項目も同様に既定値（従来の4項目）に倒す
+    reviewCategories: parseReviewCategories(data.reviewCategories),
     // 主催者リンクは導入前のイベントには項目自体が無い
     links: parseEventLinks(data.links),
     // 特設サイトの表示内容も導入前のイベントには項目自体が無いため既定値に倒す
@@ -184,6 +188,7 @@ export async function createEvent(input: CreateEventInput): Promise<EventConfig>
     stampRewardType,
     stampBenefitText,
     rankingMinReviews: input.rankingMinReviews ?? DEFAULT_RANKING_MIN_REVIEWS,
+    reviewCategories: normalizeReviewCategories(input.reviewCategories),
     links: normalizeEventLinks(input.links),
     // 特設サイトの表示内容は作成時点では未設定（編集画面で後から設定する）
     siteDescription: '',
@@ -366,6 +371,7 @@ export type UpdateEventInput = Partial<
     | 'stampRewardType'
     | 'stampBenefitText'
     | 'rankingMinReviews'
+    | 'reviewCategories'
     | 'links'
     | 'siteDescription'
     | 'gourmetDefinition'
@@ -439,6 +445,11 @@ export async function updateEvent(
     }
     validateStampRewardSettings(mergedType, mergedText);
   }
+  // レビューの項目別評価の項目は検証・正規化してから保存する
+  const reviewCategories =
+    patch.reviewCategories !== undefined
+      ? normalizeReviewCategories(patch.reviewCategories)
+      : undefined;
   // 主催者リンクは検証してから正規化した形で保存する
   const links =
     patch.links !== undefined ? normalizeEventLinks(patch.links) : undefined;
@@ -523,6 +534,7 @@ export async function updateEvent(
       ...patch,
       ...(stampRewardType !== undefined ? { stampRewardType } : {}),
       ...(stampBenefitText !== undefined ? { stampBenefitText } : {}),
+      ...(reviewCategories !== undefined ? { reviewCategories } : {}),
       ...(links !== undefined ? { links } : {}),
       ...(siteDescription !== undefined ? { siteDescription } : {}),
       ...(gourmetDefinition !== undefined ? { gourmetDefinition } : {}),

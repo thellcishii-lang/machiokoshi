@@ -10,6 +10,7 @@ import {
   isResetDue,
   isValidResetTime,
   isValidRankingMinReviews,
+  isValidReviewCategories,
   isValidStampGoalCount,
   isValidStampRewardType,
   isValidAdsPrice,
@@ -21,6 +22,7 @@ import {
   normalizeAdsSlots,
   normalizeCouponIssuePrice,
   normalizePushPrice,
+  normalizeReviewCategories,
   normalizeStampBenefitText,
   normalizeStampRewardType,
   parseAdsPrice,
@@ -29,6 +31,7 @@ import {
   parseLoginBonusDays,
   parsePushPrice,
   parseRankingMinReviews,
+  parseReviewCategories,
   parseStampBenefitText,
   parseStampGoalCount,
   parseStampRewardType,
@@ -276,6 +279,47 @@ describe('ランキング最低レビュー件数（rankingMinReviews）', () =>
     expect(parseRankingMinReviews(0)).toBe(3);
     expect(parseRankingMinReviews(99)).toBe(3);
     expect(parseRankingMinReviews('5')).toBe(3);
+  });
+});
+
+describe('レビューの項目別評価の項目（reviewCategories）', () => {
+  const defaults = ['味', '接客', '雰囲気', '盛り付け'];
+
+  it('1〜6件・各1〜10文字・重複なしだけが有効', () => {
+    expect(isValidReviewCategories(defaults)).toBe(true);
+    expect(isValidReviewCategories(['味'])).toBe(true);
+    expect(isValidReviewCategories(['a', 'b', 'c', 'd', 'e', 'f'])).toBe(true);
+    expect(isValidReviewCategories([])).toBe(false);
+    expect(isValidReviewCategories(['a', 'b', 'c', 'd', 'e', 'f', 'g'])).toBe(false);
+    expect(isValidReviewCategories([''])).toBe(false);
+    expect(isValidReviewCategories(['   '])).toBe(false);
+    expect(isValidReviewCategories(['あ'.repeat(10)])).toBe(true);
+    expect(isValidReviewCategories(['あ'.repeat(11)])).toBe(false);
+    expect(isValidReviewCategories(['味', '味'])).toBe(false);
+    expect(isValidReviewCategories(['味', ' 味 '])).toBe(false);
+    expect(isValidReviewCategories(['味', 5])).toBe(false);
+    expect(isValidReviewCategories('味')).toBe(false);
+    expect(isValidReviewCategories(undefined)).toBe(false);
+    expect(isValidReviewCategories(null)).toBe(false);
+  });
+
+  it('読み取り時は未設定・不正な値を既定の4項目に倒し、有効な値は空白を落とす', () => {
+    expect(parseReviewCategories(undefined)).toEqual(defaults);
+    expect(parseReviewCategories(null)).toEqual(defaults);
+    expect(parseReviewCategories([])).toEqual(defaults);
+    expect(parseReviewCategories(['味', '味'])).toEqual(defaults);
+    expect(parseReviewCategories([' コスパ ', '味'])).toEqual(['コスパ', '味']);
+    expect(parseReviewCategories(defaults)).toEqual(defaults);
+  });
+
+  it('書き込み時は未指定を既定の4項目にし、不正な値は throw する', () => {
+    expect(normalizeReviewCategories(undefined)).toEqual(defaults);
+    expect(normalizeReviewCategories(null)).toEqual(defaults);
+    expect(normalizeReviewCategories([' 量 ', 'コスパ'])).toEqual(['量', 'コスパ']);
+    expect(() => normalizeReviewCategories([])).toThrow();
+    expect(() => normalizeReviewCategories(['味', '味'])).toThrow();
+    expect(() => normalizeReviewCategories(['あ'.repeat(11)])).toThrow();
+    expect(() => normalizeReviewCategories('味')).toThrow();
   });
 });
 

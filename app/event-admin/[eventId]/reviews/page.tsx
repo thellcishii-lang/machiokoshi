@@ -37,12 +37,8 @@ interface AdminReviewItem {
   exhibitorId: string;
   exhibitorName: string;
   stars: number;
-  categories: {
-    taste: number;
-    service: number;
-    atmosphere: number;
-    presentation: number;
-  };
+  /** 投稿時点の項目名つき項目別評価（表示はこの項目名を使う） */
+  categoryScores: Array<{ label: string; stars: number }>;
   text: string;
   nickname: string;
   photoUrls: string[];
@@ -332,10 +328,9 @@ export default function EventReviewsAdminPage() {
                 </button>
               </div>
               <p style={{ fontSize: 12.5, color: '#64748b', margin: '6px 0 0' }}>
-                {uiText(locale, 'reviewCategoryTaste')}: {review.categories.taste} ／{' '}
-                {uiText(locale, 'reviewCategoryService')}: {review.categories.service} ／{' '}
-                {uiText(locale, 'reviewCategoryAtmosphere')}: {review.categories.atmosphere} ／{' '}
-                {uiText(locale, 'reviewCategoryPresentation')}: {review.categories.presentation}
+                {review.categoryScores
+                  .map((score) => `${score.label}: ${score.stars}`)
+                  .join(' ／ ')}
                 {review.nickname ? ` ／ ${review.nickname}` : ''}
                 {createdLabel ? ` ／ ${createdLabel}` : ''}
               </p>

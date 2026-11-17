@@ -41,6 +41,7 @@ import {
   safeLocalStorage,
 } from '@/lib/stamp-celebration';
 import { buildCouponGroups } from '@/lib/coupon-groups';
+import { DEFAULT_REVIEW_CATEGORIES } from '@/lib/event';
 import {
   buildFreeCouponQrPayload,
   buildStampQrPayload,
@@ -62,6 +63,8 @@ interface PublicEvent {
   defaultLocale: string;
   /** 入場用QRの取り込みが有効か（主催者設定。オフなら画面に何も出さない） */
   admissionQrEnabled: boolean;
+  /** レビューの項目別評価の項目（主催者設定。未取得なら既定の4項目に倒す） */
+  reviewCategories?: string[];
   /** 主催者リンク（最大3件）。未登録なら空で、画面に何も出さない */
   links?: PublicEventLink[];
   /** テーマカラー（特設サイト設定）。未設定は null で既定の茶系になる */
@@ -143,6 +146,8 @@ interface MemberReview {
   exhibitorId: string;
   exhibitorName: string;
   stars: number;
+  /** 投稿時点の項目名つき項目別評価（表示はこの項目名を使う） */
+  categoryScores?: Array<{ label: string; stars: number }>;
   categories: {
     taste: number;
     service: number;
@@ -289,11 +294,23 @@ function PinLogo() {
   );
 }
 
-interface ReviewCategoriesState {
-  taste: number;
-  service: number;
-  atmosphere: number;
-  presentation: number;
+// 自分のレビューから「項目名 → 星」の対応を作る（編集の初期値用）。
+// 項目名つき（categoryScores）を優先し、無ければ固定4項目の値を
+// 既定の項目名に写す。
+function reviewScoreByLabel(review: MemberReview | null): Map<string, number> {
+  const map = new Map<string, number>();
+  if (!review) return map;
+  if (review.categoryScores && review.categoryScores.length > 0) {
+    for (const score of review.categoryScores) {
+      map.set(score.label, score.stars);
+    }
+    return map;
+  }
+  const keys = ['taste', 'service', 'atmosphere', 'presentation'] as const;
+  keys.forEach((key, i) => {
+    map.set(DEFAULT_REVIEW_CATEGORIES[i], review.categories[key]);
+  });
+  return map;
 }
 
 function ReviewStarInput({
@@ -336,6 +353,7 @@ function ReviewStarInput({
 function ReviewShopCard({
   eventId,
   locale,
+  reviewCategories,
   shop,
   review,
   user,
@@ -343,6 +361,8 @@ function ReviewShopCard({
 }: {
   eventId: string;
   locale: Locale;
+  /** プロジェクトの現在の項目別評価の項目（フォームの行になる） */
+  reviewCategories: string[];
   shop: ReviewableShop;
   review: MemberReview | null;
   user: User;
@@ -350,12 +370,10 @@ function ReviewShopCard({
 }) {
   const [editing, setEditing] = useState(false);
   const [stars, setStars] = useState(5);
-  const [categories, setCategories] = useState<ReviewCategoriesState>({
-    taste: 5,
-    service: 5,
-    atmosphere: 5,
-    presentation: 5,
-  });
+  // 項目別評価の星。reviewCategories と同じ並びで持つ。
+  const [scores, setScores] = useState<number[]>(() =>
+    reviewCategories.map(() => 5),
+  );
   const [text, setText] = useState('');
   const [nickname, setNickname] = useState('');
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
@@ -367,9 +385,8 @@ function ReviewShopCard({
 
   const startEdit = () => {
     setStars(review?.stars ?? 5);
-    setCategories(
-      review?.categories ?? { taste: 5, service: 5, atmosphere: 5, presentation: 5 },
-    );
+    const byLabel = reviewScoreByLabel(review);
+    setScores(reviewCategories.map((label) => byLabel.get(label) ?? 5));
     setText(review?.text ?? '');
     setNickname(review?.nickname ?? '');
     setPhotoUrls(review?.photoUrls ?? []);
@@ -430,7 +447,10 @@ function ReviewShopCard({
         body: JSON.stringify({
           exhibitorId: shop.exhibitorId,
           stars,
-          categories,
+          categoryScores: reviewCategories.map((label, i) => ({
+            label,
+            stars: scores[i] ?? 5,
+          })),
           text,
           nickname,
           photoUrls,
@@ -469,8 +489,9 @@ function ReviewShopCard({
   const canNativeShare =
     typeof navigator !== 'undefined' && typeof navigator.share === 'function';
 
-  const categoryRows: Array<{
-    key: keyof ReviewCategoriesState;
+  // 項目名つきで保存されていない旧レビューの表示用（固定4項目）。
+  const legacyCategoryRows: Array<{
+    key: 'taste' | 'service' | 'atmosphere' | 'presentation';
     labelKey: 'reviewCategoryTaste' | 'reviewCategoryService' | 'reviewCategoryAtmosphere' | 'reviewCategoryPresentation';
   }> = [
     { key: 'taste', labelKey: 'reviewCategoryTaste' },
@@ -478,6 +499,20 @@ function ReviewShopCard({
     { key: 'atmosphere', labelKey: 'reviewCategoryAtmosphere' },
     { key: 'presentation', labelKey: 'reviewCategoryPresentation' },
   ];
+  // 投稿済みレビューの項目別表示は、投稿時点の項目名（スナップショット）を使う。
+  const reviewCategorySummary =
+    review && review.categoryScores && review.categoryScores.length > 0
+      ? review.categoryScores
+          .map((score) => `${score.label} ${score.stars}`)
+          .join(' ／ ')
+      : review
+        ? legacyCategoryRows
+            .map(
+              (row) =>
+                `${uiText(locale, row.labelKey)} ${review.categories[row.key]}`,
+            )
+            .join(' ／ ')
+        : '';
 
   return (
     <article style={{ ...cardStyle, padding: 16, marginTop: 12 }}>
@@ -511,12 +546,7 @@ function ReviewShopCard({
             </span>
           </div>
           <p style={{ fontSize: 12.5, color: '#64748b', margin: '4px 0 0' }}>
-            {categoryRows
-              .map(
-                (row) =>
-                  `${uiText(locale, row.labelKey)} ${review.categories[row.key]}`,
-              )
-              .join(' ／ ')}
+            {reviewCategorySummary}
             {review.nickname ? ` ／ ${review.nickname}` : ''}
           </p>
           {review.text && (
@@ -593,9 +623,9 @@ function ReviewShopCard({
             {uiText(locale, 'reviewOverallLabel')}
           </div>
           <ReviewStarInput value={stars} onChange={setStars} />
-          {categoryRows.map((row) => (
+          {reviewCategories.map((label, i) => (
             <div
-              key={row.key}
+              key={label}
               style={{
                 display: 'flex',
                 justifyContent: 'space-between',
@@ -603,14 +633,16 @@ function ReviewShopCard({
                 marginTop: 6,
               }}
             >
-              <span style={{ fontSize: 13.5, fontWeight: 600 }}>
-                {uiText(locale, row.labelKey)}
-              </span>
+              <span style={{ fontSize: 13.5, fontWeight: 600 }}>{label}</span>
               <ReviewStarInput
                 fontSize={20}
-                value={categories[row.key]}
+                value={scores[i] ?? 5}
                 onChange={(v) =>
-                  setCategories((current) => ({ ...current, [row.key]: v }))
+                  setScores((current) =>
+                    reviewCategories.map((_, index) =>
+                      index === i ? v : (current[index] ?? 5),
+                    ),
+                  )
                 }
               />
             </div>
@@ -2495,6 +2527,12 @@ export default function EventVisitorPage() {
                   key={shop.exhibitorId}
                   eventId={eventId}
                   locale={locale}
+                  reviewCategories={
+                    event?.reviewCategories &&
+                    event.reviewCategories.length > 0
+                      ? event.reviewCategories
+                      : DEFAULT_REVIEW_CATEGORIES
+                  }
                   shop={shop}
                   review={
                     myReviews.find((r) => r.exhibitorId === shop.exhibitorId) ??

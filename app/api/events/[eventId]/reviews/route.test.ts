@@ -37,7 +37,12 @@ const MEMBER_ID = memberIdForPhone(PHONE);
 const PARSED_VALUE = {
   exhibitorId: 'shop-a',
   stars: 5,
-  categories: { taste: 5, service: 4, atmosphere: 4, presentation: 3 },
+  categoryScores: [
+    { label: '味', stars: 5 },
+    { label: '接客', stars: 4 },
+    { label: '雰囲気', stars: 4 },
+    { label: '盛り付け', stars: 3 },
+  ],
   text: 'おいしかった',
   nickname: '',
   photoUrls: [],
