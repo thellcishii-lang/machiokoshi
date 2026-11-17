@@ -544,13 +544,17 @@ export default function ExhibitorRedeemPage() {
       setBusy(true);
       setResult(null);
       try {
-        await callApi(`/api/events/${eventId}/free-coupons/redeem`, {
+        const data = await callApi(`/api/events/${eventId}/free-coupons/redeem`, {
           method: 'POST',
           body: JSON.stringify({ freeCouponId }),
         });
         setResult({
           ok: true,
-          text: redeemText(locale, 'freeRedeemDone'),
+          // 発行元（スタンプ達成／ログインボーナス）で完了文を出し分ける
+          text:
+            data.kind === 'login'
+              ? redeemText(locale, 'loginRedeemDone')
+              : redeemText(locale, 'freeRedeemDone'),
           at: new Date(),
         });
       } catch (e) {

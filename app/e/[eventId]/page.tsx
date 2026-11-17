@@ -101,11 +101,23 @@ interface MemberClaim {
 interface MemberFreeCoupon {
   id: string;
   round: number;
+  /** 発行元（'stamp' | 'login'。旧データでは未設定 = 'stamp'） */
+  kind?: string;
   /** 発行時点の特典スナップショット（旧データでは未設定 = 'free-dish'） */
   rewardType?: string;
   benefitText?: string;
   status: 'active' | 'used';
   usedExhibitorName: string | null;
+}
+
+interface MemberLoginBonus {
+  enabled: boolean;
+  goalDays: number;
+  countInCycle: number;
+  remaining: number;
+  checkedInToday: boolean;
+  cyclesCompleted: number;
+  totalEarned: number;
 }
 
 interface MemberStampCard {
@@ -796,6 +808,10 @@ export default function EventVisitorPage() {
   const [coupons, setCoupons] = useState<PublicCoupon[]>([]);
   const [myClaims, setMyClaims] = useState<MemberClaim[]>([]);
   const [stampCard, setStampCard] = useState<MemberStampCard | null>(null);
+  // ログインボーナスの状態（未登録・未取得なら null）
+  const [loginBonus, setLoginBonus] = useState<MemberLoginBonus | null>(null);
+  const [loginBusy, setLoginBusy] = useState(false);
+  const [loginMessage, setLoginMessage] = useState('');
   // 達成セレブレーション表示中の無料クーポン（null = 出していない）
   const [celebrationCoupon, setCelebrationCoupon] = useState<MemberFreeCoupon | null>(null);
   // セッション内でお祝い済みのクーポン（localStorage が使えない環境の代替）
@@ -1049,6 +1065,57 @@ export default function EventVisitorPage() {
     }
   };
 
+  // ログインボーナスも購読者だけが持つ（未登録なら loginBonus: null）
+  const loadLoginBonus = async (currentUser: User) => {
+    try {
+      const idToken = await currentUser.getIdToken();
+      const res = await fetch(`/api/events/${eventId}/login-bonus`, {
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setLoginBonus((data.loginBonus as MemberLoginBonus | null) ?? null);
+      }
+    } catch {
+      // 同上
+    }
+  };
+
+  // 今日のチェックイン。サーバー側で1日1回まで（JST）に数え、達成したら
+  // クーポンが発行される。発行されたらスタンプカードを取り直し、
+  // セレブレーションの判定に乗せる。
+  const handleLoginCheckin = async () => {
+    if (!user || loginBusy) return;
+    setLoginBusy(true);
+    setLoginMessage('');
+    try {
+      const idToken = await user.getIdToken();
+      const res = await fetch(`/api/events/${eventId}/login-bonus`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setLoginMessage(data.error ?? uiText(locale, 'loginBonusCheckedInToday'));
+        return;
+      }
+      if (data.loginBonus) {
+        setLoginBonus(data.loginBonus as MemberLoginBonus);
+      }
+      if (
+        Array.isArray(data.issuedCouponIds) &&
+        data.issuedCouponIds.length > 0
+      ) {
+        setLoginMessage(uiText(locale, 'loginBonusIssued'));
+        await loadMyStamps(user);
+      }
+    } catch {
+      // 失敗しても画面はそのまま（次の自動更新で状態が戻る）
+    } finally {
+      setLoginBusy(false);
+    }
+  };
+
   // レビューは、スタンプをもらった店についてだけ書ける（資格判定はAPI側）
   const loadMyReviews = async (currentUser: User) => {
     try {
@@ -1072,6 +1139,7 @@ export default function EventVisitorPage() {
     void loadMyClaims(user, locale);
     void loadNotices(user, locale);
     void loadMyStamps(user);
+    void loadLoginBonus(user);
     void loadMyReviews(user);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, eventId, locale]);
@@ -1221,6 +1289,7 @@ export default function EventVisitorPage() {
         void loadMyClaims(user, locale);
         void loadNotices(user, locale);
         void loadMyStamps(user);
+        void loadLoginBonus(user);
         void loadMyReviews(user);
       }
     };
@@ -2192,17 +2261,21 @@ export default function EventVisitorPage() {
                           fontSize: 12,
                         }}
                       >
-                        {freeCoupon.rewardType === 'benefit'
-                          ? uiText(locale, 'benefitCouponTitle')
-                          : uiText(locale, 'freeCouponTitle')}
+                        {freeCoupon.kind === 'login'
+                          ? uiText(locale, 'loginBonusCouponTitle')
+                          : freeCoupon.rewardType === 'benefit'
+                            ? uiText(locale, 'benefitCouponTitle')
+                            : uiText(locale, 'freeCouponTitle')}
                       </span>
-                      <span style={{ fontSize: 13, color: '#475569' }}>
-                        {uiText(locale, 'stampRoundLabel', {
-                          round: String(freeCoupon.round),
-                        })}
-                      </span>
+                      {freeCoupon.kind !== 'login' && (
+                        <span style={{ fontSize: 13, color: '#475569' }}>
+                          {uiText(locale, 'stampRoundLabel', {
+                            round: String(freeCoupon.round),
+                          })}
+                        </span>
+                      )}
                     </div>
-                    {freeCoupon.rewardType === 'benefit' && freeCoupon.benefitText && (
+                    {freeCoupon.kind !== 'login' && freeCoupon.rewardType === 'benefit' && freeCoupon.benefitText && (
                       <p
                         style={{
                           fontSize: 15,
@@ -2265,12 +2338,14 @@ export default function EventVisitorPage() {
                         {uiText(locale, 'usedStamp')}
                       </span>
                       <span style={{ fontSize: 13, color: '#6b7280' }}>
-                        {freeCoupon.rewardType === 'benefit'
-                          ? uiText(locale, 'benefitCouponTitle')
-                          : uiText(locale, 'freeCouponTitle')}
+                        {freeCoupon.kind === 'login'
+                          ? uiText(locale, 'loginBonusCouponTitle')
+                          : freeCoupon.rewardType === 'benefit'
+                            ? uiText(locale, 'benefitCouponTitle')
+                            : uiText(locale, 'freeCouponTitle')}
                       </span>
                     </div>
-                    {freeCoupon.rewardType === 'benefit' && freeCoupon.benefitText && (
+                    {freeCoupon.kind !== 'login' && freeCoupon.rewardType === 'benefit' && freeCoupon.benefitText && (
                       <p style={{ fontSize: 13, margin: '6px 0 0', color: '#6b7280' }}>
                         {freeCoupon.benefitText}
                       </p>
@@ -2283,6 +2358,120 @@ export default function EventVisitorPage() {
                   </article>
                 ),
               )}
+            </section>
+          )}
+
+          {loginBonus && loginBonus.enabled && (
+            <section style={{ marginTop: 28 }}>
+              <h2
+                style={{
+                  fontSize: 17,
+                  fontWeight: 800,
+                  margin: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                <span aria-hidden="true">🎁</span>
+                <span style={{ flex: 1 }}>{uiText(locale, 'loginBonusTitle')}</span>
+              </h2>
+              <div style={{ ...cardStyle, padding: 16, marginTop: 12 }}>
+                <p style={{ fontSize: 13.5, color: '#475569', margin: 0, lineHeight: 1.7 }}>
+                  {uiText(locale, 'loginBonusNote')}
+                </p>
+                <div
+                  style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 6,
+                    marginTop: 14,
+                  }}
+                >
+                  {Array.from({ length: loginBonus.goalDays }, (_, i) => (
+                    <span
+                      key={i}
+                      aria-hidden="true"
+                      style={{
+                        width: 18,
+                        height: 18,
+                        borderRadius: '50%',
+                        border: `2px solid ${VIOLET}`,
+                        backgroundColor:
+                          i < loginBonus.countInCycle ? VIOLET : '#ffffff',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  ))}
+                </div>
+                <p
+                  style={{
+                    fontSize: 15,
+                    fontWeight: 800,
+                    textAlign: 'center',
+                    margin: '12px 0 0',
+                  }}
+                >
+                  {uiText(locale, 'loginBonusProgress', {
+                    count: String(loginBonus.countInCycle),
+                    goal: String(loginBonus.goalDays),
+                  })}
+                </p>
+                {loginBonus.remaining > 0 && (
+                  <p
+                    style={{
+                      fontSize: 13.5,
+                      color: '#475569',
+                      textAlign: 'center',
+                      margin: '4px 0 0',
+                    }}
+                  >
+                    {uiText(locale, 'loginBonusRemaining', {
+                      count: String(loginBonus.remaining),
+                    })}
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void handleLoginCheckin()}
+                  disabled={loginBusy || loginBonus.checkedInToday}
+                  style={{
+                    width: '100%',
+                    marginTop: 14,
+                    padding: '13px 12px',
+                    borderRadius: 12,
+                    border: 'none',
+                    background:
+                      'linear-gradient(90deg, var(--theme-accent, #8B5E34), var(--theme-accent-bright, #B07B45))',
+                    color: '#ffffff',
+                    fontWeight: 800,
+                    fontSize: 15,
+                    cursor:
+                      loginBusy || loginBonus.checkedInToday
+                        ? 'default'
+                        : 'pointer',
+                    opacity:
+                      loginBusy || loginBonus.checkedInToday ? 0.55 : 1,
+                  }}
+                >
+                  {loginBonus.checkedInToday
+                    ? uiText(locale, 'loginBonusCheckedInToday')
+                    : uiText(locale, 'loginBonusCheckinButton')}
+                </button>
+                {loginMessage && (
+                  <p
+                    style={{
+                      fontSize: 13.5,
+                      fontWeight: 700,
+                      color: VIOLET,
+                      textAlign: 'center',
+                      margin: '10px 0 0',
+                    }}
+                  >
+                    {loginMessage}
+                  </p>
+                )}
+              </div>
             </section>
           )}
 

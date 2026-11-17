@@ -45,6 +45,8 @@ interface Exhibitor {
   name: string;
   email: string | null;
   hasAccessCode: boolean;
+  /** アカウントの種類（'shop' = 参加店 / 'advertiser' = 協賛）。旧データは未設定 */
+  kind?: string;
 }
 
 interface Coupon {
@@ -149,6 +151,7 @@ export default function EventCouponAdminPage() {
   const [eventName, setEventName] = useState('');
   const [exhibitorName, setExhibitorName] = useState('');
   const [exhibitorEmail, setExhibitorEmail] = useState('');
+  const [exhibitorKind, setExhibitorKind] = useState<'shop' | 'advertiser'>('shop');
   const [couponForm, setCouponForm] = useState({
     exhibitorId: '',
     title: '',
@@ -250,10 +253,15 @@ export default function EventCouponAdminPage() {
     try {
       const result = await callApi(`/api/events/${eventId}/exhibitors`, {
         method: 'POST',
-        body: JSON.stringify({ name: exhibitorName, email: exhibitorEmail }),
+        body: JSON.stringify({
+          name: exhibitorName,
+          email: exhibitorEmail,
+          kind: exhibitorKind,
+        }),
       });
       setExhibitorName('');
       setExhibitorEmail('');
+      setExhibitorKind('shop');
       if (result?.mailSent === false) {
         // 登録は成立しているがパスワードメールが送れていない。「送信しました」
         // という成功文は出さず、警告だけを出す（警告文自体が登録の成立も伝える）。
@@ -496,7 +504,26 @@ export default function EventCouponAdminPage() {
                   }}
                 >
                   <span style={{ minWidth: 0 }}>
-                    <span style={{ fontWeight: 600, display: 'block' }}>{exhibitor.name}</span>
+                    <span style={{ fontWeight: 600, display: 'block' }}>
+                      {exhibitor.name}
+                      {exhibitor.kind === 'advertiser' && (
+                        <span
+                          style={{
+                            display: 'inline-block',
+                            marginLeft: 8,
+                            padding: '2px 10px',
+                            fontSize: 11.5,
+                            fontWeight: 700,
+                            borderRadius: 999,
+                            backgroundColor: '#EDE9FE',
+                            color: '#6d28d9',
+                            verticalAlign: 'middle',
+                          }}
+                        >
+                          {adminText(locale, 'adsKindSponsor')}
+                        </span>
+                      )}
+                    </span>
                     <span
                       style={{
                         display: 'block',
@@ -590,6 +617,50 @@ export default function EventCouponAdminPage() {
             {adminText(locale, 'exhibitorEmailLabel')}
             <input style={inputStyle} type="email" value={exhibitorEmail} onChange={(e) => setExhibitorEmail(e.target.value)} />
           </label>
+          <div style={{ marginBottom: 12 }}>
+            <p style={{ fontSize: 13, fontWeight: 600, margin: '0 0 8px' }}>
+              {adminText(locale, 'exhibitorKindLabel')}
+            </p>
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: 'pointer',
+                marginBottom: 8,
+              }}
+            >
+              <input
+                type="radio"
+                name="exhibitor-kind"
+                checked={exhibitorKind === 'shop'}
+                onChange={() => setExhibitorKind('shop')}
+                style={{ width: 17, height: 17 }}
+              />
+              {adminText(locale, 'exhibitorKindShop')}
+            </label>
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              <input
+                type="radio"
+                name="exhibitor-kind"
+                checked={exhibitorKind === 'advertiser'}
+                onChange={() => setExhibitorKind('advertiser')}
+                style={{ width: 17, height: 17 }}
+              />
+              {adminText(locale, 'exhibitorKindAdvertiser')}
+            </label>
+          </div>
           <p style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>
             {adminText(locale, 'exhibitorEmailNote')}
           </p>
@@ -748,11 +819,13 @@ export default function EventCouponAdminPage() {
               onChange={(e) => setCouponForm({ ...couponForm, exhibitorId: e.target.value })}
             >
               <option value="">{adminText(locale, 'selectPlaceholder')}</option>
-              {exhibitors.map((exhibitor) => (
-                <option key={exhibitor.id} value={exhibitor.id}>
-                  {exhibitor.name}
-                </option>
-              ))}
+              {exhibitors
+                .filter((exhibitor) => exhibitor.kind !== 'advertiser')
+                .map((exhibitor) => (
+                  <option key={exhibitor.id} value={exhibitor.id}>
+                    {exhibitor.name}
+                  </option>
+                ))}
             </select>
           </label>
           <label style={labelStyle}>

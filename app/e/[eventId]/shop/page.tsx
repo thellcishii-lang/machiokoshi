@@ -33,6 +33,8 @@ interface Exhibitor {
   id: string;
   name: string;
   lang: string;
+  /** アカウントの種類（'shop' = 参加店 / 'advertiser' = 協賛）。旧データは未設定 */
+  kind?: string;
 }
 
 interface ShopLink {
@@ -61,6 +63,8 @@ interface ShopProfile {
   location: { lat: number; lng: number } | null;
   /** 達成で無料になる自店の一品。未登録は null */
   freeDish: ShopFreeDish | null;
+  /** ログインボーナスクーポンで貰える自店の特典。未登録は null */
+  loginReward: ShopFreeDish | null;
   published: boolean;
 }
 
@@ -69,11 +73,46 @@ const EMPTY_FREE_DISH: ShopFreeDish = { name: '', description: '', photoUrl: nul
 interface TopPlacementState {
   enabled: boolean;
   price: number | null;
+  freeMode: boolean;
+  optedIn: boolean;
   available: boolean;
   status: string | null;
   featured: boolean;
   monthlyAmount: number | null;
 }
+
+interface ShopAdContent {
+  imageUrl: string | null;
+  title: string;
+  text: string;
+  linkUrl: string | null;
+}
+
+interface ShopAdState {
+  enabled: boolean;
+  price: number | null;
+  slots: number;
+  freeMode: boolean;
+  available: boolean;
+  status: string | null;
+  subscribed: boolean;
+  monthlyAmount: number | null;
+  eligible: boolean;
+  ad: {
+    live: ShopAdContent | null;
+    pending: ShopAdContent | null;
+    pendingSubmittedAt: string | null;
+    approvedAt: string | null;
+    lastRejectedAt: string | null;
+  };
+}
+
+const EMPTY_AD_CONTENT: ShopAdContent = {
+  imageUrl: null,
+  title: '',
+  text: '',
+  linkUrl: null,
+};
 
 const EMPTY_PROFILE: ShopProfile = {
   displayName: '',
@@ -88,6 +127,7 @@ const EMPTY_PROFILE: ShopProfile = {
   links: [],
   location: null,
   freeDish: null,
+  loginReward: null,
   published: true,
 };
 
@@ -182,6 +222,12 @@ export default function ExhibitorShopPage() {
   const [placement, setPlacement] = useState<TopPlacementState | null>(null);
   const [placementBusy, setPlacementBusy] = useState(false);
   const [placementMessage, setPlacementMessage] = useState('');
+  const [loginRewardPhotoUploading, setLoginRewardPhotoUploading] = useState(false);
+  const [shopAd, setShopAd] = useState<ShopAdState | null>(null);
+  const [adForm, setAdForm] = useState<ShopAdContent>(EMPTY_AD_CONTENT);
+  const [adBusy, setAdBusy] = useState(false);
+  const [adMessage, setAdMessage] = useState('');
+  const [adPhotoUploading, setAdPhotoUploading] = useState(false);
   const [message, setMessage] = useState('');
   const [messageOk, setMessageOk] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -261,16 +307,35 @@ export default function ExhibitorShopPage() {
         setExhibitor(me.exhibitor);
         if (me.exhibitor?.lang) setLocale(normalizeLocale(me.exhibitor.lang));
         setExhibitorError('');
-        const data = await callApi(`/api/events/${eventId}/shop-profile`);
-        if (data.profile) setProfile({ ...EMPTY_PROFILE, ...data.profile });
-        // トップ掲載の状態は取れなくても画面は出す（カードを出さないだけ）
+        // 協賛（広告専用）アカウントはプロフィールもトップ掲載も持たない
+        // ため読み込まない（広告の状態だけを読む）。
+        const isAdvertiserAccount = me.exhibitor?.kind === 'advertiser';
+        if (!isAdvertiserAccount) {
+          const data = await callApi(`/api/events/${eventId}/shop-profile`);
+          if (data.profile) setProfile({ ...EMPTY_PROFILE, ...data.profile });
+          // トップ掲載の状態は取れなくても画面は出す（カードを出さないだけ）
+          try {
+            const placementData = await callApi(
+              `/api/events/${eventId}/top-placement`,
+            );
+            setPlacement(placementData as TopPlacementState);
+          } catch {
+            setPlacement(null);
+          }
+        }
+        // 広告の状態も同様（取れなければ広告カードを出さないだけ）。
+        // フォームの初期値は掲載版→申請版の順で引き継ぐ。
         try {
-          const placementData = await callApi(
-            `/api/events/${eventId}/top-placement`,
+          const adData = (await callApi(
+            `/api/events/${eventId}/shop-ad`,
+          )) as ShopAdState;
+          setShopAd(adData);
+          setAdForm(
+            adData.ad.pending ??
+              adData.ad.live ?? { ...EMPTY_AD_CONTENT },
           );
-          setPlacement(placementData as TopPlacementState);
         } catch {
-          setPlacement(null);
+          setShopAd(null);
         }
       } catch (e) {
         setExhibitor(null);
@@ -287,11 +352,18 @@ export default function ExhibitorShopPage() {
   // 掲載の確定は Webhook 経由のため、成功時は「受付済み」の案内にする。
   useEffect(() => {
     try {
-      const result = new URLSearchParams(window.location.search).get('placement');
+      const params = new URLSearchParams(window.location.search);
+      const result = params.get('placement');
       if (result === 'success') {
         setPlacementMessage(redeemText(locale, 'topPlacementSubscribeMessage'));
       } else if (result === 'canceled') {
         setPlacementMessage(redeemText(locale, 'topPlacementCheckoutCanceled'));
+      }
+      const adResult = params.get('ad');
+      if (adResult === 'success') {
+        setAdMessage(redeemText(locale, 'adSubscribeMessage'));
+      } else if (adResult === 'canceled') {
+        setAdMessage(redeemText(locale, 'adCheckoutCanceled'));
       }
     } catch {
       // 読めなければ案内なしで続行する
@@ -337,6 +409,118 @@ export default function ExhibitorShopPage() {
       );
     } finally {
       setPlacementBusy(false);
+    }
+  };
+
+  // 無料（料金 0）の間の参加表明。有料の間はこの操作自体が無い。
+  const handlePlacementOptIn = async (optedIn: boolean) => {
+    setPlacementBusy(true);
+    setPlacementMessage('');
+    try {
+      await callApi(`/api/events/${eventId}/top-placement/opt-in`, {
+        method: 'POST',
+        body: JSON.stringify({ optedIn }),
+      });
+      const placementData = await callApi(`/api/events/${eventId}/top-placement`);
+      setPlacement(placementData as TopPlacementState);
+    } catch (e) {
+      setPlacementMessage(
+        e instanceof Error
+          ? e.message
+          : redeemText(locale, 'topPlacementOptInFailed'),
+      );
+    } finally {
+      setPlacementBusy(false);
+    }
+  };
+
+  const reloadShopAd = async () => {
+    const adData = (await callApi(
+      `/api/events/${eventId}/shop-ad`,
+    )) as ShopAdState;
+    setShopAd(adData);
+    return adData;
+  };
+
+  const handleAdSubscribe = async () => {
+    setAdBusy(true);
+    setAdMessage('');
+    try {
+      const data = await callApi(`/api/events/${eventId}/shop-ad/checkout`, {
+        method: 'POST',
+      });
+      if (typeof data.checkoutUrl !== 'string') throw new Error('no checkout url');
+      window.location.href = data.checkoutUrl;
+    } catch (e) {
+      setAdMessage(
+        e instanceof Error ? e.message : redeemText(locale, 'adSubscribeFailed'),
+      );
+      setAdBusy(false);
+    }
+  };
+
+  const handleAdCancel = async () => {
+    setAdBusy(true);
+    setAdMessage('');
+    try {
+      await callApi(`/api/events/${eventId}/shop-ad/cancel`, {
+        method: 'POST',
+      });
+      await reloadShopAd();
+      setAdMessage(redeemText(locale, 'adCancelMessage'));
+    } catch (e) {
+      setAdMessage(
+        e instanceof Error ? e.message : redeemText(locale, 'adCancelFailed'),
+      );
+    } finally {
+      setAdBusy(false);
+    }
+  };
+
+  const handleAdSubmit = async () => {
+    setAdBusy(true);
+    setAdMessage('');
+    try {
+      await callApi(`/api/events/${eventId}/shop-ad`, {
+        method: 'PUT',
+        body: JSON.stringify(adForm),
+      });
+      await reloadShopAd();
+      setAdMessage(redeemText(locale, 'adSubmittedMessage'));
+    } catch (e) {
+      setAdMessage(
+        e instanceof Error ? e.message : redeemText(locale, 'adSubmitFailed'),
+      );
+    } finally {
+      setAdBusy(false);
+    }
+  };
+
+  const handleAdPhotoSelect = async (file: File | undefined) => {
+    if (!file || !user) return;
+    setAdPhotoUploading(true);
+    setAdMessage('');
+    try {
+      const idToken = await user.getIdToken();
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('purpose', 'ad');
+      const res = await fetch(`/api/events/${eventId}/shop-profile/photo`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${idToken}` },
+        body: formData,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || typeof data.url !== 'string') {
+        throw new Error(data.error ?? redeemText(locale, 'profilePhotoFailed'));
+      }
+      setAdForm((current) => ({ ...current, imageUrl: data.url }));
+    } catch (e) {
+      setAdMessage(
+        e instanceof Error ? e.message : redeemText(locale, 'profilePhotoFailed'),
+      );
+    } finally {
+      setAdPhotoUploading(false);
     }
   };
 
@@ -508,6 +692,42 @@ export default function ExhibitorShopPage() {
     }));
   };
 
+  const updateLoginReward = (field: keyof ShopFreeDish, value: string | null) => {
+    setProfile((current) => ({
+      ...current,
+      loginReward: { ...(current.loginReward ?? EMPTY_FREE_DISH), [field]: value },
+    }));
+  };
+
+  const handleLoginRewardPhotoSelect = async (file: File | undefined) => {
+    if (!file || !user) return;
+    setLoginRewardPhotoUploading(true);
+    setMessage('');
+    try {
+      const idToken = await user.getIdToken();
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('purpose', 'login-reward');
+      const res = await fetch(`/api/events/${eventId}/shop-profile/photo`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${idToken}` },
+        body: formData,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || typeof data.url !== 'string') {
+        throw new Error(data.error ?? redeemText(locale, 'profilePhotoFailed'));
+      }
+      updateLoginReward('photoUrl', data.url);
+    } catch (e) {
+      setMessageOk(false);
+      setMessage(
+        e instanceof Error ? e.message : redeemText(locale, 'profilePhotoFailed'),
+      );
+    } finally {
+      setLoginRewardPhotoUploading(false);
+    }
+  };
+
   const handleFreeDishPhotoSelect = async (file: File | undefined) => {
     if (!file || !user) return;
     setFreeDishPhotoUploading(true);
@@ -641,6 +861,9 @@ export default function ExhibitorShopPage() {
     );
   }
 
+  // 協賛（広告専用）アカウントには広告の画面だけを出す
+  const isAdvertiser = exhibitor?.kind === 'advertiser';
+
   return (
     <main style={{ ...containerStyle, ...themeCssVars(themeColor) } as React.CSSProperties}>
       {brandRow(
@@ -693,6 +916,14 @@ export default function ExhibitorShopPage() {
             {languagePills}
           </section>
 
+          {isAdvertiser && (
+            <p style={{ fontSize: 13.5, color: '#475569', marginTop: 14 }}>
+              {redeemText(locale, 'advertiserNote')}
+            </p>
+          )}
+
+          {!isAdvertiser && (
+            <>
           <h1 style={{ fontSize: 19, fontWeight: 800, margin: '20px 0 0' }}>
             {redeemText(locale, 'shopPageTitle')}
           </h1>
@@ -870,6 +1101,100 @@ export default function ExhibitorShopPage() {
                     disabled={freeDishPhotoUploading}
                     onChange={(e) => {
                       void handleFreeDishPhotoSelect(e.target.files?.[0]);
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+              )}
+            </div>
+
+            <div
+              style={{
+                border: '1px solid #e2e8f0',
+                borderRadius: 12,
+                padding: '12px 14px 14px',
+                marginTop: 16,
+              }}
+            >
+              <p style={{ fontSize: 13, fontWeight: 600, margin: 0 }}>
+                {redeemText(locale, 'profileLoginRewardTitle')}
+              </p>
+              <p style={{ fontSize: 12, color: '#64748b', margin: '6px 0 0' }}>
+                {redeemText(locale, 'profileLoginRewardNote')}
+              </p>
+              <label style={labelStyle}>
+                {redeemText(locale, 'profileLoginRewardName')}
+                <input
+                  style={inputStyle}
+                  value={(profile.loginReward ?? EMPTY_FREE_DISH).name}
+                  onChange={(e) => updateLoginReward('name', e.target.value)}
+                />
+              </label>
+              <label style={labelStyle}>
+                {redeemText(locale, 'profileLoginRewardDescription')}
+                <textarea
+                  style={{ ...inputStyle, minHeight: 60 }}
+                  value={(profile.loginReward ?? EMPTY_FREE_DISH).description}
+                  onChange={(e) => updateLoginReward('description', e.target.value)}
+                />
+              </label>
+              {(profile.loginReward ?? EMPTY_FREE_DISH).photoUrl ? (
+                <div style={{ width: 96, marginTop: 12 }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={(profile.loginReward ?? EMPTY_FREE_DISH).photoUrl ?? ''}
+                    alt=""
+                    style={{
+                      width: 96,
+                      height: 96,
+                      objectFit: 'cover',
+                      borderRadius: 10,
+                      border: '1px solid #e2e8f0',
+                      display: 'block',
+                    }}
+                  />
+                  <button
+                    onClick={() => updateLoginReward('photoUrl', null)}
+                    style={{
+                      width: '100%',
+                      marginTop: 6,
+                      padding: '5px 0',
+                      fontSize: 12.5,
+                      fontWeight: 600,
+                      borderRadius: 8,
+                      border: '1px solid #fca5a5',
+                      backgroundColor: '#ffffff',
+                      color: '#b91c1c',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {redeemText(locale, 'profilePhotoRemove')}
+                  </button>
+                </div>
+              ) : (
+                <label
+                  style={{
+                    display: 'inline-block',
+                    marginTop: 12,
+                    padding: '10px 16px',
+                    fontSize: 14,
+                    fontWeight: 700,
+                    borderRadius: 10,
+                    border: `1px solid ${VIOLET}`,
+                    color: VIOLET,
+                    backgroundColor: '#ffffff',
+                    cursor: loginRewardPhotoUploading ? 'wait' : 'pointer',
+                    opacity: loginRewardPhotoUploading ? 0.6 : 1,
+                  }}
+                >
+                  {redeemText(locale, 'profilePhotoAdd')}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    style={{ display: 'none' }}
+                    disabled={loginRewardPhotoUploading}
+                    onChange={(e) => {
+                      void handleLoginRewardPhotoSelect(e.target.files?.[0]);
                       e.target.value = '';
                     }}
                   />
@@ -1081,13 +1406,57 @@ export default function ExhibitorShopPage() {
               </p>
             )}
           </section>
+            </>
+          )}
 
-          {placement && (placement.featured || placement.available) && (
+          {!isAdvertiser && placement && (placement.freeMode || placement.featured || placement.available) && (
             <section style={{ ...cardStyle, padding: 16, marginTop: 16 }}>
               <h2 style={{ fontSize: 16.5, fontWeight: 800, margin: 0 }}>
                 {redeemText(locale, 'topPlacementTitle')}
               </h2>
-              {placement.featured ? (
+              {placement.freeMode ? (
+                placement.optedIn ? (
+                  <>
+                    <p style={{ fontSize: 13.5, color: '#334155', marginTop: 8 }}>
+                      {redeemText(locale, 'topPlacementOptedInNote')}
+                    </p>
+                    <button
+                      onClick={() => void handlePlacementOptIn(false)}
+                      disabled={placementBusy}
+                      style={{
+                        marginTop: 12,
+                        padding: '9px 16px',
+                        fontSize: 13.5,
+                        fontWeight: 700,
+                        borderRadius: 10,
+                        border: '1px solid #fca5a5',
+                        backgroundColor: '#ffffff',
+                        color: '#b91c1c',
+                        cursor: 'pointer',
+                        opacity: placementBusy ? 0.6 : 1,
+                      }}
+                    >
+                      {redeemText(locale, 'topPlacementOptOutButton')}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p style={{ fontSize: 13.5, color: '#334155', marginTop: 8 }}>
+                      {redeemText(locale, 'topPlacementOptInNote')}
+                    </p>
+                    <p style={{ fontSize: 15, fontWeight: 800, marginTop: 8 }}>
+                      {redeemText(locale, 'freePriceLabel')}
+                    </p>
+                    <button
+                      onClick={() => void handlePlacementOptIn(true)}
+                      disabled={placementBusy}
+                      style={{ ...primaryButtonStyle, marginTop: 12, opacity: placementBusy ? 0.6 : 1 }}
+                    >
+                      {redeemText(locale, 'topPlacementOptInButton')}
+                    </button>
+                  </>
+                )
+              ) : placement.featured ? (
                 <>
                   <p style={{ fontSize: 13.5, color: '#334155', marginTop: 8 }}>
                     {placement.status === 'past_due'
@@ -1120,9 +1489,11 @@ export default function ExhibitorShopPage() {
                   </p>
                   {placement.price !== null && (
                     <p style={{ fontSize: 15, fontWeight: 800, marginTop: 8 }}>
-                      {redeemText(locale, 'topPlacementPrice', {
-                        price: placement.price.toLocaleString('ja-JP'),
-                      })}
+                      {placement.price === 0
+                        ? redeemText(locale, 'freePriceLabel')
+                        : redeemText(locale, 'topPlacementPrice', {
+                            price: placement.price.toLocaleString('ja-JP'),
+                          })}
                     </p>
                   )}
                   <button
@@ -1141,7 +1512,209 @@ export default function ExhibitorShopPage() {
               )}
             </section>
           )}
-          {!placement?.featured && !placement?.available && placementMessage && (
+
+          {shopAd && shopAd.enabled && (
+            <section style={{ ...cardStyle, padding: 16, marginTop: 16 }}>
+              <h2 style={{ fontSize: 16.5, fontWeight: 800, margin: 0 }}>
+                {redeemText(locale, 'adSectionTitle')}
+              </h2>
+              <p style={{ fontSize: 13.5, color: '#334155', marginTop: 8 }}>
+                {redeemText(locale, 'adNote')}
+              </p>
+              {shopAd.freeMode ? (
+                <p style={{ fontSize: 13.5, color: '#334155', marginTop: 8 }}>
+                  {redeemText(locale, 'adFreeNote')}
+                </p>
+              ) : shopAd.subscribed ? (
+                <>
+                  <p style={{ fontSize: 13.5, color: '#334155', marginTop: 8 }}>
+                    {shopAd.status === 'past_due'
+                      ? redeemText(locale, 'adPastDueNote')
+                      : redeemText(locale, 'adSubscribedNote')}
+                  </p>
+                  <button
+                    onClick={() => void handleAdCancel()}
+                    disabled={adBusy}
+                    style={{
+                      marginTop: 12,
+                      padding: '9px 16px',
+                      fontSize: 13.5,
+                      fontWeight: 700,
+                      borderRadius: 10,
+                      border: '1px solid #fca5a5',
+                      backgroundColor: '#ffffff',
+                      color: '#b91c1c',
+                      cursor: 'pointer',
+                      opacity: adBusy ? 0.6 : 1,
+                    }}
+                  >
+                    {redeemText(locale, 'adCancelButton')}
+                  </button>
+                </>
+              ) : shopAd.available ? (
+                <>
+                  {shopAd.price !== null && (
+                    <p style={{ fontSize: 15, fontWeight: 800, marginTop: 8 }}>
+                      {shopAd.price === 0
+                        ? redeemText(locale, 'freePriceLabel')
+                        : redeemText(locale, 'adPrice', {
+                            price: shopAd.price.toLocaleString('ja-JP'),
+                          })}
+                    </p>
+                  )}
+                  <button
+                    onClick={() => void handleAdSubscribe()}
+                    disabled={adBusy}
+                    style={{ ...primaryButtonStyle, marginTop: 12, opacity: adBusy ? 0.6 : 1 }}
+                  >
+                    {redeemText(locale, 'adSubscribeButton')}
+                  </button>
+                </>
+              ) : null}
+
+              <div
+                style={{
+                  border: '1px solid #e2e8f0',
+                  borderRadius: 12,
+                  padding: '12px 14px 14px',
+                  marginTop: 16,
+                }}
+              >
+                <p style={{ fontSize: 13, fontWeight: 600, margin: 0 }}>
+                  {redeemText(locale, 'adFormTitle')}
+                </p>
+                <p style={{ fontSize: 12, color: '#64748b', margin: '6px 0 0' }}>
+                  {redeemText(locale, 'adFormNote')}
+                </p>
+                <p style={{ fontSize: 12.5, fontWeight: 700, color: VIOLET, margin: '10px 0 0' }}>
+                  {shopAd.ad.pending
+                    ? redeemText(locale, 'adStatusPending')
+                    : shopAd.ad.live
+                      ? redeemText(locale, 'adStatusLive')
+                      : shopAd.ad.lastRejectedAt
+                        ? redeemText(locale, 'adStatusRejected')
+                        : redeemText(locale, 'adStatusNone')}
+                </p>
+                <label style={labelStyle}>
+                  {redeemText(locale, 'adTitleLabel')}
+                  <input
+                    style={inputStyle}
+                    maxLength={40}
+                    value={adForm.title}
+                    onChange={(e) =>
+                      setAdForm((current) => ({ ...current, title: e.target.value }))
+                    }
+                  />
+                </label>
+                <label style={labelStyle}>
+                  {redeemText(locale, 'adTextLabel')}
+                  <textarea
+                    style={{ ...inputStyle, minHeight: 72 }}
+                    maxLength={200}
+                    value={adForm.text}
+                    onChange={(e) =>
+                      setAdForm((current) => ({ ...current, text: e.target.value }))
+                    }
+                  />
+                </label>
+                <label style={labelStyle}>
+                  {redeemText(locale, 'adLinkLabel')}
+                  <input
+                    style={inputStyle}
+                    type="url"
+                    placeholder="https://"
+                    value={adForm.linkUrl ?? ''}
+                    onChange={(e) =>
+                      setAdForm((current) => ({
+                        ...current,
+                        linkUrl: e.target.value ? e.target.value : null,
+                      }))
+                    }
+                  />
+                </label>
+                <p style={{ fontSize: 13, fontWeight: 600, margin: '14px 0 0' }}>
+                  {redeemText(locale, 'adImageLabel')}
+                </p>
+                {adForm.imageUrl ? (
+                  <div style={{ width: 160, marginTop: 10 }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={adForm.imageUrl}
+                      alt=""
+                      style={{
+                        width: 160,
+                        height: 100,
+                        objectFit: 'cover',
+                        borderRadius: 10,
+                        border: '1px solid #e2e8f0',
+                        display: 'block',
+                      }}
+                    />
+                    <button
+                      onClick={() =>
+                        setAdForm((current) => ({ ...current, imageUrl: null }))
+                      }
+                      style={{
+                        width: '100%',
+                        marginTop: 6,
+                        padding: '5px 0',
+                        fontSize: 12.5,
+                        fontWeight: 600,
+                        borderRadius: 8,
+                        border: '1px solid #fca5a5',
+                        backgroundColor: '#ffffff',
+                        color: '#b91c1c',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {redeemText(locale, 'profilePhotoRemove')}
+                    </button>
+                  </div>
+                ) : (
+                  <label
+                    style={{
+                      display: 'inline-block',
+                      marginTop: 10,
+                      padding: '10px 16px',
+                      fontSize: 14,
+                      fontWeight: 700,
+                      borderRadius: 10,
+                      border: `1px solid ${VIOLET}`,
+                      color: VIOLET,
+                      backgroundColor: '#ffffff',
+                      cursor: adPhotoUploading ? 'wait' : 'pointer',
+                      opacity: adPhotoUploading ? 0.6 : 1,
+                    }}
+                  >
+                    {redeemText(locale, 'profilePhotoAdd')}
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      style={{ display: 'none' }}
+                      disabled={adPhotoUploading}
+                      onChange={(e) => {
+                        void handleAdPhotoSelect(e.target.files?.[0]);
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                )}
+                <button
+                  onClick={() => void handleAdSubmit()}
+                  disabled={adBusy}
+                  style={{ ...primaryButtonStyle, marginTop: 16, opacity: adBusy ? 0.6 : 1 }}
+                >
+                  {redeemText(locale, 'adSubmitButton')}
+                </button>
+              </div>
+              {adMessage && (
+                <p style={{ fontSize: 13.5, fontWeight: 600, color: '#334155', marginTop: 12 }}>
+                  {adMessage}
+                </p>
+              )}
+            </section>
+          )}
+          {!isAdvertiser && !placement?.featured && !placement?.available && placementMessage && (
             <p style={{ fontSize: 13.5, fontWeight: 600, color: '#334155', marginTop: 16 }}>
               {placementMessage}
             </p>

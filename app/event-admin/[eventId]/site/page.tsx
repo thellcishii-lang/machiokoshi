@@ -169,6 +169,9 @@ export default function SiteEditAdminPage() {
   const [notes, setNotes] = useState<SiteNote[]>([{ title: '', body: '' }]);
   const [topPlacementEnabled, setTopPlacementEnabled] = useState(false);
   const [topPlacementPrice, setTopPlacementPrice] = useState('');
+  const [adsEnabled, setAdsEnabled] = useState(false);
+  const [adsSlots, setAdsSlots] = useState('5');
+  const [adsPrice, setAdsPrice] = useState('');
   const [uploading, setUploading] = useState(false);
   const [imageMessage, setImageMessage] = useState('');
   const [iconUploading, setIconUploading] = useState(false);
@@ -243,6 +246,13 @@ export default function SiteEditAdminPage() {
         typeof siteData.topPlacementPrice === 'number'
           ? String(siteData.topPlacementPrice)
           : '',
+      );
+      setAdsEnabled(siteData.adsEnabled === true);
+      setAdsSlots(
+        typeof siteData.adsSlots === 'number' ? String(siteData.adsSlots) : '5',
+      );
+      setAdsPrice(
+        typeof siteData.adsPrice === 'number' ? String(siteData.adsPrice) : '',
       );
       setLoadMessage('');
     } catch (e) {
@@ -350,6 +360,7 @@ export default function SiteEditAdminPage() {
     setSaveMessage('');
     try {
       const priceText = topPlacementPrice.trim();
+      const adsPriceText = adsPrice.trim();
       const data = await callApi(`/api/events/${eventId}/site-settings`, {
         method: 'PUT',
         body: JSON.stringify({
@@ -361,6 +372,9 @@ export default function SiteEditAdminPage() {
           siteNotes: notes,
           topPlacementEnabled,
           topPlacementPrice: priceText === '' ? null : Number(priceText),
+          adsEnabled,
+          adsSlots: adsSlots.trim() === '' ? null : Number(adsSlots),
+          adsPrice: adsPriceText === '' ? null : Number(adsPriceText),
         }),
       });
       // サーバー側で正規化された値（空行の除去など）をそのまま表示に戻す
@@ -389,6 +403,13 @@ export default function SiteEditAdminPage() {
         typeof data.topPlacementPrice === 'number'
           ? String(data.topPlacementPrice)
           : '',
+      );
+      setAdsEnabled(data.adsEnabled === true);
+      setAdsSlots(
+        typeof data.adsSlots === 'number' ? String(data.adsSlots) : '5',
+      );
+      setAdsPrice(
+        typeof data.adsPrice === 'number' ? String(data.adsPrice) : '',
       );
       setSaveMessage(adminText(locale, 'savedMessage'));
     } catch (e) {
@@ -767,7 +788,7 @@ export default function SiteEditAdminPage() {
             <input
               style={inputStyle}
               type="number"
-              min={100}
+              min={0}
               max={1000000}
               step={100}
               inputMode="numeric"
@@ -776,7 +797,67 @@ export default function SiteEditAdminPage() {
               onChange={(e) => setTopPlacementPrice(e.target.value)}
             />
           </label>
+          {topPlacementPrice.trim() === '0' && (
+            <p style={noteTextStyle}>{adminText(locale, 'siteFreePriceNote')}</p>
+          )}
           <p style={noteTextStyle}>{adminText(locale, 'siteTopPlacementCancelNote')}</p>
+        </div>
+      </section>
+
+      <section style={{ marginTop: 32 }}>
+        <h2 style={sectionTitleStyle}>{adminText(locale, 'siteAdsTitle')}</h2>
+        <p style={noteTextStyle}>{adminText(locale, 'siteAdsNote')}</p>
+        <div style={{ ...cardStyle, marginTop: 12, padding: 24 }}>
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              fontSize: 14,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={adsEnabled}
+              onChange={(e) => setAdsEnabled(e.target.checked)}
+              style={{ width: 18, height: 18 }}
+            />
+            {adminText(locale, 'siteAdsEnabledLabel')}
+          </label>
+          <label style={{ ...labelStyle, marginTop: 16, marginBottom: 0 }}>
+            {adminText(locale, 'siteAdsSlotsLabel')}
+            <input
+              style={inputStyle}
+              type="number"
+              min={1}
+              max={50}
+              step={1}
+              inputMode="numeric"
+              placeholder="5"
+              value={adsSlots}
+              onChange={(e) => setAdsSlots(e.target.value)}
+            />
+          </label>
+          <label style={{ ...labelStyle, marginTop: 16, marginBottom: 0 }}>
+            {adminText(locale, 'siteAdsPriceLabel')}
+            <input
+              style={inputStyle}
+              type="number"
+              min={0}
+              max={1000000}
+              step={100}
+              inputMode="numeric"
+              placeholder="3000"
+              value={adsPrice}
+              onChange={(e) => setAdsPrice(e.target.value)}
+            />
+          </label>
+          {adsPrice.trim() === '0' && (
+            <p style={noteTextStyle}>{adminText(locale, 'siteFreePriceNote')}</p>
+          )}
+          <p style={noteTextStyle}>{adminText(locale, 'siteAdsCancelNote')}</p>
         </div>
       </section>
 

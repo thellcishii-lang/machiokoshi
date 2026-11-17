@@ -184,7 +184,14 @@ export default function EventDashboardPage() {
     if (!user) return;
     try {
       const data = await callApi(`/api/events/${eventId}/exhibitors`);
-      if (Array.isArray(data.exhibitors)) setShopCount(data.exhibitors.length);
+      if (Array.isArray(data.exhibitors)) {
+        // 参加店数には協賛（広告専用）アカウントを含めない
+        setShopCount(
+          data.exhibitors.filter(
+            (e: { kind?: string }) => e.kind !== 'advertiser',
+          ).length,
+        );
+      }
     } catch {
       // 件数が出ないだけ
     }
@@ -268,6 +275,7 @@ export default function EventDashboardPage() {
     { href: `/event-admin/${eventId}/schedule`, label: adminText(locale, 'navSchedule') },
     { href: `/event-admin/${eventId}/coupons`, label: adminText(locale, 'navCoupons') },
     { href: `/event-admin/${eventId}/site`, label: adminText(locale, 'navSiteEdit') },
+    { href: `/event-admin/${eventId}/ads`, label: adminText(locale, 'navAds') },
     { href: specialSiteUrl(eventId), label: adminText(locale, 'specialSiteOpen'), external: true },
   ];
 

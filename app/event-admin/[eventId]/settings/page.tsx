@@ -142,6 +142,10 @@ export default function EventSettingsAdminPage() {
   const [rankingMinReviews, setRankingMinReviews] = useState(3);
   const [rankingMessage, setRankingMessage] = useState('');
   const [rankingSaving, setRankingSaving] = useState(false);
+  const [loginBonusEnabled, setLoginBonusEnabled] = useState(false);
+  const [loginBonusDays, setLoginBonusDays] = useState(7);
+  const [loginBonusMessage, setLoginBonusMessage] = useState('');
+  const [loginBonusSaving, setLoginBonusSaving] = useState(false);
   const [pdfTitle, setPdfTitle] = useState('');
   const [pdfUploading, setPdfUploading] = useState(false);
   const [message, setMessage] = useState('');
@@ -211,6 +215,12 @@ export default function EventSettingsAdminPage() {
       }
       if (typeof data.event?.rankingMinReviews === 'number') {
         setRankingMinReviews(data.event.rankingMinReviews);
+      }
+      if (typeof data.event?.loginBonusEnabled === 'boolean') {
+        setLoginBonusEnabled(data.event.loginBonusEnabled);
+      }
+      if (typeof data.event?.loginBonusDays === 'number') {
+        setLoginBonusDays(data.event.loginBonusDays);
       }
       const links: Array<{ title: string; url: string }> = data.event?.links ?? [];
       setLinkSlots(
@@ -322,6 +332,30 @@ export default function EventSettingsAdminPage() {
       );
     } finally {
       setRankingSaving(false);
+    }
+  };
+
+  const handleSaveLoginBonus = async () => {
+    setLoginBonusSaving(true);
+    setLoginBonusMessage('');
+    try {
+      const data = await callApi(`/api/events/${eventId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ loginBonusEnabled, loginBonusDays }),
+      });
+      if (typeof data.event?.loginBonusEnabled === 'boolean') {
+        setLoginBonusEnabled(data.event.loginBonusEnabled);
+      }
+      if (typeof data.event?.loginBonusDays === 'number') {
+        setLoginBonusDays(data.event.loginBonusDays);
+      }
+      setLoginBonusMessage(adminText(locale, 'loginBonusSaved'));
+    } catch (e) {
+      setLoginBonusMessage(
+        e instanceof Error ? e.message : adminText(locale, 'loginBonusSaveFailed'),
+      );
+    } finally {
+      setLoginBonusSaving(false);
     }
   };
 
@@ -682,6 +716,58 @@ export default function EventSettingsAdminPage() {
             </span>
           </button>
           {rankingMessage && <p style={adminFeedbackStyle}>{rankingMessage}</p>}
+        </div>
+      </section>
+
+      <section style={{ marginTop: 32 }}>
+        <h2 style={sectionTitleStyle}>{adminText(locale, 'loginBonusSettingsTitle')}</h2>
+        <p style={{ fontSize: 12.5, color: '#64748b', marginTop: 5 }}>
+          {adminText(locale, 'loginBonusNote')}
+        </p>
+        <div style={{ ...cardStyle, marginTop: 12, padding: 24 }}>
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              fontSize: 14,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={loginBonusEnabled}
+              onChange={(e) => setLoginBonusEnabled(e.target.checked)}
+              style={{ width: 18, height: 18 }}
+            />
+            {adminText(locale, 'loginBonusEnabledLabel')}
+          </label>
+          <label style={{ ...labelStyle, marginTop: 16, marginBottom: 0 }}>
+            {adminText(locale, 'loginBonusDaysLabel')}
+            <select
+              style={inputStyle}
+              value={loginBonusDays}
+              onChange={(e) => setLoginBonusDays(Number(e.target.value))}
+            >
+              {Array.from({ length: 16 }, (_, i) => i + 5).map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            onClick={() => void handleSaveLoginBonus()}
+            disabled={loginBonusSaving}
+            style={{ ...primaryButtonStyle, marginTop: 20 }}
+          >
+            <span style={adminButtonContentStyle}>
+              {loginBonusSaving && <ButtonSpinner />}
+              {adminText(locale, 'loginBonusSaveButton')}
+            </span>
+          </button>
+          {loginBonusMessage && <p style={adminFeedbackStyle}>{loginBonusMessage}</p>}
         </div>
       </section>
 
