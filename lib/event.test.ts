@@ -17,10 +17,12 @@ import {
   isValidCouponIssuePrice,
   isValidLoginBonusDays,
   isValidPushPrice,
+  isValidShopMonthlyPrice,
   normalizeAdsPrice,
   normalizeAdsSlots,
   normalizeCouponIssuePrice,
   normalizePushPrice,
+  normalizeShopMonthlyPrice,
   normalizeStampBenefitText,
   normalizeStampRewardType,
   parseAdsPrice,
@@ -28,6 +30,7 @@ import {
   parseCouponIssuePrice,
   parseLoginBonusDays,
   parsePushPrice,
+  parseShopMonthlyPrice,
   parseRankingMinReviews,
   parseStampBenefitText,
   parseStampGoalCount,
@@ -457,5 +460,35 @@ describe('店舗手数料（couponIssuePrice / pushPrice）', () => {
     expect(normalizePushPrice(3000)).toBe(3000);
     expect(() => normalizePushPrice(-1)).toThrow();
     expect(() => normalizePushPrice(100.5)).toThrow();
+  });
+});
+
+describe('参加店の自己登録の月額料金（shopMonthlyPrice）', () => {
+  it('0（無料）〜1,000,000 の整数だけが有効', () => {
+    expect(isValidShopMonthlyPrice(0)).toBe(true);
+    expect(isValidShopMonthlyPrice(3000)).toBe(true);
+    expect(isValidShopMonthlyPrice(1_000_000)).toBe(true);
+    expect(isValidShopMonthlyPrice(1_000_001)).toBe(false);
+    expect(isValidShopMonthlyPrice(-1)).toBe(false);
+    expect(isValidShopMonthlyPrice(100.5)).toBe(false);
+    expect(isValidShopMonthlyPrice('3000')).toBe(false);
+    expect(isValidShopMonthlyPrice(null)).toBe(false);
+  });
+
+  it('読み取りは未設定・不正値を null（受け付けない）に倒し、0 は保持する', () => {
+    expect(parseShopMonthlyPrice(0)).toBe(0);
+    expect(parseShopMonthlyPrice(3000)).toBe(3000);
+    expect(parseShopMonthlyPrice(undefined)).toBeNull();
+    expect(parseShopMonthlyPrice(null)).toBeNull();
+    expect(parseShopMonthlyPrice(-5)).toBeNull();
+  });
+
+  it('正規化は未指定・null を未設定にし、不正値で throw する', () => {
+    expect(normalizeShopMonthlyPrice(undefined)).toBeNull();
+    expect(normalizeShopMonthlyPrice(null)).toBeNull();
+    expect(normalizeShopMonthlyPrice(0)).toBe(0);
+    expect(normalizeShopMonthlyPrice(3000)).toBe(3000);
+    expect(() => normalizeShopMonthlyPrice(-1)).toThrow();
+    expect(() => normalizeShopMonthlyPrice(100.5)).toThrow();
   });
 });

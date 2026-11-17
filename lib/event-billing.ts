@@ -23,11 +23,15 @@ import type { Firestore } from 'firebase-admin/firestore';
 import { jstDateString } from './event';
 import { getOrganizer, findOrganizerByOwnerUid, type Organizer } from './organizers';
 import { listEventsByOwner } from './event-store';
-import { setShopBillingSuspended } from './event-shop';
+import { setShopBillingSuspended, setShopDelistedAt } from './event-shop';
+import { EVENT_EXHIBITORS_COLLECTION } from './event-coupon';
+import { sendEmail } from './mailer';
 import { resolveAppOrigin } from './app-origin';
 
 export const SHOP_BILLINGS_COLLECTION = 'shopBillings';
 export const BILLING_PAYMENTS_COLLECTION = 'billingPayments';
+/** 支払い失敗の管理人通知の送信済みマーカー（請求書IDがドキュメントID）。 */
+export const BILLING_FAILURE_NOTICES_COLLECTION = 'billingFailureNotices';
 const BILLING_SETTINGS_SUBCOLLECTION = 'billing';
 const BILLING_SETTINGS_DOC_ID = 'stripe';
 
@@ -657,6 +661,107 @@ export async function listBillingPayments(
   });
 }
 
+// ─── 支払い失敗の管理人通知 ───
+//
+// 運用（2026-11-17 Ishii の仕様）: 店の月額の支払いが期日に失敗したら、
+// 管理人にメールで知らせる。管理人はそれを見て店へ連絡し、期限までに
+// 払われなければ掲載が止まる（掲載停止自体は Stripe のリトライが尽きた
+// 時点で Webhook が自動で行う）。通知は請求書ごとに1回だけ:
+// billingFailureNotices/{invoiceId} を create できた場合だけ送る
+// （Stripe のリトライで同じ請求書の失敗イベントが複数届いても1回）。
+
+function escapeNoticeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/** 支払い失敗通知メールの文面（純粋関数）。 */
+export function buildBillingFailureNoticeEmail(input: {
+  shopName: string;
+  eventName?: string | null;
+  amount: number;
+}): { subject: string; html: string } {
+  const eventPart = input.eventName
+    ? `プロジェクト「${escapeNoticeHtml(input.eventName)}」`
+    : 'Push-taro 町おこし のプロジェクト';
+  return {
+    subject: '【Push-taro 町おこし】参加店のお支払い失敗のお知らせ',
+    html: `
+<p>${eventPart}の参加店「${escapeNoticeHtml(input.shopName)}」様の月額料金のお支払いが失敗しました。</p>
+<p>請求額: ${input.amount.toLocaleString()}円</p>
+<p>カードの有効期限切れや残高不足などが考えられます。お店へご連絡のうえ、お支払い方法のご確認をお願いいたします。</p>
+<p>このままお支払いが完了しない場合、そのお店の掲載は自動的に停止します（掲載が止まっても、お店の情報はそのまま保存されます）。</p>
+<p>お支払い状況は管理画面の「店舗課金」ページでご確認いただけます。</p>
+`,
+  };
+}
+
+export type BillingFailureMailSender = (args: {
+  to: string;
+  subject: string;
+  html: string;
+}) => Promise<{ success: boolean; error?: string }>;
+
+/**
+ * 支払い失敗を管理人へ通知する（請求書ごとに1回だけ）。
+ * 送信できたら true、既に通知済みなら false を返す。
+ * メール送信に失敗した場合はマーカーを取り消し、次の失敗イベントで
+ * 再度通知できるようにする（通知の取りこぼし防止）。
+ */
+export async function notifyBillingFailureOnce(
+  db: Firestore,
+  input: {
+    eventId: string;
+    invoiceId: string;
+    exhibitorId: string;
+    to: string;
+    shopName: string;
+    eventName?: string | null;
+    amount: number;
+  },
+  send: BillingFailureMailSender = (args) => sendEmail(args),
+): Promise<boolean> {
+  const ref = db
+    .collection('events')
+    .doc(input.eventId)
+    .collection(BILLING_FAILURE_NOTICES_COLLECTION)
+    .doc(input.invoiceId);
+  try {
+    await ref.create({
+      exhibitorId: input.exhibitorId,
+      notifiedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    if (isAlreadyExistsError(error)) return false;
+    throw error;
+  }
+  const mail = buildBillingFailureNoticeEmail({
+    shopName: input.shopName,
+    eventName: input.eventName,
+    amount: input.amount,
+  });
+  try {
+    const result = await send({
+      to: input.to,
+      subject: mail.subject,
+      html: mail.html,
+    });
+    if (!result.success) {
+      console.error('[event-billing] failure notice email failed:', result.error);
+      await ref.delete().catch(() => undefined);
+      return false;
+    }
+  } catch (error) {
+    console.error('[event-billing] failure notice email error:', error);
+    await ref.delete().catch(() => undefined);
+    return false;
+  }
+  return true;
+}
+
 // ─── オプション有効な契約者の解決 ───
 
 /**
@@ -945,6 +1050,50 @@ export async function applyStripeWebhookEffect(
   });
   if (suspend !== null) {
     await setShopBillingSuspended(db, eventId, exhibitorId, suspend);
+  }
+  // 掲載停止の日時を参加店レコードに残す（停止の起算点。3ヶ月ルールの
+  // 判定に使う）。復旧したら取り除く。内容（プロフィール等）は消さない。
+  if (suspend === true) {
+    await setShopDelistedAt(db, eventId, exhibitorId, occurredAt);
+  } else if (suspend === false) {
+    await setShopDelistedAt(db, eventId, exhibitorId, null);
+  }
+
+  // 支払い失敗は管理人へメールで知らせる（請求書ごとに1回だけ）。
+  // 通知の失敗で Webhook の処理自体は失敗にしない。
+  if (
+    event.type === 'invoice.payment_failed' &&
+    effect.payment?.status === 'failed' &&
+    effect.payment.invoiceId
+  ) {
+    try {
+      const organizer = await getOrganizer(contractId);
+      if (organizer?.email) {
+        const [eventSnap, exhibitorSnap] = await Promise.all([
+          db.collection('events').doc(eventId).get(),
+          db
+            .collection('events')
+            .doc(eventId)
+            .collection(EVENT_EXHIBITORS_COLLECTION)
+            .doc(exhibitorId)
+            .get(),
+        ]);
+        await notifyBillingFailureOnce(db, {
+          eventId,
+          invoiceId: effect.payment.invoiceId,
+          exhibitorId,
+          to: organizer.email,
+          shopName: String(exhibitorSnap.data()?.name ?? exhibitorId),
+          eventName:
+            typeof eventSnap.data()?.name === 'string'
+              ? eventSnap.data()!.name
+              : null,
+          amount: effect.payment.amount,
+        });
+      }
+    } catch (error) {
+      console.error('[event-billing] failure notice failed:', error);
+    }
   }
   return { applied: true, duplicate: false };
 }

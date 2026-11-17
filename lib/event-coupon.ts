@@ -42,6 +42,19 @@ export function parseExhibitorKind(value: unknown): ExhibitorKind {
   return value === 'advertiser' ? 'advertiser' : 'shop';
 }
 
+/**
+ * 登録の入口。
+ * - 'admin': 管理人が管理画面から発行（従来の入口）
+ * - 'self': 店・広告主が公開の申込ページから自分で登録（自己申込）
+ * 旧ドキュメント（項目なし）は 'admin' として扱う。
+ */
+export type ExhibitorSource = 'admin' | 'self';
+
+/** 保存済みの登録入口を防御的に読む（読み取り用）。'self' のみ自己申込。 */
+export function parseExhibitorSource(value: unknown): ExhibitorSource {
+  return value === 'self' ? 'self' : 'admin';
+}
+
 export interface EventExhibitor {
   id: string;
   name: string;
@@ -54,6 +67,21 @@ export interface EventExhibitor {
   lang: Locale;
   /** アカウントの種類（参加店／協賛）。旧ドキュメントは 'shop' */
   kind: ExhibitorKind;
+  /** 登録の入口（管理人発行／自己申込）。旧ドキュメントは 'admin' */
+  source: ExhibitorSource;
+  /**
+   * 店舗課金の未払い確定で掲載停止になった日時（ISO）。停止中でない
+   * （未設定・復旧済み）場合は null。掲載停止から3ヶ月を過ぎると閉店
+   * 扱いになり、同じメールでの新規登録（自己申込）が通るようになる
+   * （実体は lib/event-apply.ts）。
+   */
+  delistedAt: string | null;
+  /**
+   * 閉店扱いになった日時（ISO）。掲載停止から3ヶ月経過後に同じメールで
+   * 新規登録された時点で、旧レコードに付けられる。以後の重複判定・
+   * ログイン照合では存在しないものとして扱う。未閉店は null。
+   */
+  closedAt: string | null;
 }
 
 function mapExhibitor(
@@ -69,6 +97,15 @@ function mapExhibitor(
       typeof data.accessCode === 'string' && data.accessCode.length > 0,
     lang: normalizeLocale(data.lang),
     kind: parseExhibitorKind(data.kind),
+    source: parseExhibitorSource(data.source),
+    delistedAt:
+      typeof data.delistedAt === 'string' && data.delistedAt
+        ? data.delistedAt
+        : null,
+    closedAt:
+      typeof data.closedAt === 'string' && data.closedAt
+        ? data.closedAt
+        : null,
   };
 }
 
@@ -203,12 +240,22 @@ export async function createExhibitor(
     email?: string | null;
     lang?: Locale;
     kind?: ExhibitorKind;
+    /** 登録の入口。未指定は管理人発行（'admin'） */
+    source?: ExhibitorSource;
+    /**
+     * ドキュメントIDを呼び出し側で先に決める場合に指定する。
+     * 自己申込では、支払い確認前に課金レコードを同じ ID で作るため、
+     * 申込時点で ID を採番しておく（lib/event-apply.ts）。
+     */
+    id?: string;
   },
 ): Promise<EventExhibitor> {
   const name = input.name.trim();
   if (!name) throw new Error('出店者名が必要です');
   const event = await getEvent(eventId);
-  const ref = exhibitorsRef(eventId).doc();
+  const ref = input.id
+    ? exhibitorsRef(eventId).doc(input.id)
+    : exhibitorsRef(eventId).doc();
   const email = input.email?.trim().toLowerCase() || null;
   const exhibitor: EventExhibitor = {
     id: ref.id,
@@ -217,10 +264,19 @@ export async function createExhibitor(
     hasAccessCode: false,
     lang: resolveLocale(input.lang, event?.defaultLocale),
     kind: input.kind ?? 'shop',
+    source: input.source ?? 'admin',
+    delistedAt: null,
+    closedAt: null,
   };
-  // hasAccessCode はドキュメントの accessCode フィールドから導く表示用の値で、
-  // 保存するのは実フィールド（email / lang）だけ。
-  const { hasAccessCode: _displayOnly, ...stored } = exhibitor;
+  // hasAccessCode / delistedAt / closedAt はドキュメントの実フィールドから
+  // 導く表示用の値で、作成時に保存するのは実フィールド（email / lang /
+  // kind / source）だけ（停止・閉店の印は課金側が後から付ける）。
+  const {
+    hasAccessCode: _displayOnly,
+    delistedAt: _delistedDisplayOnly,
+    closedAt: _closedDisplayOnly,
+    ...stored
+  } = exhibitor;
   await ref.set({ ...stored, createdAt: FieldValue.serverTimestamp() });
   return exhibitor;
 }

@@ -1,13 +1,16 @@
 // lib/event-billing.test.ts
 // 店舗課金の純粋関数: 設定入力・月額の検証、JST 月キーの収支集計、
 // Stripe Webhook イベントからローカルへの効果への変換を検証する。
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import type { Firestore } from 'firebase-admin/firestore';
 import {
+  buildBillingFailureNoticeEmail,
   currentAndPreviousMonthKeys,
   effectFromStripeEvent,
   isValidStripeSecretKey,
   isValidStripeWebhookSecret,
   monthKeyJst,
+  notifyBillingFailureOnce,
   parseBillingSettingsInput,
   parseMonthlyAmount,
   shopBillingTransitionForSubscriptionStatus,
@@ -312,5 +315,113 @@ describe('effectFromStripeEvent', () => {
         }),
       ),
     ).toBeNull();
+  });
+});
+
+// 支払い失敗の管理人通知（請求書ごとに1回）用の最小フェイク Firestore。
+// billingFailureNotices の create / delete だけを再現する。
+function fakeNoticeDb() {
+  const docs = new Map<string, Record<string, unknown>>();
+  const key = (eventId: string, invoiceId: string) => `${eventId}/${invoiceId}`;
+  const db = {
+    collection: (_name: string) => ({
+      doc: (eventId: string) => ({
+        collection: (_sub: string) => ({
+          doc: (invoiceId: string) => ({
+            create: async (data: Record<string, unknown>) => {
+              const k = key(eventId, invoiceId);
+              if (docs.has(k)) {
+                const error = new Error('already exists') as Error & {
+                  code?: number;
+                };
+                error.code = 6;
+                throw error;
+              }
+              docs.set(k, data);
+            },
+            delete: async () => {
+              docs.delete(key(eventId, invoiceId));
+            },
+          }),
+        }),
+      }),
+    }),
+  };
+  return { db: db as unknown as Firestore, docs };
+}
+
+describe('支払い失敗の管理人通知', () => {
+  it('文面には店名・プロジェクト名・請求額が入る', () => {
+    const mail = buildBillingFailureNoticeEmail({
+      shopName: '店A',
+      eventName: 'テストプロジェクト',
+      amount: 3000,
+    });
+    expect(mail.subject).toContain('お支払い失敗');
+    expect(mail.html).toContain('店A');
+    expect(mail.html).toContain('テストプロジェクト');
+    expect(mail.html).toContain('3,000円');
+  });
+
+  it('同じ請求書では1回だけ送る', async () => {
+    const { db } = fakeNoticeDb();
+    const send = vi.fn(
+      async (_mail: { to: string; subject: string; html: string }) => ({
+        success: true as const,
+      }),
+    );
+    const input = {
+      eventId: 'event-1',
+      invoiceId: 'in_1',
+      exhibitorId: 'exh-1',
+      to: 'organizer@example.com',
+      shopName: '店A',
+      eventName: 'テストプロジェクト',
+      amount: 3000,
+    };
+    await expect(notifyBillingFailureOnce(db, input, send)).resolves.toBe(true);
+    await expect(notifyBillingFailureOnce(db, input, send)).resolves.toBe(false);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0][0].to).toBe('organizer@example.com');
+  });
+
+  it('別の請求書なら再度送る', async () => {
+    const { db } = fakeNoticeDb();
+    const send = vi.fn(async () => ({ success: true }));
+    const base = {
+      eventId: 'event-1',
+      exhibitorId: 'exh-1',
+      to: 'organizer@example.com',
+      shopName: '店A',
+      eventName: null,
+      amount: 3000,
+    };
+    await notifyBillingFailureOnce(db, { ...base, invoiceId: 'in_1' }, send);
+    await expect(
+      notifyBillingFailureOnce(db, { ...base, invoiceId: 'in_2' }, send),
+    ).resolves.toBe(true);
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+
+  it('送信に失敗したらマーカーを取り消し、次の機会に送り直せる', async () => {
+    const { db } = fakeNoticeDb();
+    const failing = vi.fn(async () => ({ success: false, error: 'smtp down' }));
+    const input = {
+      eventId: 'event-1',
+      invoiceId: 'in_1',
+      exhibitorId: 'exh-1',
+      to: 'organizer@example.com',
+      shopName: '店A',
+      eventName: null,
+      amount: 3000,
+    };
+    await expect(notifyBillingFailureOnce(db, input, failing)).resolves.toBe(
+      false,
+    );
+    const succeeding = vi.fn(async () => ({ success: true }));
+    await expect(notifyBillingFailureOnce(db, input, succeeding)).resolves.toBe(
+      true,
+    );
+    expect(succeeding).toHaveBeenCalledTimes(1);
   });
 });

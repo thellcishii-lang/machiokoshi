@@ -213,6 +213,17 @@ export interface EventConfig {
    */
   pushPrice: number | null;
   /**
+   * 参加店の自己登録（公開の登録ページ）で店が払う月額料金（円）。
+   * 管理人が特設サイト編集画面で設定する。未設定（null）の間は自己登録を
+   * 受け付けない。0 は「無料」: 支払いなしで登録が完了する。有料の間は
+   * 管理人自身の Stripe で支払いが確認できてから参加店レコードが作られる
+   * （実体は lib/event-apply.ts）。登録後の課金レコード（shopBillings）の
+   * monthlyAmount にはこの金額が入る（管理人発行で店ごとに決める月額と
+   * 同じ置き場）。導入前に作られたプロジェクトには項目自体が無いため、
+   * 読み取り時は null（受け付けない）に倒す。
+   */
+  shopMonthlyPrice: number | null;
+  /**
    * クーポン上限（プロジェクト全体の件数）。購読者上限と同じく契約枠の軸なので、
    * 変更は運営側のみ。既定は MAX_COUPONS_PER_EVENT。
    */
@@ -298,6 +309,7 @@ export interface CreateEventInput {
   adsPrice?: number | null;
   couponIssuePrice?: number | null;
   pushPrice?: number | null;
+  shopMonthlyPrice?: number | null;
   links?: EventLink[];
   couponCap?: number;
   backupRetentionDays?: number;
@@ -835,6 +847,43 @@ export function normalizePushPrice(input: unknown): number | null {
   if (!isValidPushPrice(input)) {
     throw new Error(
       `プッシュ配信の料金は${PUSH_PRICE_MIN}円から${PUSH_PRICE_MAX}円の整数で指定してください`,
+    );
+  }
+  return input as number;
+}
+
+/** 参加店の自己登録の月額料金の下限・上限（円）。0 は無料（支払いなしで登録完了）。 */
+export const SHOP_MONTHLY_PRICE_MIN = 0;
+export const SHOP_MONTHLY_PRICE_MAX = 1_000_000;
+
+/** 参加店の自己登録の月額料金として有効な値かどうか（0〜1,000,000 の整数）。 */
+export function isValidShopMonthlyPrice(value: unknown): boolean {
+  return (
+    typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= SHOP_MONTHLY_PRICE_MIN &&
+    value <= SHOP_MONTHLY_PRICE_MAX
+  );
+}
+
+/**
+ * 保存済みの自己登録の月額料金を防御的に読む（読み取り用。throw しない）。
+ * 未設定・不正な値は null（未設定＝自己登録を受け付けない）に倒す。
+ * 0（無料）はそのまま 0。
+ */
+export function parseShopMonthlyPrice(value: unknown): number | null {
+  return isValidShopMonthlyPrice(value) ? (value as number) : null;
+}
+
+/**
+ * 自己登録の月額料金の入力を検証して正規化する（書き込み用。不正なら throw）。
+ * 未指定・null は未設定（null）として扱う。0 は無料として有効。
+ */
+export function normalizeShopMonthlyPrice(input: unknown): number | null {
+  if (input === undefined || input === null) return null;
+  if (!isValidShopMonthlyPrice(input)) {
+    throw new Error(
+      `参加店の月額料金は${SHOP_MONTHLY_PRICE_MIN}円から${SHOP_MONTHLY_PRICE_MAX}円の整数で指定してください`,
     );
   }
   return input as number;
