@@ -56,6 +56,8 @@ interface ShopProfile {
   menuName: string;
   menuDescription: string;
   description: string;
+  /** お店のトップ画像（1枚）。未設定は null */
+  coverImageUrl: string | null;
   photoUrls: string[];
   instagramUrl: string;
   links: ShopLink[];
@@ -153,6 +155,7 @@ const EMPTY_PROFILE: ShopProfile = {
   menuName: '',
   menuDescription: '',
   description: '',
+  coverImageUrl: null,
   photoUrls: [],
   instagramUrl: '',
   links: [],
@@ -281,6 +284,7 @@ export default function ExhibitorShopPage() {
   const [messageOk, setMessageOk] = useState(false);
   const [busy, setBusy] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [coverPhotoUploading, setCoverPhotoUploading] = useState(false);
   const [freeDishPhotoUploading, setFreeDishPhotoUploading] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [eventName, setEventName] = useState('');
@@ -915,6 +919,39 @@ export default function ExhibitorShopPage() {
     }));
   };
 
+  const handleCoverPhotoSelect = async (file: File | undefined) => {
+    if (!file || !user) return;
+    setCoverPhotoUploading(true);
+    setMessage('');
+    try {
+      const idToken = await user.getIdToken();
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('purpose', 'cover');
+      const res = await fetch(`/api/events/${eventId}/shop-profile/photo`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${idToken}` },
+        body: formData,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || typeof data.url !== 'string') {
+        throw new Error(data.error ?? redeemText(locale, 'profilePhotoFailed'));
+      }
+      setProfile((current) => ({ ...current, coverImageUrl: data.url }));
+    } catch (e) {
+      setMessageOk(false);
+      setMessage(
+        e instanceof Error ? e.message : redeemText(locale, 'profilePhotoFailed'),
+      );
+    } finally {
+      setCoverPhotoUploading(false);
+    }
+  };
+
+  const handleRemoveCoverPhoto = () => {
+    setProfile((current) => ({ ...current, coverImageUrl: null }));
+  };
+
   const updateFreeDish = (field: keyof ShopFreeDish, value: string | null) => {
     setProfile((current) => ({
       ...current,
@@ -1440,6 +1477,102 @@ export default function ExhibitorShopPage() {
                 onChange={(e) => updateField('description', e.target.value)}
               />
             </label>
+
+            <div style={{ marginTop: 16 }}>
+              <p style={{ fontSize: 13, fontWeight: 600, margin: 0 }}>
+                {redeemText(locale, 'profileCoverImage')}
+              </p>
+              <p style={{ fontSize: 12, color: '#64748b', margin: '6px 0 0' }}>
+                {redeemText(locale, 'profileCoverImageNote')}
+              </p>
+              {profile.coverImageUrl ? (
+                <div style={{ marginTop: 10 }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={profile.coverImageUrl}
+                    alt=""
+                    style={{
+                      width: '100%',
+                      height: 180,
+                      objectFit: 'cover',
+                      borderRadius: 10,
+                      border: '1px solid #e2e8f0',
+                      display: 'block',
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                    <label
+                      style={{
+                        padding: '6px 14px',
+                        fontSize: 12.5,
+                        fontWeight: 600,
+                        borderRadius: 8,
+                        border: `1px solid ${VIOLET}`,
+                        backgroundColor: '#ffffff',
+                        color: VIOLET,
+                        cursor: coverPhotoUploading ? 'wait' : 'pointer',
+                        opacity: coverPhotoUploading ? 0.6 : 1,
+                      }}
+                    >
+                      {redeemText(locale, 'profileCoverImageReplace')}
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        style={{ display: 'none' }}
+                        disabled={coverPhotoUploading}
+                        onChange={(e) => {
+                          void handleCoverPhotoSelect(e.target.files?.[0]);
+                          e.target.value = '';
+                        }}
+                      />
+                    </label>
+                    <button
+                      onClick={handleRemoveCoverPhoto}
+                      style={{
+                        padding: '6px 14px',
+                        fontSize: 12.5,
+                        fontWeight: 600,
+                        borderRadius: 8,
+                        border: '1px solid #fca5a5',
+                        backgroundColor: '#ffffff',
+                        color: '#b91c1c',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {redeemText(locale, 'profilePhotoRemove')}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <label
+                  style={{
+                    display: 'inline-block',
+                    marginTop: 10,
+                    padding: '10px 16px',
+                    fontSize: 14,
+                    fontWeight: 700,
+                    borderRadius: 10,
+                    border: `1px solid ${VIOLET}`,
+                    color: VIOLET,
+                    backgroundColor: '#ffffff',
+                    cursor: coverPhotoUploading ? 'wait' : 'pointer',
+                    opacity: coverPhotoUploading ? 0.6 : 1,
+                  }}
+                >
+                  {redeemText(locale, 'profilePhotoAdd')}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    style={{ display: 'none' }}
+                    disabled={coverPhotoUploading}
+                    onChange={(e) => {
+                      void handleCoverPhotoSelect(e.target.files?.[0]);
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+              )}
+            </div>
 
             <div style={{ marginTop: 16 }}>
               <p style={{ fontSize: 13, fontWeight: 600, margin: 0 }}>

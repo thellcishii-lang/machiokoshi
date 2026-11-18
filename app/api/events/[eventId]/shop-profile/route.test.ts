@@ -153,6 +153,38 @@ describe('PUT /api/events/[eventId]/shop-profile', () => {
     expect(mocks.updateShopProfile).not.toHaveBeenCalled();
   });
 
+  it('トップ画像は検証・正規化して保存する', async () => {
+    mocks.updateShopProfile.mockImplementation(
+      async (_db: unknown, _eventId: string, _exhibitorId: string, profile: unknown) => ({
+        ok: true,
+        profile,
+      }),
+    );
+    const response = await callPut({
+      displayName: 'カレー堂',
+      coverImageUrl: ' https://example.com/cover.jpg ',
+    });
+    expect(response.status).toBe(200);
+    expect(mocks.updateShopProfile).toHaveBeenCalledWith(
+      {},
+      EVENT_ID,
+      'shop-a',
+      expect.objectContaining({
+        coverImageUrl: 'https://example.com/cover.jpg',
+      }),
+    );
+    const body = await response.json();
+    expect(body.profile.coverImageUrl).toBe('https://example.com/cover.jpg');
+  });
+
+  it('検証エラー（トップ画像が https でない）は 400 で、保存しない', async () => {
+    const response = await callPut({
+      coverImageUrl: 'http://example.com/cover.jpg',
+    });
+    expect(response.status).toBe(400);
+    expect(mocks.updateShopProfile).not.toHaveBeenCalled();
+  });
+
   it('検証エラー（写真4枚）は 400 で、保存しない', async () => {
     const response = await callPut({
       photoUrls: [

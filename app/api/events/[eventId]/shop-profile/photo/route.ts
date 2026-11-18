@@ -5,7 +5,8 @@
 // 無料の一品の写真はフォームの purpose='free-dish' で区別し、同じ
 // ディレクトリに free-dish- 接頭辞で保存する（公開読み取りは共通）。
 // ログインボーナス特典は purpose='login-reward'（login-reward- 接頭辞）、
-// 広告画像は purpose='ad'（ad- 接頭辞）で同じ作法にする。
+// 広告画像は purpose='ad'（ad- 接頭辞）、お店のトップ画像は
+// purpose='cover'（cover- 接頭辞）で同じ作法にする。
 // 検証（jpg/png/webp、1枚5MBまで）はレビュー写真と同じ純粋関数。
 // 書き込みは Admin SDK 経由のみで、storage.rules 側は読み取りだけを
 // 公開する（クライアントからの直接書き込みは許可しない）。
@@ -15,6 +16,7 @@ import { getStorage } from 'firebase-admin/storage';
 import { requireEventExhibitor } from '@/lib/event-auth';
 import { validateReviewPhoto } from '@/lib/event-review';
 import {
+  shopCoverPhotoStoragePath,
   shopFreeDishPhotoStoragePath,
   shopLoginRewardPhotoStoragePath,
   shopPhotoStoragePath,
@@ -69,7 +71,9 @@ export async function POST(
         ? shopLoginRewardPhotoStoragePath(eventId, guard.exhibitor.id, fileName)
         : purpose === 'ad'
           ? shopAdPhotoStoragePath(eventId, guard.exhibitor.id, fileName)
-          : shopPhotoStoragePath(eventId, guard.exhibitor.id, fileName);
+          : purpose === 'cover'
+            ? shopCoverPhotoStoragePath(eventId, guard.exhibitor.id, fileName)
+            : shopPhotoStoragePath(eventId, guard.exhibitor.id, fileName);
   try {
     const bucket = getStorage().bucket();
     const storedFile = bucket.file(storagePath);
