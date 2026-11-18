@@ -7,12 +7,25 @@
 // - 書けるのは、その店のスタンプをもらった客だけ（資格判定は
 //   lib/event-stamp.ts の hasStampForShop）。投稿は即時公開され、
 //   不適切なものだけ管理人が非表示にできる（店側は触れない）。
+// - 項目別評価の項目（内容と数）はプロジェクト設定
+//   （EventConfig.reviewCategories）で管理人が変えられる。レビューには
+//   投稿時点の項目名を categoryScores（{label, stars} の配列）として
+//   スナップショット保存し、表示は常にその項目名を使う（設定を後から
+//   変えても過去のレビューの表示は変わらない。スタンプ特典の
+//   stampBenefitText と同じ考え方）。導入前のレビューは固定4項目の
+//   categories オブジェクトで保存されているため、読み取り時に既定の
+//   項目名（味・接客・雰囲気・盛り付け）へ写して categoryScores に揃える。
 // - 内容は原文のまま表示する（翻訳しない）。公開用データには
 //   memberId を含めない（電話番号ハッシュを外に出さない）。
 // - 写真は API 経由で Admin SDK が Storage に保存する
 //   （events/{eventId}/review-photos/{memberId}/...）。ここでは
 //   検証だけを担う。
 import { FieldValue, type Firestore } from 'firebase-admin/firestore';
+import {
+  DEFAULT_REVIEW_CATEGORIES,
+  REVIEW_CATEGORY_LABEL_MAX_LENGTH,
+  REVIEW_CATEGORY_MAX_COUNT,
+} from './event';
 import { getEvent } from './event-store';
 import { getExhibitor } from './event-coupon';
 import {
@@ -37,6 +50,11 @@ export const REVIEW_PHOTO_EXTENSIONS: Record<string, string> = {
   'image/webp': 'webp',
 };
 
+/**
+ * 項目別評価の固定4項目の形（導入前の保存形式）。
+ * 現在の正の形は ReviewCategoryScore の配列で、これは旧データの
+ * 読み取りと、旧形式で読む利用側（特設サイト）への互換のために残す。
+ */
 export interface ReviewCategories {
   taste: number;
   service: number;
@@ -44,12 +62,32 @@ export interface ReviewCategories {
   presentation: number;
 }
 
+/** 項目別評価の1項目分。label は投稿時点の項目名のスナップショット。 */
+export interface ReviewCategoryScore {
+  label: string;
+  stars: number;
+}
+
+/** 既定の項目名と固定4項目キーの対応（旧形式との相互変換に使う）。 */
+export const REVIEW_CATEGORY_DEFAULT_KEYS: Array<{
+  label: string;
+  key: keyof ReviewCategories;
+}> = [
+  { label: DEFAULT_REVIEW_CATEGORIES[0], key: 'taste' },
+  { label: DEFAULT_REVIEW_CATEGORIES[1], key: 'service' },
+  { label: DEFAULT_REVIEW_CATEGORIES[2], key: 'atmosphere' },
+  { label: DEFAULT_REVIEW_CATEGORIES[3], key: 'presentation' },
+];
+
 export interface EventReview {
   id: string;
   memberId: string;
   exhibitorId: string;
   exhibitorName: string;
   stars: number;
+  /** 投稿時点の項目名つき項目別評価（正の形）。 */
+  categoryScores: ReviewCategoryScore[];
+  /** 互換用: categoryScores から既定の項目名で引いた固定4項目の値。 */
   categories: ReviewCategories;
   text: string;
   nickname: string;
@@ -65,6 +103,9 @@ export interface PublicReview {
   exhibitorId: string;
   exhibitorName: string;
   stars: number;
+  /** 投稿時点の項目名つき項目別評価（正の形）。 */
+  categoryScores: ReviewCategoryScore[];
+  /** 互換用: categoryScores から既定の項目名で引いた固定4項目の値。 */
   categories: ReviewCategories;
   text: string;
   nickname: string;
@@ -82,7 +123,12 @@ export interface ReviewSummary {
   count: number;
   /** 総合の平均（小数1桁）。0件なら 0 */
   averageStars: number;
-  /** 項目別の平均（小数1桁）。0件なら各 0 */
+  /**
+   * 項目別の平均（小数1桁）。項目名ごとに、その項目を含むレビューだけ
+   * で平均する。並びは最初に現れた項目の順。0件なら空配列。
+   */
+  categoryAverages: Array<{ label: string; average: number }>;
+  /** 互換用: categoryAverages から既定の項目名で引いた固定4項目の平均。 */
   categories: ReviewCategories;
 }
 
@@ -102,7 +148,8 @@ export function reviewIdFor(memberId: string, exhibitorId: string): string {
 export interface ParsedReviewInput {
   exhibitorId: string;
   stars: number;
-  categories: ReviewCategories;
+  /** 項目名つきの項目別評価。プロジェクトの現在の項目との照合は upsertReview 側で行う。 */
+  categoryScores: ReviewCategoryScore[];
   text: string;
   nickname: string;
   photoUrls: string[];
@@ -118,17 +165,106 @@ function parseStarValue(raw: unknown): number | null {
   return raw;
 }
 
-function parseCategories(raw: unknown): ReviewCategories | null {
-  if (typeof raw !== 'object' || raw === null) return null;
-  const source = raw as Record<string, unknown>;
-  const taste = parseStarValue(source.taste);
-  const service = parseStarValue(source.service);
-  const atmosphere = parseStarValue(source.atmosphere);
-  const presentation = parseStarValue(source.presentation);
-  if (taste === null || service === null || atmosphere === null || presentation === null) {
-    return null;
+/**
+ * 投稿入力の項目別評価を読む（純粋関数）。
+ * 現在の形式は categoryScores（{label, stars} の配列）。項目名は
+ * 前後の空白を落とし、1〜最大文字数・重複なし・最大件数まで。
+ * 旧形式の categories（固定4項目のオブジェクト）も、既定の項目名に
+ * 写して受け付ける（導入前の画面・テストとの互換）。
+ */
+function parseCategoryScoresInput(
+  source: Record<string, unknown>,
+): ReviewCategoryScore[] | null {
+  if (source.categoryScores !== undefined) {
+    if (!Array.isArray(source.categoryScores)) return null;
+    if (
+      source.categoryScores.length < 1 ||
+      source.categoryScores.length > REVIEW_CATEGORY_MAX_COUNT
+    ) {
+      return null;
+    }
+    const scores: ReviewCategoryScore[] = [];
+    const seen = new Set<string>();
+    for (const item of source.categoryScores) {
+      if (typeof item !== 'object' || item === null) return null;
+      const entry = item as Record<string, unknown>;
+      const label = typeof entry.label === 'string' ? entry.label.trim() : '';
+      if (!label || label.length > REVIEW_CATEGORY_LABEL_MAX_LENGTH) {
+        return null;
+      }
+      if (seen.has(label)) return null;
+      seen.add(label);
+      const stars = parseStarValue(entry.stars);
+      if (stars === null) return null;
+      scores.push({ label, stars });
+    }
+    return scores;
   }
-  return { taste, service, atmosphere, presentation };
+  if (source.categories !== undefined) {
+    if (typeof source.categories !== 'object' || source.categories === null) {
+      return null;
+    }
+    const legacy = source.categories as Record<string, unknown>;
+    const scores: ReviewCategoryScore[] = [];
+    for (const { label, key } of REVIEW_CATEGORY_DEFAULT_KEYS) {
+      const stars = parseStarValue(legacy[key]);
+      if (stars === null) return null;
+      scores.push({ label, stars });
+    }
+    return scores;
+  }
+  return null;
+}
+
+/**
+ * 保存済みレビューの項目別評価を読む（純粋関数・防御的。throw しない）。
+ * 現在の形式（categoryScores の配列）を優先し、無ければ導入前の
+ * categories（固定4項目のオブジェクト）を既定の項目名に写す。
+ * どちらも読めなければ空配列。
+ */
+export function parseReviewCategoryScores(data: {
+  categoryScores?: unknown;
+  categories?: unknown;
+}): ReviewCategoryScore[] {
+  if (Array.isArray(data.categoryScores)) {
+    const scores: ReviewCategoryScore[] = [];
+    const seen = new Set<string>();
+    for (const item of data.categoryScores) {
+      if (typeof item !== 'object' || item === null) continue;
+      const entry = item as Record<string, unknown>;
+      const label = typeof entry.label === 'string' ? entry.label.trim() : '';
+      const stars = entry.stars;
+      if (!label || seen.has(label)) continue;
+      if (typeof stars !== 'number' || !Number.isFinite(stars)) continue;
+      seen.add(label);
+      scores.push({ label, stars });
+      if (scores.length >= REVIEW_CATEGORY_MAX_COUNT) break;
+    }
+    if (scores.length > 0) return scores;
+  }
+  if (typeof data.categories === 'object' && data.categories !== null) {
+    const legacy = data.categories as Record<string, unknown>;
+    return REVIEW_CATEGORY_DEFAULT_KEYS.map(({ label, key }) => ({
+      label,
+      stars: typeof legacy[key] === 'number' ? (legacy[key] as number) : 0,
+    }));
+  }
+  return [];
+}
+
+/**
+ * 項目名つきの評価から、互換用の固定4項目の値を引く（純粋関数）。
+ * 既定の項目名と一致するものだけを写し、無い項目は 0。
+ */
+export function legacyCategoriesFromScores(
+  scores: Array<{ label: string; stars: number }>,
+): ReviewCategories {
+  const byLabel = new Map(scores.map((score) => [score.label, score.stars]));
+  const result = {} as ReviewCategories;
+  for (const { label, key } of REVIEW_CATEGORY_DEFAULT_KEYS) {
+    result[key] = byLabel.get(label) ?? 0;
+  }
+  return result;
 }
 
 /**
@@ -153,11 +289,11 @@ export function parseReviewInput(raw: unknown): ParseReviewResult {
     return { ok: false, error: '総合評価は1〜5で入力してください' };
   }
 
-  const categories = parseCategories(source.categories);
-  if (categories === null) {
+  const categoryScores = parseCategoryScoresInput(source);
+  if (categoryScores === null) {
     return {
       ok: false,
-      error: '項目別評価（味・接客・雰囲気・盛り付け）は1〜5で入力してください',
+      error: '項目別評価は各項目1〜5で入力してください',
     };
   }
 
@@ -199,7 +335,7 @@ export function parseReviewInput(raw: unknown): ParseReviewResult {
 
   return {
     ok: true,
-    value: { exhibitorId, stars, categories, text, nickname, photoUrls },
+    value: { exhibitorId, stars, categoryScores, text, nickname, photoUrls },
   };
 }
 
@@ -209,37 +345,48 @@ function roundToTenth(value: number): number {
   return Math.round(value * 10) / 10;
 }
 
-/** レビュー群の集計（総合平均・項目別平均・件数）。 */
+/**
+ * レビュー群の集計（総合平均・項目別平均・件数）。
+ * 項目別は項目名ごとに、その項目を含むレビューだけで平均する
+ * （項目の内容・数が途中で変わっても、過去の項目は過去の名前のまま
+ * 集計される）。ランキングは総合の平均だけを使う（lib/event-ranking.ts）。
+ */
 export function summarizeReviews(
-  reviews: Array<Pick<EventReview, 'stars' | 'categories'>>,
+  reviews: Array<Pick<EventReview, 'stars' | 'categoryScores'>>,
 ): ReviewSummary {
   const count = reviews.length;
   if (count === 0) {
     return {
       count: 0,
       averageStars: 0,
+      categoryAverages: [],
       categories: { taste: 0, service: 0, atmosphere: 0, presentation: 0 },
     };
   }
-  const sum = reviews.reduce(
-    (acc, review) => ({
-      stars: acc.stars + review.stars,
-      taste: acc.taste + review.categories.taste,
-      service: acc.service + review.categories.service,
-      atmosphere: acc.atmosphere + review.categories.atmosphere,
-      presentation: acc.presentation + review.categories.presentation,
-    }),
-    { stars: 0, taste: 0, service: 0, atmosphere: 0, presentation: 0 },
-  );
+  const starsTotal = reviews.reduce((acc, review) => acc + review.stars, 0);
+  const byLabel = new Map<string, { total: number; count: number }>();
+  for (const review of reviews) {
+    for (const score of review.categoryScores) {
+      const entry = byLabel.get(score.label) ?? { total: 0, count: 0 };
+      entry.total += score.stars;
+      entry.count += 1;
+      byLabel.set(score.label, entry);
+    }
+  }
+  const categoryAverages = [...byLabel.entries()].map(([label, entry]) => ({
+    label,
+    average: roundToTenth(entry.total / entry.count),
+  }));
   return {
     count,
-    averageStars: roundToTenth(sum.stars / count),
-    categories: {
-      taste: roundToTenth(sum.taste / count),
-      service: roundToTenth(sum.service / count),
-      atmosphere: roundToTenth(sum.atmosphere / count),
-      presentation: roundToTenth(sum.presentation / count),
-    },
+    averageStars: roundToTenth(starsTotal / count),
+    categoryAverages,
+    categories: legacyCategoriesFromScores(
+      categoryAverages.map(({ label, average }) => ({
+        label,
+        stars: average,
+      })),
+    ),
   };
 }
 
@@ -250,6 +397,7 @@ export function toPublicReview(review: EventReview): PublicReview {
     exhibitorId: review.exhibitorId,
     exhibitorName: review.exhibitorName,
     stars: review.stars,
+    categoryScores: review.categoryScores,
     categories: review.categories,
     text: review.text,
     nickname: review.nickname,
@@ -332,7 +480,9 @@ function mapReview(
   id: string,
   data: FirebaseFirestore.DocumentData,
 ): EventReview {
-  const categories = (data.categories ?? {}) as Record<string, unknown>;
+  // 項目別評価は現在の形式（categoryScores）を正とし、導入前の
+  // categories（固定4項目）で保存されたレビューは既定の項目名に写す。
+  const categoryScores = parseReviewCategoryScores(data);
   const photoUrls = Array.isArray(data.photoUrls)
     ? data.photoUrls.filter((url): url is string => typeof url === 'string')
     : [];
@@ -342,16 +492,8 @@ function mapReview(
     exhibitorId: String(data.exhibitorId ?? ''),
     exhibitorName: String(data.exhibitorName ?? ''),
     stars: typeof data.stars === 'number' ? data.stars : 0,
-    categories: {
-      taste: typeof categories.taste === 'number' ? categories.taste : 0,
-      service: typeof categories.service === 'number' ? categories.service : 0,
-      atmosphere:
-        typeof categories.atmosphere === 'number' ? categories.atmosphere : 0,
-      presentation:
-        typeof categories.presentation === 'number'
-          ? categories.presentation
-          : 0,
-    },
+    categoryScores,
+    categories: legacyCategoriesFromScores(categoryScores),
     text: String(data.text ?? ''),
     nickname: String(data.nickname ?? ''),
     photoUrls,
@@ -379,6 +521,9 @@ export type UpsertReviewResult =
 /**
  * レビューを投稿する（1人1店1件。再投稿は同じドキュメントの更新）。
  * 書けるのは、その店のスタンプをもらった客だけ（資格なしは 403）。
+ * 項目別評価は、プロジェクトの現在の項目（reviewCategories）と
+ * 項目名・並びが一致するものだけを受け付け、項目名つきでそのまま
+ * 保存する（これが表示用のスナップショットになる）。
  * 編集しても createdAt は保持し、管理人が付けた非表示（visible=false）も
  * 保持する（書き直しで非表示を解除できないように）。
  */
@@ -393,6 +538,18 @@ export async function upsertReview(
   const event = await getEvent(input.eventId);
   if (!event) {
     return { ok: false, status: 404, error: 'プロジェクトが見つかりません' };
+  }
+  const submittedLabels = input.value.categoryScores.map((score) => score.label);
+  const labelsMatch =
+    submittedLabels.length === event.reviewCategories.length &&
+    submittedLabels.every((label, i) => label === event.reviewCategories[i]);
+  if (!labelsMatch) {
+    return {
+      ok: false,
+      status: 400,
+      error:
+        '項目別評価の項目が変わっています。画面を再読み込みしてから投稿してください',
+    };
   }
   const exhibitor = await getExhibitor(input.eventId, input.value.exhibitorId);
   if (!exhibitor) {
@@ -423,7 +580,7 @@ export async function upsertReview(
       exhibitorId: input.value.exhibitorId,
       exhibitorName: exhibitor.name,
       stars: input.value.stars,
-      categories: input.value.categories,
+      categoryScores: input.value.categoryScores,
       text: input.value.text,
       nickname: input.value.nickname,
       photoUrls: input.value.photoUrls,
