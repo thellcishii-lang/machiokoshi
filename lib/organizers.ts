@@ -65,6 +65,29 @@ export interface Organizer {
    * 旧レコード（フィールド自体が無い）は '' 扱い。
    */
   worldName: string;
+  /**
+   * お客さんの登録に SMS 電話認証を使うかどうか（データのみの切替スイッチ。
+   * 画面のトグルは無い）。既定は false = 端末認証（匿名認証の uid を
+   * 本人キーにする）。true の契約だけが従来の SMS 電話登録になり、
+   * SMSカード残高（smsBalance）のゲートと消費報告もその契約だけに効く。
+   * 設定はプロビジョニング（本家接続）または運営側のデータ変更で行う。
+   * 旧レコード（フィールド自体が無い）は false 扱い。
+   */
+  smsAuthEnabled: boolean;
+  /**
+   * SMSカード残高のアプリ側ミラー（保有件数）。台帳の実体は本家
+   * （shops.smsBalance）で、プロビジョニングで絶対値が送られてきたら
+   * 上書きする（未報告の消費分は差し引いて取り込む。lib/sms-mirror.ts）。
+   * SMS 送信のたびにローカルで1件ずつ減らし、新規登録のゲートに使う。
+   * 旧レコード（フィールド自体が無い）は 0 扱い。
+   */
+  smsBalance: number;
+  /**
+   * 本家へまだ報告していない SMS 消費件数（ローカル消費の累計）。
+   * tick のバッチ報告（lib/sms-mirror.ts）が本家へ送って冪等に差し引かれ、
+   * 確認できた分だけここから減る。旧レコードは 0 扱い。
+   */
+  smsPendingCount: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -91,6 +114,17 @@ function toOrganizer(id: string, data: FirebaseFirestore.DocumentData): Organize
     billingOptionEnabled: data.billingOptionEnabled === true,
     adsOptionEnabled: data.adsOptionEnabled === true,
     worldName: typeof data.worldName === 'string' ? data.worldName : '',
+    smsAuthEnabled: data.smsAuthEnabled === true,
+    smsBalance:
+      typeof data.smsBalance === 'number' && Number.isFinite(data.smsBalance) && data.smsBalance > 0
+        ? Math.floor(data.smsBalance)
+        : 0,
+    smsPendingCount:
+      typeof data.smsPendingCount === 'number' &&
+      Number.isFinite(data.smsPendingCount) &&
+      data.smsPendingCount > 0
+        ? Math.floor(data.smsPendingCount)
+        : 0,
     createdAt: data.createdAt?.toDate?.().toISOString() ?? '',
     updatedAt: data.updatedAt?.toDate?.().toISOString() ?? '',
   };
@@ -186,6 +220,10 @@ export interface CreateOrganizerData {
   billingOptionEnabled?: boolean;
   adsOptionEnabled?: boolean;
   worldName?: string;
+  /** SMS認証を使うか。未指定は false（端末認証） */
+  smsAuthEnabled?: boolean;
+  /** SMSカード残高ミラーの初期値（本家からの絶対値）。未指定は 0 */
+  smsBalance?: number;
   mustChangePassword?: boolean;
 }
 
@@ -213,6 +251,12 @@ export async function createOrganizerRecord(
       billingOptionEnabled: data.billingOptionEnabled ?? false,
       adsOptionEnabled: data.adsOptionEnabled ?? false,
       worldName: data.worldName ?? '',
+      smsAuthEnabled: data.smsAuthEnabled ?? false,
+      smsBalance:
+        typeof data.smsBalance === 'number' && Number.isFinite(data.smsBalance) && data.smsBalance > 0
+          ? Math.floor(data.smsBalance)
+          : 0,
+      smsPendingCount: 0,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
@@ -246,6 +290,13 @@ export interface ProvisioningProfilePatch {
   adsOptionEnabled?: boolean;
   /** 世界観の名前。送られた場合だけ反映する */
   worldName?: string;
+  /** SMS認証の ON/OFF。送られた場合だけ反映する */
+  smsAuthEnabled?: boolean;
+  /**
+   * SMSカード残高（本家の絶対値）。プロビジョニング側で未報告の消費分を
+   * 差し引いてから書き込む（lib/provisioning.ts が調整する）。
+   */
+  smsBalance?: number;
 }
 
 /**

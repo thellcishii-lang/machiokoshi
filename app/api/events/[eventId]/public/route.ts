@@ -3,6 +3,7 @@
 //返すのは表示に必要な最小項目だけ（所有者uidなどは出さない）。
 import { NextResponse } from 'next/server';
 import { getEvent } from '@/lib/event-store';
+import { getEventSmsAuthEnabled } from '@/lib/event-member-auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +16,10 @@ export async function GET(
   if (!event) {
     return NextResponse.json({ error: 'イベントが見つかりません' }, { status: 404 });
   }
+  // 登録の本人確認方式（契約のデータ上のスイッチ）。来場者画面は
+  // これで電話入力フローと端末認証フローを出し分ける。画面に
+  // 切り替え UI は無く、契約レコードの値がそのまま効く。
+  const smsAuthEnabled = await getEventSmsAuthEnabled(event);
   return NextResponse.json({
     event: {
       name: event.name,
@@ -23,6 +28,7 @@ export async function GET(
       status: event.status,
       resetMode: event.resetMode,
       defaultLocale: event.defaultLocale,
+      smsAuthEnabled,
       // 入場用QRの取り込みが有効かどうか（来場者画面の表示制御に使う）
       admissionQrEnabled: event.admissionQrEnabled,
       // スタンプ達成特典の種類と内容（特設サイトの達成特典の表示に使う。

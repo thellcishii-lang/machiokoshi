@@ -126,6 +126,23 @@ describe('buildProvisioningUpdate', () => {
     it('billingOptionEnabled が送られなければ含めない（既存値を変えない）', () => {
       expect(buildProvisioningUpdate({ companyName: '' })).toEqual({});
     });
+    it('smsAuthEnabled は boolean が送られた場合だけ含める', () => {
+      expect(buildProvisioningUpdate({ companyName: '', smsAuthEnabled: true })).toEqual({
+        smsAuthEnabled: true,
+      });
+      expect(buildProvisioningUpdate({ companyName: '', smsAuthEnabled: false })).toEqual({
+        smsAuthEnabled: false,
+      });
+    });
+    it('smsAuthEnabled が boolean でなければ無視し、送られなければ含めない', () => {
+      expect(
+        buildProvisioningUpdate({
+          companyName: '',
+          smsAuthEnabled: 'true' as unknown as boolean,
+        }),
+      ).toEqual({});
+      expect(buildProvisioningUpdate({ companyName: '' })).toEqual({});
+    });
     it('adsOptionEnabled は boolean が送られた場合だけ含める', () => {
       expect(buildProvisioningUpdate({ companyName: '', adsOptionEnabled: true })).toEqual({
         adsOptionEnabled: true,

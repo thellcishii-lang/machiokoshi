@@ -1,12 +1,13 @@
 // app/api/events/[eventId]/reviews/route.ts
 // レビューの投稿（来場者）と、全件一覧（管理人）。
-// POST: 電話番号認証のトークンから本人を特定し、その店のスタンプを
-// もらった客だけが書ける（資格判定は lib/event-review.ts の upsertReview）。
+// POST: 認証方式に応じたトークンから本人を特定し（lib/event-member-auth.ts）、
+// その店のスタンプをもらった客だけが書ける（資格判定は
+// lib/event-review.ts の upsertReview）。
 // 1人1店1件で、再投稿は同じレビューの更新になる。
 // GET: 管理画面用の一覧（非表示も含む）。プロジェクト所有者だけ。
 import { NextResponse } from 'next/server';
-import { authAdmin, db } from '@/lib/firebase-admin';
-import { memberIdForPhone } from '@/lib/event-coupon';
+import { db } from '@/lib/firebase-admin';
+import { memberIdFromRequest } from '@/lib/event-member-auth';
 import { requireEventOwner } from '@/lib/event-auth';
 import {
   listReviewsForAdmin,
@@ -22,23 +23,9 @@ export async function POST(
 ) {
   const { eventId } = await params;
 
-  const authHeader = request.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return NextResponse.json({ error: '電話番号認証が必要です' }, { status: 401 });
-  }
-  let memberId: string;
-  try {
-    const decoded = await authAdmin.verifyIdToken(authHeader.slice(7));
-    if (typeof decoded.phone_number !== 'string' || !decoded.phone_number) {
-      return NextResponse.json({ error: '電話番号認証が必要です' }, { status: 401 });
-    }
-    memberId = memberIdForPhone(decoded.phone_number);
-  } catch {
-    return NextResponse.json(
-      { error: '電話番号認証の有効期限が切れています' },
-      { status: 401 },
-    );
-  }
+  const auth = await memberIdFromRequest(request, eventId);
+  if ('error' in auth) return auth.error;
+  const memberId = auth.memberId;
 
   let body: unknown;
   try {

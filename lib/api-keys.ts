@@ -68,6 +68,32 @@ export function toApiKeySummary(
   };
 }
 
+/**
+ * 有効なキーのうち最も新しいものを返す（アプリ→本家への署名付き送信に使う）。
+ * 本家側は「現在保持しているキー」で検証するため、通常は本家が保持する
+ * 最新の発行キーがこれと一致する。環境変数 HONKE_SMS_REPORT_KEY_ID で
+ * キーIDを指定した場合はそちらが優先される（lib/sms-mirror.ts）。
+ */
+export async function findLatestActiveApiKey(): Promise<ApiKeyRecord | null> {
+  const snap = await db
+    .collection(API_KEYS_COLLECTION)
+    .orderBy('createdAt', 'desc')
+    .limit(10)
+    .get();
+  for (const doc of snap.docs) {
+    const data = doc.data();
+    if (data.revoked === true) continue;
+    if (typeof data.secret !== 'string' || !data.secret) continue;
+    return {
+      id: doc.id,
+      secret: data.secret,
+      label: String(data.label ?? ''),
+      revoked: false,
+    };
+  }
+  return null;
+}
+
 /** キーを発行する。戻り値の secret はこの一度だけ表示する前提。 */
 export async function createApiKey(
   label: string,

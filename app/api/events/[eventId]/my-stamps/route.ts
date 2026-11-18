@@ -1,10 +1,11 @@
 // app/api/events/[eventId]/my-stamps/route.ts
 // 来場者本人のスタンプカード（現在の周の進捗と無料クーポン）。
-// 電話番号認証のトークンから本人を特定する（my-claims と同じ作法）。
-// 購読者でない場合は card: null（画面には何も出さない）。
+// 認証方式に応じたトークンから本人を特定する（my-claims と同じ作法、
+// lib/event-member-auth.ts）。購読者でない場合は card: null
+// （画面には何も出さない）。
 import { NextResponse } from 'next/server';
-import { authAdmin, db } from '@/lib/firebase-admin';
-import { memberIdForPhone } from '@/lib/event-coupon';
+import { db } from '@/lib/firebase-admin';
+import { memberIdFromRequest } from '@/lib/event-member-auth';
 import { getStampCard } from '@/lib/event-stamp';
 
 export const dynamic = 'force-dynamic';
@@ -15,24 +16,9 @@ export async function GET(
 ) {
   const { eventId } = await params;
 
-  const authHeader = request.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return NextResponse.json({ error: '電話番号認証が必要です' }, { status: 401 });
-  }
-  let memberId: string;
-  try {
-    const decoded = await authAdmin.verifyIdToken(authHeader.slice(7));
-    if (typeof decoded.phone_number !== 'string' || !decoded.phone_number) {
-      return NextResponse.json({ error: '電話番号認証が必要です' }, { status: 401 });
-    }
-    memberId = memberIdForPhone(decoded.phone_number);
-  } catch {
-    return NextResponse.json(
-      { error: '電話番号認証の有効期限が切れています' },
-      { status: 401 },
-    );
-  }
+  const auth = await memberIdFromRequest(request, eventId);
+  if ('error' in auth) return auth.error;
 
-  const card = await getStampCard(db, eventId, memberId);
+  const card = await getStampCard(db, eventId, auth.memberId);
   return NextResponse.json({ card });
 }

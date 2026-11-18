@@ -103,6 +103,12 @@ export const UI_TEXT = {
     zh: '验证码发送失败（{code}）。',
     ko: '인증 코드 전송에 실패했습니다({code}).',
   },
+  smsUnavailable: {
+    ja: '現在、新規登録を受け付けていません。',
+    en: 'New registrations are not being accepted right now.',
+    zh: '目前暂停接受新注册。',
+    ko: '현재 신규 등록을 받고 있지 않습니다.',
+  },
   codeLabel: {
     ja: '認証コード',
     en: 'Verification code',

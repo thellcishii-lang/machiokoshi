@@ -160,6 +160,16 @@ export function memberIdForPhone(phoneE164: string): string {
   return createHash('sha256').update(phoneE164.trim()).digest('hex');
 }
 
+/**
+ * 端末認証（SMSオフ時）の memberId。端末の識別子（匿名認証の uid）の
+ * SHA-256 ハッシュ。電話番号の memberId と衝突しないよう 'device:'
+ * プレフィックスを付けてからハッシュする。uid そのものはドキュメントIDに
+ * 含めない（memberIdForPhone と同じ作法）。
+ */
+export function memberIdForDevice(deviceUid: string): string {
+  return createHash('sha256').update(`device:${deviceUid.trim()}`).digest('hex');
+}
+
 export function claimIdFor(memberId: string, couponId: string): string {
   return `${memberId}_${couponId}`;
 }

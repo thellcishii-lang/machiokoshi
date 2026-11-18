@@ -13,6 +13,8 @@ const mocks = vi.hoisted(() => ({
   upsertReview: vi.fn(),
   listReviewsForAdmin: vi.fn(),
   requireEventOwner: vi.fn(),
+  getEvent: vi.fn(),
+  findOrganizerByOwnerUid: vi.fn(),
 }));
 
 vi.mock('@/lib/firebase-admin', () => ({
@@ -26,6 +28,14 @@ vi.mock('@/lib/event-review', () => ({
 }));
 vi.mock('@/lib/event-auth', () => ({
   requireEventOwner: mocks.requireEventOwner,
+}));
+// 本人特定は契約の認証方式で切り替わる（lib/event-member-auth.ts）。
+// このテストは従来の電話認証パスを検証するため、SMSオンの契約に倒す。
+vi.mock('@/lib/event-store', () => ({
+  getEvent: mocks.getEvent,
+}));
+vi.mock('@/lib/organizers', () => ({
+  findOrganizerByOwnerUid: mocks.findOrganizerByOwnerUid,
 }));
 
 import { GET, POST } from './route';
@@ -69,6 +79,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.verifyIdToken.mockResolvedValue({ phone_number: PHONE });
   mocks.parseReviewInput.mockReturnValue({ ok: true, value: PARSED_VALUE });
+  mocks.getEvent.mockResolvedValue({ ownerUid: 'owner-1' });
+  mocks.findOrganizerByOwnerUid.mockResolvedValue({ smsAuthEnabled: true });
 });
 
 describe('POST /api/events/[eventId]/reviews', () => {

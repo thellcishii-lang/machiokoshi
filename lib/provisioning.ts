@@ -12,6 +12,7 @@
 // - パスワードは Auth に渡すだけで、ログ・レコードのどこにも残さない。
 import { authAdmin } from './firebase-admin';
 import { propagateCapsToOwnerEvents } from './event-store';
+import { applyProvisionedSmsBalance, sanitizeSmsBalance } from './sms-mirror';
 import {
   applyProvisioningUpdate,
   completeOrganizerRecord,
@@ -61,6 +62,19 @@ export interface ProvisionOrganizerInput {
    * （無害化は sanitizeWorldName）。
    */
   worldName?: string;
+  /**
+   * SMS認証の ON/OFF（本家 lib/sms-card.ts のミラー契約）。任意項目:
+   * boolean が送られた場合だけ反映し、送られなければ既存値を変えない。
+   * アプリ側の既定は false（端末認証）で、本家が明示的に true を
+   * 送った契約だけが SMS 電話登録になる。
+   */
+  smsAuthEnabled?: boolean;
+  /**
+   * SMSカード残高（本家台帳の絶対値）。任意項目: 数値が送られた場合だけ
+   * ミラーへ取り込む。本家の絶対値はアプリ側の未報告消費を知らないため、
+   * 取り込み時に未報告分を差し引く（lib/sms-mirror.ts）。不正値は無視する。
+   */
+  smsBalance?: number;
 }
 
 export type ProvisionOrganizerResult =
@@ -146,6 +160,7 @@ export function buildProvisioningUpdate(
     | 'billingOptionEnabled'
     | 'adsOptionEnabled'
     | 'worldName'
+    | 'smsAuthEnabled'
   >,
 ): ProvisioningProfilePatch {
   const patch: ProvisioningProfilePatch = {};
@@ -174,6 +189,10 @@ export function buildProvisioningUpdate(
   }
   const worldName = sanitizeWorldName(input.worldName);
   if (worldName !== undefined) patch.worldName = worldName;
+  // SMS認証の切替は boolean が送られた場合だけ反映する。
+  if (typeof input.smsAuthEnabled === 'boolean') {
+    patch.smsAuthEnabled = input.smsAuthEnabled;
+  }
   return patch;
 }
 
@@ -227,6 +246,18 @@ export async function provisionOrganizer(
     const patch = buildProvisioningUpdate(input);
     if (Object.keys(patch).length > 0) {
       await applyProvisioningUpdate(input.contractId, patch);
+    }
+    // SMSカード残高（本家の絶対値）が送られてきたらミラーへ取り込む。
+    // 本家の絶対値はアプリ側の未報告消費を知らないため、その分を差し引く
+    // （二重に数えないための調整。lib/sms-mirror.ts）。
+    const smsBalance = sanitizeSmsBalance(input.smsBalance);
+    if (smsBalance !== undefined) {
+      await applyProvisioningUpdate(input.contractId, {
+        smsBalance: applyProvisionedSmsBalance(
+          smsBalance,
+          existing!.smsPendingCount ?? 0,
+        ),
+      });
     }
     // 枠が変わったら、終わっていないイベント（下書き・開催中）にも
     // 同じ枠を伝播させる。終了済みイベントの枠は履歴として触らない。
@@ -303,6 +334,10 @@ export async function provisionOrganizer(
     adsOptionEnabled: input.adsOptionEnabled === true,
     // 世界観の名前は無害化した値だけを保持する。
     worldName: sanitizeWorldName(input.worldName) ?? '',
+    // SMS認証は boolean のときだけ有効として保存（それ以外は端末認証）。
+    smsAuthEnabled: input.smsAuthEnabled === true,
+    // SMSカード残高ミラーは無害化した絶対値だけを保持する。
+    smsBalance: sanitizeSmsBalance(input.smsBalance) ?? 0,
     // 初期パスワードは初回ログインで必ず変更させる。
     mustChangePassword: true,
   };
