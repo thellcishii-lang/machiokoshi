@@ -7,6 +7,7 @@ import {
   evaluateRedemption,
   filterCoupons,
   isCouponCapReached,
+  memberIdForDevice,
   memberIdForPhone,
   parseCouponIssuedBy,
   parseExhibitorKind,
@@ -144,6 +145,21 @@ describe('ID生成', () => {
   it('memberIdForPhone は決定的で電話番号そのものを含まない', () => {
     expect(memberIdForPhone('+819012345678')).toBe(memberIdForPhone('+819012345678'));
     expect(memberIdForPhone('+819012345678')).not.toContain('9012345678');
+  });
+  it('memberIdForDevice は決定的で、uid そのものを含まない64桁ハッシュ', () => {
+    const uid = 'device-uid-abc123';
+    expect(memberIdForDevice(uid)).toBe(memberIdForDevice(uid));
+    expect(memberIdForDevice(uid)).toMatch(/^[0-9a-f]{64}$/);
+    expect(memberIdForDevice(uid)).not.toContain(uid);
+    // 前後の空白は取り除いてから導く（電話番号側と同じ作法）
+    expect(memberIdForDevice(` ${uid} `)).toBe(memberIdForDevice(uid));
+  });
+  it('memberIdForDevice は電話番号の memberId と衝突しない', () => {
+    // 同じ文字列でも、端末キーと電話キーでは別の本人として扱う
+    expect(memberIdForDevice('+819012345678')).not.toBe(
+      memberIdForPhone('+819012345678'),
+    );
+    expect(memberIdForDevice('uid-a')).not.toBe(memberIdForDevice('uid-b'));
   });
   it('claimId は memberId と couponId の組み合わせ', () => {
     expect(claimIdFor('m1', 'c1')).toBe('m1_c1');

@@ -1,10 +1,20 @@
 // app/api/events/[eventId]/register/route.ts
-// 来場者登録 API。Firebase Phone Auth（SMS認証）で本人確認した電話番号をキーに、
-// events/{eventId} 配下へ members（本人確認）と subscribers（プッシュ購読）を保存する。
+// 来場者登録 API。本人確認の方式は契約のデータ上のスイッチ
+// （organizers.smsAuthEnabled）で切り替わる:
+// - SMSオン: Firebase Phone Auth（SMS認証）で本人確認した電話番号をキーに、
+//   events/{eventId} 配下へ members（本人確認）と subscribers（プッシュ購読）
+//   を保存する。
+// - SMSオフ（既定）: 端末認証。匿名認証の uid（端末に保持される識別子）を
+//   キーに保存し、電話番号は一切集めない。
 import { NextResponse } from 'next/server';
 import { authAdmin } from '@/lib/firebase-admin';
 import { enforceRateLimit } from '@/lib/rate-limit';
-import { registerEventVisitor } from '@/lib/event-register';
+import {
+  registerEventDeviceVisitor,
+  registerEventVisitor,
+} from '@/lib/event-register';
+import { getEvent } from '@/lib/event-store';
+import { getEventSmsAuthEnabled } from '@/lib/event-member-auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,20 +32,26 @@ export async function POST(
 
   const { eventId } = await params;
 
-  // 電話番号認証（SMS）のトークンから電話番号を取り出す。本人確認が無い登録は受けない。
+  const event = await getEvent(eventId);
+  if (!event) {
+    return NextResponse.json({ error: 'イベントが見つかりません' }, { status: 404 });
+  }
+  const smsEnabled = await getEventSmsAuthEnabled(event);
+  const requiredMessage = smsEnabled ? '電話番号認証が必要です' : '認証が必要です';
+  const expiredMessage = smsEnabled
+    ? '電話番号認証の有効期限が切れています'
+    : '認証の有効期限が切れています';
+
+  // 本人確認済みのトークンから本人キーを取り出す。本人確認が無い登録は受けない。
   const authHeader = request.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
-    return NextResponse.json({ error: '電話番号認証が必要です' }, { status: 401 });
+    return NextResponse.json({ error: requiredMessage }, { status: 401 });
   }
-  let phoneE164: string;
+  let decoded: { uid?: unknown; phone_number?: unknown };
   try {
-    const decoded = await authAdmin.verifyIdToken(authHeader.slice(7));
-    if (typeof decoded.phone_number !== 'string' || !decoded.phone_number) {
-      return NextResponse.json({ error: '電話番号認証が必要です' }, { status: 401 });
-    }
-    phoneE164 = decoded.phone_number;
+    decoded = await authAdmin.verifyIdToken(authHeader.slice(7));
   } catch {
-    return NextResponse.json({ error: '電話番号認証の有効期限が切れています' }, { status: 401 });
+    return NextResponse.json({ error: expiredMessage }, { status: 401 });
   }
 
   let body: Record<string, unknown>;
@@ -50,7 +66,30 @@ export async function POST(
   }
   const lang = typeof body.lang === 'string' ? body.lang : undefined;
 
-  const result = await registerEventVisitor(eventId, { phoneE164, fcmToken, lang });
+  if (smsEnabled) {
+    if (typeof decoded.phone_number !== 'string' || !decoded.phone_number) {
+      return NextResponse.json({ error: requiredMessage }, { status: 401 });
+    }
+    const result = await registerEventVisitor(eventId, {
+      phoneE164: decoded.phone_number,
+      fcmToken,
+      lang,
+    });
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: result.status });
+    }
+    return NextResponse.json({ ok: true, memberId: result.memberId }, { status: 201 });
+  }
+
+  // 端末認証: 匿名認証の uid が端末の識別子になる。
+  if (typeof decoded.uid !== 'string' || !decoded.uid) {
+    return NextResponse.json({ error: requiredMessage }, { status: 401 });
+  }
+  const result = await registerEventDeviceVisitor(eventId, {
+    deviceUid: decoded.uid,
+    fcmToken,
+    lang,
+  });
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: result.status });
   }

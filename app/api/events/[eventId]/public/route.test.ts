@@ -6,10 +6,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   getEvent: vi.fn(),
+  findOrganizerByOwnerUid: vi.fn(),
 }));
 
 vi.mock('@/lib/event-store', () => ({
   getEvent: mocks.getEvent,
+}));
+vi.mock('@/lib/firebase-admin', () => ({
+  authAdmin: { verifyIdToken: vi.fn() },
+  db: {},
+}));
+vi.mock('@/lib/organizers', () => ({
+  findOrganizerByOwnerUid: mocks.findOrganizerByOwnerUid,
 }));
 
 import { GET } from './route';
@@ -42,6 +50,8 @@ function eventWith(partial: Record<string, unknown>) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // 契約レコードが引けない既定では端末認証（smsAuthEnabled: false）
+  mocks.findOrganizerByOwnerUid.mockResolvedValue(null);
 });
 
 describe('GET /api/events/[eventId]/public', () => {
@@ -132,5 +142,19 @@ describe('GET /api/events/[eventId]/public', () => {
       params: Promise.resolve({ eventId: EVENT_ID }),
     });
     expect(response.status).toBe(404);
+  });
+
+  it('smsAuthEnabled は契約のスイッチを反映する（既定は false = 端末認証）', async () => {
+    mocks.getEvent.mockResolvedValue(eventWith({ ownerUid: 'owner-1' }));
+    const off = await GET(new Request('http://localhost'), {
+      params: Promise.resolve({ eventId: EVENT_ID }),
+    });
+    expect((await off.json()).event.smsAuthEnabled).toBe(false);
+
+    mocks.findOrganizerByOwnerUid.mockResolvedValue({ smsAuthEnabled: true });
+    const on = await GET(new Request('http://localhost'), {
+      params: Promise.resolve({ eventId: EVENT_ID }),
+    });
+    expect((await on.json()).event.smsAuthEnabled).toBe(true);
   });
 });

@@ -2,8 +2,14 @@
 
 // app/e/[eventId]/page.tsx
 // Push-taro 町おこし の来場者登録画面（QRコードの着地先）。
-// 流れ: プロジェクト情報の確認 → 電話番号のSMS認証 → 通知許可とFCMトークン取得 → 登録API。
-// 電話番号認証の作法は本家の登録画面（app/subscribe）に合わせている。
+// 本人確認の方式は契約のデータ上のスイッチ（公開APIの smsAuthEnabled）で
+// 切り替わる。画面に切り替え UI は無い:
+// - SMSオン: プロジェクト情報の確認 → 電話番号のSMS認証 → 通知許可と
+//   FCMトークン取得 → 登録API。電話番号認証の作法は本家の登録画面
+//   （app/subscribe）に合わせている。SMSを送る直前に残高ゲート
+//   （/sms-gate）を通す。
+// - SMSオフ（既定）: 電話番号は使わない。匿名認証で端末の識別子（uid）を
+//   得て、そのまま通知許可と登録APIへ進む。
 // 画面の固定文は4言語辞書（lib/ui-text.ts）で切り替える。初期表示は
 // プロジェクトのデフォルト言語、本人が切り替えたらその選択が優先される。
 // クーポン表示: 取得済みを上部に固定し、全カタログは出店者ごとの
@@ -21,6 +27,7 @@ import {
   RecaptchaVerifier,
   User,
   onAuthStateChanged,
+  signInAnonymously,
   signInWithPhoneNumber,
 } from 'firebase/auth';
 import { auth, requestFCMToken } from '@/lib/firebase-client';
@@ -63,6 +70,12 @@ interface PublicEvent {
   defaultLocale: string;
   /** 入場用QRの取り込みが有効か（主催者設定。オフなら画面に何も出さない） */
   admissionQrEnabled: boolean;
+  /**
+   * 登録に SMS 電話認証を使うか（契約のデータ上のスイッチ。公開APIが
+   * 契約レコードから解決して返す）。false（既定）は端末認証で、
+   * 電話番号入力の段階そのものが出ない。
+   */
+  smsAuthEnabled: boolean;
   /** レビューの項目別評価の項目（主催者設定。未取得なら既定の4項目に倒す） */
   reviewCategories?: string[];
   /** 主催者リンク（最大3件）。未登録なら空で、画面に何も出さない */
@@ -902,7 +915,15 @@ export default function EventVisitorPage() {
           // 保存が読めなくてもデフォルト言語で続行する
         }
         setLocale(resolveLocale(stored, ev.defaultLocale));
-        setPhase(ev.status === 'live' ? 'phone' : 'unavailable');
+        // SMSオンの契約だけ電話番号入力から始める。端末認証（既定）は
+        // 電話番号の段階を飛ばして、そのまま登録（通知許可）の段階へ。
+        setPhase(
+          ev.status === 'live'
+            ? ev.smsAuthEnabled === true
+              ? 'phone'
+              : 'register'
+            : 'unavailable',
+        );
         // 案内PDFは登録前でも見られる（会場案内など）
         try {
           const pdfRes = await fetch(`/api/events/${eventId}/info-pdfs/public`);
@@ -928,6 +949,17 @@ export default function EventVisitorPage() {
       }),
     [],
   );
+
+  // 端末認証（SMSオフ）のときは匿名認証でサインインし、端末の識別子
+  // （uid）を得る。uid は端末側に保持されるため、同じ端末では同じ
+  // 来場者として扱われる。電話認証済みのセッションがある場合は
+  // そのまま使う（サーバー側も uid から同じ本人を導く）。
+  useEffect(() => {
+    if (!event || event.smsAuthEnabled === true || user) return;
+    signInAnonymously(auth).catch(() => {
+      // 失敗しても画面は止めない（登録ボタンの処理でも再試行する）
+    });
+  }, [event, user]);
 
   const handleLocaleChange = async (next: Locale) => {
     setLocale(next);
@@ -963,6 +995,19 @@ export default function EventVisitorPage() {
     setBusy(true);
     setMessage('');
     try {
+      // SMSカード残高のゲート: 残高が無い契約では SMS 自体を送らない。
+      // ゲートを通過した時点で消費1件として数えられる（lib/sms-mirror.ts）。
+      const gateRes = await fetch(`/api/events/${eventId}/sms-gate`, {
+        method: 'POST',
+      });
+      if (gateRes.status === 403) {
+        setMessage(uiText(locale, 'smsUnavailable'));
+        return;
+      }
+      if (!gateRes.ok) {
+        setMessage(uiText(locale, 'sendCodeFailed', { code: 'sms-gate' }));
+        return;
+      }
       const previousVerifier = (window as unknown as Record<string, unknown>)
         .__phoneRecaptchaVerifier as RecaptchaVerifier | undefined;
       previousVerifier?.clear();
@@ -997,7 +1042,24 @@ export default function EventVisitorPage() {
   };
 
   const handleRegister = async () => {
-    if (!user || !event) return;
+    if (!event) return;
+    let currentUser = user;
+    if (!currentUser) {
+      // SMSオンでは電話認証が前提。端末認証では匿名サインインが
+      // まだなら、ここで端末の識別子を得る。
+      if (event.smsAuthEnabled === true) return;
+      setBusy(true);
+      try {
+        const credential = await signInAnonymously(auth);
+        currentUser = credential.user;
+        setUser(credential.user);
+      } catch {
+        setMessage(uiText(locale, 'registerRetry'));
+        return;
+      } finally {
+        setBusy(false);
+      }
+    }
     setBusy(true);
     setMessage('');
     try {
@@ -1022,7 +1084,7 @@ export default function EventVisitorPage() {
         return;
       }
 
-      const idToken = await user.getIdToken();
+      const idToken = await currentUser.getIdToken();
       const res = await fetch(`/api/events/${eventId}/register`, {
         method: 'POST',
         headers: {

@@ -1,19 +1,25 @@
 // lib/event-register.ts
 // Push-taro 町おこし の来場者登録（events/{eventId} 配下への配置）。
 //
-// - 本人確認は Firebase Phone Auth（SMS認証）。電話番号がその人の識別キーになる
-//   （再登録によるクーポンの二重取得を防ぐため）。
-// - members/{memberId}: 電話番号を含む本人確認レコード。memberId は電話番号の
-//   SHA-256 ハッシュで、電話番号そのものをドキュメントIDにしない。
+// - 本人確認の方式は契約のデータ上のスイッチ（organizers.smsAuthEnabled）で
+//   切り替わる。画面にトグルは無い。
+//   - SMSオン: Firebase Phone Auth（SMS認証）。電話番号がその人の識別キーに
+//     なる（再登録によるクーポンの二重取得を防ぐため）。
+//   - SMSオフ（既定）: 端末認証。匿名認証の uid（端末に保持される識別子）が
+//     識別キーになり、電話番号は一切集めない。
+// - members/{memberId}: 本人確認レコード。memberId は識別キー（電話番号 or
+//   端末 uid）の SHA-256 ハッシュで、キーそのものをドキュメントIDにしない。
 //   方式B（keep-phones）では日次リセットでも残り、イベント終了時に消去される。
-// - subscribers/{memberId}: プッシュ購読（FCMトークン）。1電話番号につき1購読とし、
-//   再登録はトークンの更新として扱う。日次リセットで両方式とも消去される。
+// - subscribers/{memberId}: プッシュ購読（FCMトークン）。1つの本人キーにつき
+//   1購読とし、再登録はトークンの更新として扱う。日次リセットで両方式とも
+//   消去される。
 import { createHash } from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
 import { db, messaging } from './firebase-admin';
 import { EVENT_SUBCOLLECTIONS, EventConfig, jstDateString, localeTopic } from './event';
 import { isLocale, normalizeLocale, type Locale } from './i18n';
 import { getEvent } from './event-store';
+import { memberIdForDevice } from './event-coupon';
 
 export function memberIdForPhone(phoneE164: string): string {
   return createHash('sha256').update(phoneE164.trim()).digest('hex');
@@ -76,10 +82,51 @@ export async function registerEventVisitor(
   if (!event) {
     return { ok: false, status: 404, error: 'イベントが見つかりません' };
   }
+  return registerMember(
+    eventId,
+    event,
+    memberIdForPhone(input.phoneE164),
+    { phone: input.phoneE164 },
+    input,
+  );
+}
 
+/**
+ * 端末認証（SMSオフ時）の来場者登録。本人キーは匿名認証の uid
+ * （端末に保持される識別子）で、members レコードに電話番号は持たない。
+ * 登録可否・上限・配信トピックの扱いは電話登録と同一。
+ */
+export async function registerEventDeviceVisitor(
+  eventId: string,
+  input: { deviceUid: string; fcmToken: string; lang?: string; now?: Date },
+): Promise<RegisterVisitorResult> {
+  const event = await getEvent(eventId);
+  if (!event) {
+    return { ok: false, status: 404, error: 'イベントが見つかりません' };
+  }
+  return registerMember(
+    eventId,
+    event,
+    memberIdForDevice(input.deviceUid),
+    { authMethod: 'device', deviceUid: input.deviceUid },
+    input,
+  );
+}
+
+/**
+ * 登録の本体（本人キーの導出だけが方式で異なり、以降は共通）。
+ * memberCreateFields は members レコードの新規作成時だけ書く本人キー
+ * まわりの項目（電話番号 or 端末識別子）。
+ */
+async function registerMember(
+  eventId: string,
+  event: EventConfig,
+  memberId: string,
+  memberCreateFields: Record<string, unknown>,
+  input: { fcmToken: string; lang?: string; now?: Date },
+): Promise<RegisterVisitorResult> {
   const now = input.now ?? new Date();
   const today = jstDateString(now);
-  const memberId = memberIdForPhone(input.phoneE164);
   const subscribersRef = eventRef(eventId).collection(EVENT_SUBCOLLECTIONS.subscribers);
   const membersRef = eventRef(eventId).collection(EVENT_SUBCOLLECTIONS.members);
   const subscriberRef = subscribersRef.doc(memberId);
@@ -106,7 +153,7 @@ export async function registerEventVisitor(
   const batch = db.batch();
   if (!memberSnap.exists) {
     batch.set(memberRef, {
-      phone: input.phoneE164,
+      ...memberCreateFields,
       createdAt: FieldValue.serverTimestamp(),
       lastRegisteredAt: FieldValue.serverTimestamp(),
     });

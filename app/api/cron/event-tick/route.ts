@@ -3,10 +3,12 @@
 // 外部のスケジューラ（Cloud Scheduler 等）から15分ごとに叩く前提。
 //
 // 町おこしのプロジェクトは常設のため、EVENT にあった終了処理（データ消去）と
-// 日次リセットは行わない。tick の役割は2つ:
+// 日次リセットは行わない。tick の役割は3つ:
 // 1. 予約配信の実行: 到期した campaign を開催中プロジェクトごとに処理する。
 // 2. 週次ランキングの補完: 「直近で完了した週」のランキングが未保存の
 //    プロジェクトについて計算して保存する（冪等な catch-up）。
+// 3. SMS消費の本家への報告: SMSオン契約の未報告消費を署名付きで本家へ
+//    送る（lib/sms-mirror.ts）。SMSオフ（既定）の間は対象が無く何も起きない。
 // プロジェクトごとに try/catch し、1プロジェクトの失敗が他プロジェクトの処理を止めない。
 // ランキングの失敗も配信とは独立に局所化する。
 import { NextResponse } from 'next/server';
@@ -17,6 +19,7 @@ import { processDueCampaigns } from '@/lib/event-push';
 import { ensurePreviousWeekRanking } from '@/lib/event-ranking';
 import { recordTickRun, type TickRunInput } from '@/lib/tick-runs';
 import { dispatchOperatorAlerts } from '@/lib/monitoring';
+import { flushSmsUsageReports } from '@/lib/sms-mirror';
 
 export const dynamic = 'force-dynamic';
 
@@ -69,6 +72,30 @@ export async function GET(req: Request) {
       }
     }
 
+    // SMS消費の報告は配信・ランキングと独立。失敗しても tick 本体は
+    // 止めず、未報告分は次回 tick で同じ reportId のまま再送される。
+    let smsReports: { sent: number; failed: number; skipped: number } | undefined;
+    try {
+      smsReports = await flushSmsUsageReports();
+      if (smsReports.failed > 0) {
+        errors.push({
+          eventId: '-',
+          message: `SMS消費報告に失敗: ${smsReports.failed}件`,
+        });
+      }
+      if (smsReports.skipped > 0) {
+        errors.push({
+          eventId: '-',
+          message: `SMS消費報告を保留（署名キーが無い）: ${smsReports.skipped}件`,
+        });
+      }
+    } catch (error) {
+      errors.push({
+        eventId: '-',
+        message: `SMS消費報告に失敗: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
+
     await recordAndAlert({
       ok: true,
       durationMs: Date.now() - startedAtMs,
@@ -80,6 +107,7 @@ export async function GET(req: Request) {
     return NextResponse.json({
       ok: true,
       campaignsSent,
+      smsReports,
       errors,
     });
   } catch (error) {

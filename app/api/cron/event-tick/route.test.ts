@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   ensurePreviousWeekRanking: vi.fn(),
   recordTickRun: vi.fn(),
   dispatchOperatorAlerts: vi.fn(),
+  flushSmsUsageReports: vi.fn(),
 }));
 
 vi.mock('@/lib/cron-auth', () => ({ isValidCronRequest: () => true }));
@@ -25,6 +26,9 @@ vi.mock('@/lib/event-ranking', () => ({
 vi.mock('@/lib/tick-runs', () => ({ recordTickRun: mocks.recordTickRun }));
 vi.mock('@/lib/monitoring', () => ({
   dispatchOperatorAlerts: mocks.dispatchOperatorAlerts,
+}));
+vi.mock('@/lib/sms-mirror', () => ({
+  flushSmsUsageReports: mocks.flushSmsUsageReports,
 }));
 
 import { GET } from './route';
@@ -45,6 +49,7 @@ beforeEach(() => {
   mocks.ensurePreviousWeekRanking.mockResolvedValue(false);
   mocks.recordTickRun.mockResolvedValue(undefined);
   mocks.dispatchOperatorAlerts.mockResolvedValue(undefined);
+  mocks.flushSmsUsageReports.mockResolvedValue({ sent: 0, failed: 0, skipped: 0 });
 });
 
 describe('GET /api/cron/event-tick', () => {
