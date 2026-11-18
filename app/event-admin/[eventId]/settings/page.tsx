@@ -33,6 +33,12 @@ import {
   adminPageTitleStyle,
 } from '@/components/AdminBrand';
 import { adminText, uiText } from '@/lib/ui-text';
+import {
+  DEFAULT_REVIEW_CATEGORIES,
+  REVIEW_CATEGORY_LABEL_MAX_LENGTH,
+  REVIEW_CATEGORY_MAX_COUNT,
+  REVIEW_CATEGORY_MIN_COUNT,
+} from '@/lib/event';
 import { AdminShell } from '@/components/AdminShell';
 import { CapWarningBanner } from '@/components/CapWarningBanner';
 import { AdminNav } from '../AdminNav';
@@ -142,6 +148,11 @@ export default function EventSettingsAdminPage() {
   const [rankingMinReviews, setRankingMinReviews] = useState(3);
   const [rankingMessage, setRankingMessage] = useState('');
   const [rankingSaving, setRankingSaving] = useState(false);
+  const [reviewCategoryLabels, setReviewCategoryLabels] = useState<string[]>([
+    ...DEFAULT_REVIEW_CATEGORIES,
+  ]);
+  const [reviewCategoriesMessage, setReviewCategoriesMessage] = useState('');
+  const [reviewCategoriesSaving, setReviewCategoriesSaving] = useState(false);
   const [loginBonusEnabled, setLoginBonusEnabled] = useState(false);
   const [loginBonusDays, setLoginBonusDays] = useState(7);
   const [loginBonusMessage, setLoginBonusMessage] = useState('');
@@ -215,6 +226,12 @@ export default function EventSettingsAdminPage() {
       }
       if (typeof data.event?.rankingMinReviews === 'number') {
         setRankingMinReviews(data.event.rankingMinReviews);
+      }
+      if (Array.isArray(data.event?.reviewCategories)) {
+        const labels = data.event.reviewCategories.filter(
+          (value: unknown): value is string => typeof value === 'string',
+        );
+        if (labels.length > 0) setReviewCategoryLabels(labels);
       }
       if (typeof data.event?.loginBonusEnabled === 'boolean') {
         setLoginBonusEnabled(data.event.loginBonusEnabled);
@@ -332,6 +349,49 @@ export default function EventSettingsAdminPage() {
       );
     } finally {
       setRankingSaving(false);
+    }
+  };
+
+  const updateReviewCategoryLabel = (index: number, value: string) => {
+    setReviewCategoryLabels((labels) =>
+      labels.map((label, i) => (i === index ? value : label)),
+    );
+  };
+
+  const handleSaveReviewCategories = async () => {
+    const normalized = reviewCategoryLabels.map((label) => label.trim());
+    const invalid =
+      normalized.length < REVIEW_CATEGORY_MIN_COUNT ||
+      normalized.length > REVIEW_CATEGORY_MAX_COUNT ||
+      normalized.some(
+        (label) => !label || label.length > REVIEW_CATEGORY_LABEL_MAX_LENGTH,
+      ) ||
+      new Set(normalized).size !== normalized.length;
+    if (invalid) {
+      setReviewCategoriesMessage(
+        adminText(locale, 'reviewCategoriesInvalidError'),
+      );
+      return;
+    }
+    setReviewCategoriesSaving(true);
+    setReviewCategoriesMessage('');
+    try {
+      const data = await callApi(`/api/events/${eventId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ reviewCategories: normalized }),
+      });
+      if (Array.isArray(data.event?.reviewCategories)) {
+        setReviewCategoryLabels(data.event.reviewCategories);
+      }
+      setReviewCategoriesMessage(adminText(locale, 'reviewCategoriesSaved'));
+    } catch (e) {
+      setReviewCategoriesMessage(
+        e instanceof Error
+          ? e.message
+          : adminText(locale, 'reviewCategoriesSaveFailed'),
+      );
+    } finally {
+      setReviewCategoriesSaving(false);
     }
   };
 
@@ -716,6 +776,90 @@ export default function EventSettingsAdminPage() {
             </span>
           </button>
           {rankingMessage && <p style={adminFeedbackStyle}>{rankingMessage}</p>}
+        </div>
+      </section>
+
+      <section style={{ marginTop: 32 }}>
+        <h2 style={sectionTitleStyle}>{adminText(locale, 'reviewCategoriesSettingsTitle')}</h2>
+        <p style={{ fontSize: 12.5, color: '#64748b', marginTop: 5 }}>
+          {adminText(locale, 'reviewCategoriesNote')}
+        </p>
+        <div style={{ ...cardStyle, marginTop: 12, padding: 24 }}>
+          {reviewCategoryLabels.map((label, i) => (
+            <div
+              key={i}
+              style={{
+                display: 'flex',
+                alignItems: 'flex-end',
+                gap: 10,
+                marginBottom: i < reviewCategoryLabels.length - 1 ? 14 : 0,
+              }}
+            >
+              <label style={{ ...labelStyle, marginBottom: 0, flex: 1 }}>
+                {adminText(locale, 'reviewCategorySlotLabel', { n: String(i + 1) })}
+                <input
+                  style={inputStyle}
+                  value={label}
+                  maxLength={REVIEW_CATEGORY_LABEL_MAX_LENGTH}
+                  onChange={(e) => updateReviewCategoryLabel(i, e.target.value)}
+                />
+              </label>
+              <button
+                onClick={() =>
+                  setReviewCategoryLabels((labels) =>
+                    labels.filter((_, index) => index !== i),
+                  )
+                }
+                disabled={reviewCategoryLabels.length <= REVIEW_CATEGORY_MIN_COUNT}
+                style={{
+                  ...dangerButtonStyle,
+                  opacity:
+                    reviewCategoryLabels.length <= REVIEW_CATEGORY_MIN_COUNT
+                      ? 0.5
+                      : 1,
+                }}
+              >
+                {adminText(locale, 'deleteButton')}
+              </button>
+            </div>
+          ))}
+          <div style={{ marginTop: 16 }}>
+            <button
+              onClick={() =>
+                setReviewCategoryLabels((labels) => [...labels, ''])
+              }
+              disabled={reviewCategoryLabels.length >= REVIEW_CATEGORY_MAX_COUNT}
+              style={{
+                padding: '7px 16px',
+                fontSize: 13,
+                fontWeight: 600,
+                borderRadius: 12,
+                border: '1px solid #E8DCC4',
+                backgroundColor: '#ffffff',
+                color: VIOLET,
+                cursor: 'pointer',
+                opacity:
+                  reviewCategoryLabels.length >= REVIEW_CATEGORY_MAX_COUNT
+                    ? 0.5
+                    : 1,
+              }}
+            >
+              {adminText(locale, 'reviewCategoryAddButton')}
+            </button>
+          </div>
+          <button
+            onClick={() => void handleSaveReviewCategories()}
+            disabled={reviewCategoriesSaving}
+            style={{ ...primaryButtonStyle, marginTop: 20 }}
+          >
+            <span style={adminButtonContentStyle}>
+              {reviewCategoriesSaving && <ButtonSpinner />}
+              {adminText(locale, 'reviewCategoriesSaveButton')}
+            </span>
+          </button>
+          {reviewCategoriesMessage && (
+            <p style={adminFeedbackStyle}>{reviewCategoriesMessage}</p>
+          )}
         </div>
       </section>
 

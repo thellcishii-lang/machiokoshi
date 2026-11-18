@@ -6,6 +6,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   filterVisibleReviews,
+  legacyCategoriesFromScores,
+  parseReviewCategoryScores,
   parseReviewInput,
   reviewIdFor,
   reviewPhotoStoragePath,
@@ -23,6 +25,12 @@ function makeReview(overrides: Partial<EventReview> = {}): EventReview {
     exhibitorId: 'shop-a',
     exhibitorName: '店A',
     stars: 5,
+    categoryScores: [
+      { label: '味', stars: 5 },
+      { label: '接客', stars: 4 },
+      { label: '雰囲気', stars: 4 },
+      { label: '盛り付け', stars: 3 },
+    ],
     categories: { taste: 5, service: 4, atmosphere: 4, presentation: 3 },
     text: 'おいしかった',
     nickname: 'たろう',
@@ -32,6 +40,11 @@ function makeReview(overrides: Partial<EventReview> = {}): EventReview {
     updatedAt: '2026-11-14T01:00:00.000Z',
     ...overrides,
   };
+}
+
+/** 項目名と星の対応から categoryScores を作る（並びは渡した順）。 */
+function scoresOf(entries: Array<[string, number]>) {
+  return entries.map(([label, stars]) => ({ label, stars }));
 }
 
 const validCategories = {
@@ -54,7 +67,7 @@ describe('reviewIdFor', () => {
 });
 
 describe('parseReviewInput', () => {
-  it('最小入力（星と項目別だけ）を通す', () => {
+  it('最小入力（星と項目別だけ）を通す。旧形式の項目別は既定の項目名に写す', () => {
     const result = parseReviewInput({
       exhibitorId: 'shop-a',
       stars: 4,
@@ -65,12 +78,66 @@ describe('parseReviewInput', () => {
       expect(result.value).toEqual({
         exhibitorId: 'shop-a',
         stars: 4,
-        categories: validCategories,
+        categoryScores: scoresOf([
+          ['味', 5],
+          ['接客', 4],
+          ['雰囲気', 3],
+          ['盛り付け', 4],
+        ]),
         text: '',
         nickname: '',
         photoUrls: [],
       });
     }
+  });
+
+  it('項目名つきの項目別（categoryScores）を受け付け、項目名の空白を落とす', () => {
+    const result = parseReviewInput({
+      exhibitorId: 'shop-a',
+      stars: 4,
+      categoryScores: [
+        { label: ' コスパ ', stars: 5 },
+        { label: '量', stars: 3 },
+      ],
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.categoryScores).toEqual(
+        scoresOf([
+          ['コスパ', 5],
+          ['量', 3],
+        ]),
+      );
+    }
+  });
+
+  it('categoryScores の形が不正なら落とす', () => {
+    const cases: unknown[] = [
+      [],
+      [{ label: '味', stars: 5 }, { label: '味', stars: 4 }],
+      [{ label: '味', stars: 0 }],
+      [{ label: '味', stars: 6 }],
+      [{ label: '味', stars: 3.5 }],
+      [{ label: '', stars: 5 }],
+      [{ label: 'あ'.repeat(11), stars: 5 }],
+      [{ label: '味' }],
+      [{ stars: 5 }],
+      ['味'],
+      '味',
+      Array.from({ length: 7 }, (_, i) => ({ label: `項目${i}`, stars: 5 })),
+    ];
+    for (const categoryScores of cases) {
+      const result = parseReviewInput({
+        exhibitorId: 'shop-a',
+        stars: 5,
+        categoryScores,
+      });
+      expect(result.ok).toBe(false);
+    }
+  });
+
+  it('項目別がどちらも無ければ落とす', () => {
+    expect(parseReviewInput({ exhibitorId: 'shop-a', stars: 5 }).ok).toBe(false);
   });
 
   it('本文・ニックネームは前後の空白を落とし、写真URLを受け付ける', () => {
@@ -183,19 +250,41 @@ describe('summarizeReviews', () => {
     const summary = summarizeReviews([
       makeReview({
         stars: 5,
-        categories: { taste: 5, service: 4, atmosphere: 4, presentation: 3 },
+        categoryScores: scoresOf([
+          ['味', 5],
+          ['接客', 4],
+          ['雰囲気', 4],
+          ['盛り付け', 3],
+        ]),
       }),
       makeReview({
         stars: 4,
-        categories: { taste: 4, service: 4, atmosphere: 2, presentation: 3 },
+        categoryScores: scoresOf([
+          ['味', 4],
+          ['接客', 4],
+          ['雰囲気', 2],
+          ['盛り付け', 3],
+        ]),
       }),
       makeReview({
         stars: 4,
-        categories: { taste: 5, service: 5, atmosphere: 3, presentation: 4 },
+        categoryScores: scoresOf([
+          ['味', 5],
+          ['接客', 5],
+          ['雰囲気', 3],
+          ['盛り付け', 4],
+        ]),
       }),
     ]);
     expect(summary.count).toBe(3);
     expect(summary.averageStars).toBe(4.3);
+    expect(summary.categoryAverages).toEqual([
+      { label: '味', average: 4.7 },
+      { label: '接客', average: 4.3 },
+      { label: '雰囲気', average: 3 },
+      { label: '盛り付け', average: 3.3 },
+    ]);
+    // 互換用の固定4項目も同じ平均になる
     expect(summary.categories).toEqual({
       taste: 4.7,
       service: 4.3,
@@ -204,11 +293,121 @@ describe('summarizeReviews', () => {
     });
   });
 
-  it('0件ならすべて0', () => {
+  it('項目の内容が途中で変わっても、項目名ごとに含むレビューだけで平均する', () => {
+    const summary = summarizeReviews([
+      makeReview({
+        stars: 5,
+        categoryScores: scoresOf([
+          ['味', 5],
+          ['接客', 5],
+        ]),
+      }),
+      makeReview({
+        stars: 3,
+        categoryScores: scoresOf([
+          ['味', 3],
+          ['コスパ', 4],
+        ]),
+      }),
+    ]);
+    expect(summary.categoryAverages).toEqual([
+      { label: '味', average: 4 },
+      { label: '接客', average: 5 },
+      { label: 'コスパ', average: 4 },
+    ]);
+    // 互換用の固定4項目は既定の項目名だけを写す
+    expect(summary.categories).toEqual({
+      taste: 4,
+      service: 5,
+      atmosphere: 0,
+      presentation: 0,
+    });
+  });
+
+  it('0件ならすべて0で項目別は空', () => {
     expect(summarizeReviews([])).toEqual({
       count: 0,
       averageStars: 0,
+      categoryAverages: [],
       categories: { taste: 0, service: 0, atmosphere: 0, presentation: 0 },
+    });
+  });
+});
+
+describe('parseReviewCategoryScores（保存済みレビューの項目別を読む）', () => {
+  it('現在の形式（categoryScores）をそのまま読む', () => {
+    expect(
+      parseReviewCategoryScores({
+        categoryScores: scoresOf([
+          ['コスパ', 5],
+          ['量', 3],
+        ]),
+      }),
+    ).toEqual(
+      scoresOf([
+        ['コスパ', 5],
+        ['量', 3],
+      ]),
+    );
+  });
+
+  it('導入前の形式（categories の固定4項目）を既定の項目名に写す', () => {
+    expect(
+      parseReviewCategoryScores({
+        categories: { taste: 5, service: 4, atmosphere: 3, presentation: 2 },
+      }),
+    ).toEqual(
+      scoresOf([
+        ['味', 5],
+        ['接客', 4],
+        ['雰囲気', 3],
+        ['盛り付け', 2],
+      ]),
+    );
+  });
+
+  it('categoryScores があれば旧形式より優先する', () => {
+    expect(
+      parseReviewCategoryScores({
+        categoryScores: scoresOf([['量', 4]]),
+        categories: { taste: 1, service: 1, atmosphere: 1, presentation: 1 },
+      }),
+    ).toEqual(scoresOf([['量', 4]]));
+  });
+
+  it('壊れた要素は落とし、どちらも無ければ空配列', () => {
+    expect(
+      parseReviewCategoryScores({
+        categoryScores: [
+          { label: '味', stars: 5 },
+          { label: '味', stars: 3 },
+          { label: '', stars: 5 },
+          { label: '接客', stars: 'x' },
+          'bad',
+        ],
+      }),
+    ).toEqual(scoresOf([['味', 5]]));
+    expect(parseReviewCategoryScores({})).toEqual([]);
+    expect(parseReviewCategoryScores({ categoryScores: 'x' })).toEqual([]);
+  });
+});
+
+describe('legacyCategoriesFromScores（互換用の固定4項目）', () => {
+  it('既定の項目名だけを写し、無い項目は0', () => {
+    expect(
+      legacyCategoriesFromScores(
+        scoresOf([
+          ['味', 5],
+          ['コスパ', 4],
+          ['盛り付け', 2],
+        ]),
+      ),
+    ).toEqual({ taste: 5, service: 0, atmosphere: 0, presentation: 2 });
+    expect(legacyCategoriesFromScores([])).toEqual({
+      taste: 0,
+      service: 0,
+      atmosphere: 0,
+      presentation: 0,
     });
   });
 });
@@ -220,6 +419,13 @@ describe('toPublicReview', () => {
     expect(pub).not.toHaveProperty('visible');
     expect(pub.exhibitorName).toBe('店A');
     expect(pub.stars).toBe(5);
+  });
+
+  it('項目名つきの項目別評価（スナップショット）をそのまま出す', () => {
+    const pub = toPublicReview(
+      makeReview({ categoryScores: scoresOf([['コスパ', 4]]) }),
+    );
+    expect(pub.categoryScores).toEqual(scoresOf([['コスパ', 4]]));
   });
 });
 

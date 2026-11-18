@@ -29,6 +29,9 @@ export async function GET(
       // 未設定のプロジェクトでは 'free-dish' / '' になる）
       stampRewardType: event.stampRewardType,
       stampBenefitText: event.stampBenefitText,
+      // レビューの項目別評価の項目（来場者画面の書き込みフォームに使う。
+      // 未設定のプロジェクトでは既定の4項目（味・接客・雰囲気・盛り付け）になる）
+      reviewCategories: event.reviewCategories,
       // 主催者リンク（最大3件、タイトル付きで来場者画面に表示する）
       links: event.links,
       // 特設サイト（本家）の表示内容。読み取り時に正規化済みの値を返す

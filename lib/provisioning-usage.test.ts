@@ -22,6 +22,7 @@ function eventWith(status: EventConfig['status']): EventConfig {
     stampRewardType: 'free-dish',
     stampBenefitText: '',
     rankingMinReviews: 3,
+    reviewCategories: ['味', '接客', '雰囲気', '盛り付け'],
     links: [],
     siteDescription: '',
     gourmetDefinition: '',
