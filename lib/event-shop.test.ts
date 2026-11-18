@@ -13,7 +13,9 @@ import {
   resolveShopLocation,
   resolveTopFeatured,
   setShopDelistedAt,
+  shopCoverPhotoStoragePath,
   shopFreeDishPhotoStoragePath,
+  shopMainVisualUrl,
   shopLoginRewardPhotoStoragePath,
   shopPhotoStoragePath,
   toPublicShop,
@@ -151,6 +153,90 @@ describe('validateShopProfileInput', () => {
     expect(validateShopProfileInput({ published: 'yes' }).ok).toBe(false);
     expect(validateShopProfileInput(null).ok).toBe(false);
     expect(validateShopProfileInput('x').ok).toBe(false);
+  });
+});
+
+describe('お店のトップ画像（coverImageUrl）', () => {
+  it('読み取り: https のトップ画像を保持し、無い旧プロフィールは null', () => {
+    const withCover = parseShopProfile({
+      coverImageUrl: 'https://example.com/cover.jpg',
+    });
+    expect(withCover.coverImageUrl).toBe('https://example.com/cover.jpg');
+    expect(parseShopProfile({}).coverImageUrl).toBeNull();
+    expect(parseShopProfile(undefined).coverImageUrl).toBeNull();
+  });
+
+  it('読み取り: https でない・文字列でないトップ画像は null に倒す', () => {
+    expect(
+      parseShopProfile({ coverImageUrl: 'http://example.com/c.jpg' })
+        .coverImageUrl,
+    ).toBeNull();
+    expect(parseShopProfile({ coverImageUrl: 42 }).coverImageUrl).toBeNull();
+    expect(parseShopProfile({ coverImageUrl: null }).coverImageUrl).toBeNull();
+  });
+
+  it('公開用にもトップ画像がそのまま載る', () => {
+    const shop = toPublicShop(
+      { id: 'shop-a', name: '登録名A' },
+      { coverImageUrl: 'https://example.com/cover.jpg' },
+    );
+    expect(shop.profile.coverImageUrl).toBe('https://example.com/cover.jpg');
+  });
+
+  it('保存検証: https のトップ画像を通し、前後空白を落とす', () => {
+    const result = validateShopProfileInput({
+      coverImageUrl: ' https://example.com/cover.jpg ',
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.coverImageUrl).toBe('https://example.com/cover.jpg');
+    }
+  });
+
+  it('保存検証: 未指定・null・空文字は未設定（null）として通る', () => {
+    for (const input of [{}, { coverImageUrl: null }, { coverImageUrl: '  ' }]) {
+      const result = validateShopProfileInput(input);
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.value.coverImageUrl).toBeNull();
+    }
+  });
+
+  it('保存検証: https でない・文字列でないトップ画像はエラー', () => {
+    expect(
+      validateShopProfileInput({ coverImageUrl: 'http://example.com/c.jpg' })
+        .ok,
+    ).toBe(false);
+    expect(validateShopProfileInput({ coverImageUrl: 42 }).ok).toBe(false);
+  });
+
+  it('保存先パスは同じディレクトリに cover- 接頭辞で作る', () => {
+    expect(shopCoverPhotoStoragePath('ev1', 'shop-a', 'x.jpg')).toBe(
+      'events/ev1/shop-photos/shop-a/cover-x.jpg',
+    );
+  });
+});
+
+describe('shopMainVisualUrl（メイン画像のフォールバック）', () => {
+  it('トップ画像があればそれを使う', () => {
+    expect(
+      shopMainVisualUrl({
+        coverImageUrl: 'https://example.com/cover.jpg',
+        photoUrls: ['https://example.com/food.jpg'],
+      }),
+    ).toBe('https://example.com/cover.jpg');
+  });
+
+  it('トップ画像が無ければ料理の写真の1枚目で代用する', () => {
+    expect(
+      shopMainVisualUrl({
+        coverImageUrl: null,
+        photoUrls: ['https://example.com/food.jpg', 'https://example.com/f2.jpg'],
+      }),
+    ).toBe('https://example.com/food.jpg');
+  });
+
+  it('どちらも無ければ null', () => {
+    expect(shopMainVisualUrl({ coverImageUrl: null, photoUrls: [] })).toBeNull();
   });
 });
 
