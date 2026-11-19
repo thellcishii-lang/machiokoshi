@@ -27,6 +27,7 @@ export async function GET(
     description:
       pickLocalizedText(coupon.descriptionI18n, locale, event?.defaultLocale) ||
       coupon.description,
+    exhibitorId: coupon.exhibitorId,
     exhibitorName: coupon.exhibitorName,
     keywords: coupon.keywords,
   }));
