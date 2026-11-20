@@ -877,6 +877,8 @@ export default function EventVisitorPage() {
   const [qrBusy, setQrBusy] = useState(false);
   const [qrFeedback, setQrFeedback] = useState<{ text: string; error: boolean } | null>(null);
   const qrScannerRef = useRef<Html5Qrcode | null>(null);
+  // 登録状態の確認は端末（uid）ごとに1回だけ行うための記録
+  const registrationCheckRef = useRef<string | null>(null);
   // カタログで展開中の出店者グループ（検索中は全グループ展開扱い）
   const [openGroups, setOpenGroups] = useState<ReadonlySet<string>>(new Set());
 
@@ -960,6 +962,67 @@ export default function EventVisitorPage() {
       // 失敗しても画面は止めない（登録ボタンの処理でも再試行する）
     });
   }, [event, user]);
+
+  // 登録済みの端末では、開くたびに登録バナー（通知許可の段階）を出さない:
+  // 認証とプロジェクトの読み込みが揃ったら登録状態を1回だけ確認し、
+  // 登録済みならそのまま利用画面（'done'）へ進める。未登録・確認失敗の
+  // ときは何もせず、従来の登録フロー（SMSオンでは電話番号の段階を含む）
+  // のままにする。
+  // あわせて、通知許可が済んでいる端末では裏側で FCM トークンを
+  // 付け直す（登録 API は冪等で、言語トピックの付け替えも行われる）。
+  // 許可ダイアログは絶対に出さない: requestPermission は呼ばず、
+  // 許可済み（'granted'）のときだけトークン取得を試みる。付け直しに
+  // 失敗しても利用画面はそのまま出す。
+  useEffect(() => {
+    if (!user || !event || event.status !== 'live') return;
+    const checkKey = `${eventId}:${user.uid}`;
+    if (registrationCheckRef.current === checkKey) return;
+    registrationCheckRef.current = checkKey;
+    let cancelled = false;
+    (async () => {
+      try {
+        const idToken = await user.getIdToken();
+        const res = await fetch(`/api/events/${eventId}/registration-status`, {
+          headers: { Authorization: `Bearer ${idToken}` },
+        });
+        if (!res.ok || cancelled) return;
+        const data = await res.json().catch(() => ({}));
+        if (cancelled || data.registered !== true) return;
+        // 登録の段階にいるときだけ利用画面へ進める（電話番号入力中
+        // などの段階は邪魔しない）
+        setPhase((p) => (p === 'register' ? 'done' : p));
+        if (
+          typeof Notification !== 'undefined' &&
+          Notification.permission === 'granted'
+        ) {
+          try {
+            const fcmToken = await requestFCMToken({ shopName: event.name });
+            if (fcmToken && !cancelled) {
+              const refreshToken = await user.getIdToken();
+              await fetch(`/api/events/${eventId}/register`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${refreshToken}`,
+                },
+                body: JSON.stringify({ fcmToken, lang: locale }),
+              });
+            }
+          } catch {
+            // 付け直しに失敗しても利用画面はそのまま出す
+          }
+        }
+      } catch {
+        // 状態が読めなければ従来どおり登録の段階を表示する
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // locale は確認時点の表示言語を使う（依存に入れると言語切替のたびに
+    // 再確認してしまうため、意図的に外している）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, event, eventId]);
 
   const handleLocaleChange = async (next: Locale) => {
     setLocale(next);
