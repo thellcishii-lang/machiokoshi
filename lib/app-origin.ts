@@ -6,13 +6,15 @@
 // コードを含まない共有 lib に切り出した。lib/exhibitor-access.ts は互換の
 // ため APP_ORIGIN / resolveAppOrigin を re-export している。
 
+import { APP_HOSTING_ORIGIN } from './variant-identity';
+
 /**
- * 本番の App Hosting origin（町おこしバックエンド 'machiokoshi' の URL）。
+ * 本番の App Hosting origin。値は lib/variant-identity.ts で
+ * バックエンド ID とプロジェクト ID から組み立てる（ここに直書きしない）。
  * 将来の独自ドメイン化に備え、環境変数 NEXT_PUBLIC_APP_ORIGIN があれば
  * そちらを優先する（末尾のスラッシュは取り除く）。
  */
-export const APP_ORIGIN =
-  'https://machiokoshi--push-taro-machiokoshi.asia-east1.hosted.app';
+export const APP_ORIGIN = APP_HOSTING_ORIGIN;
 
 export function resolveAppOrigin(): string {
   const fromEnv = process.env.NEXT_PUBLIC_APP_ORIGIN?.trim();

@@ -6,11 +6,12 @@
 // イベント削除（lib/event-store.ts）と案内PDF削除（lib/event-info.ts）が
 // このエラーで失敗したため、初期化時に必ずバケット名を渡す。
 // 値の出どころは apphosting.yaml の NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
-// （クライアント設定と同じ公開識別子）。最終フォールバックはこの
-// プロジェクトの既定バケット。
+// （クライアント設定と同じ公開識別子）。最終フォールバックは
+// lib/variant-identity.ts で定義するこのプロジェクトの既定バケット。
 
-export const DEFAULT_STORAGE_BUCKET =
-  'push-taro-machiokoshi.firebasestorage.app';
+import { DEFAULT_STORAGE_BUCKET_NAME } from './variant-identity';
+
+export const DEFAULT_STORAGE_BUCKET = DEFAULT_STORAGE_BUCKET_NAME;
 
 export function resolveStorageBucket(
   env: Record<string, string | undefined>,
