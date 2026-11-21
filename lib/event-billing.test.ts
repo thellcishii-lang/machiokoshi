@@ -1,20 +1,23 @@
 // lib/event-billing.test.ts
 // 店舗課金の純粋関数: 設定入力・月額の検証、JST 月キーの収支集計、
 // Stripe Webhook イベントからローカルへの効果への変換を検証する。
-import { describe, expect, it, vi } from 'vitest';
-import type { Firestore } from 'firebase-admin/firestore';
+import { describe, expect, it } from 'vitest';
 import {
-  buildBillingFailureNoticeEmail,
+  BILLING_PAYMENTS_CSV_HEADER,
+  buildBillingPaymentsCsv,
   currentAndPreviousMonthKeys,
   effectFromStripeEvent,
+  formatJstDateTime,
   isValidStripeSecretKey,
   isValidStripeWebhookSecret,
   monthKeyJst,
-  notifyBillingFailureOnce,
+  parseBillingPaymentKind,
   parseBillingSettingsInput,
   parseMonthlyAmount,
   shopBillingTransitionForSubscriptionStatus,
   summarizePaymentsByMonth,
+  type BillingPaymentRecord,
+  type ShopBilling,
   type StripeWebhookEventLike,
 } from './event-billing';
 
@@ -318,110 +321,140 @@ describe('effectFromStripeEvent', () => {
   });
 });
 
-// 支払い失敗の管理人通知（請求書ごとに1回）用の最小フェイク Firestore。
-// billingFailureNotices の create / delete だけを再現する。
-function fakeNoticeDb() {
-  const docs = new Map<string, Record<string, unknown>>();
-  const key = (eventId: string, invoiceId: string) => `${eventId}/${invoiceId}`;
-  const db = {
-    collection: (_name: string) => ({
-      doc: (eventId: string) => ({
-        collection: (_sub: string) => ({
-          doc: (invoiceId: string) => ({
-            create: async (data: Record<string, unknown>) => {
-              const k = key(eventId, invoiceId);
-              if (docs.has(k)) {
-                const error = new Error('already exists') as Error & {
-                  code?: number;
-                };
-                error.code = 6;
-                throw error;
-              }
-              docs.set(k, data);
-            },
-            delete: async () => {
-              docs.delete(key(eventId, invoiceId));
-            },
-          }),
-        }),
-      }),
-    }),
+describe('parseBillingPaymentKind', () => {
+  it('既知の種別だけ通し、それ以外は subscription に倒す', () => {
+    expect(parseBillingPaymentKind('coupon-issue')).toBe('coupon-issue');
+    expect(parseBillingPaymentKind('push-send')).toBe('push-send');
+    expect(parseBillingPaymentKind('subscription')).toBe('subscription');
+    expect(parseBillingPaymentKind(undefined)).toBe('subscription');
+    expect(parseBillingPaymentKind('unknown')).toBe('subscription');
+  });
+});
+
+describe('formatJstDateTime', () => {
+  it('UTC の ISO を JST 表記（+09:00）にする', () => {
+    expect(formatJstDateTime('2026-11-02T00:00:00.000Z')).toBe(
+      '2026-11-02T09:00:00+09:00',
+    );
+    expect(formatJstDateTime('2026-01-01T15:30:05.000Z')).toBe(
+      '2026-01-02T00:30:05+09:00',
+    );
+  });
+
+  it('解釈できない値は空文字', () => {
+    expect(formatJstDateTime('')).toBe('');
+    expect(formatJstDateTime('not-a-date')).toBe('');
+  });
+});
+
+function paymentRecord(
+  overrides: Partial<BillingPaymentRecord> = {},
+): BillingPaymentRecord {
+  return {
+    id: 'evt_1',
+    exhibitorId: 'shop-1',
+    kind: 'subscription',
+    amount: 3000,
+    status: 'paid',
+    paidAt: '2026-11-02T00:00:00.000Z',
+    occurredAt: '2026-11-02T00:00:00.000Z',
+    stripeEventId: 'evt_1',
+    stripeInvoiceId: 'in_123',
+    ...overrides,
   };
-  return { db: db as unknown as Firestore, docs };
 }
 
-describe('支払い失敗の管理人通知', () => {
-  it('文面には店名・プロジェクト名・請求額が入る', () => {
-    const mail = buildBillingFailureNoticeEmail({
-      shopName: '店A',
-      eventName: 'テストプロジェクト',
-      amount: 3000,
-    });
-    expect(mail.subject).toContain('お支払い失敗');
-    expect(mail.html).toContain('店A');
-    expect(mail.html).toContain('テストプロジェクト');
-    expect(mail.html).toContain('3,000円');
+function shopBilling(overrides: Partial<ShopBilling> = {}): ShopBilling {
+  return {
+    exhibitorId: 'shop-1',
+    stripeCustomerId: 'cus_1',
+    stripeSubscriptionId: 'sub_1',
+    monthlyAmount: 3000,
+    status: 'active',
+    currentPeriodEnd: null,
+    checkoutUrl: null,
+    checkoutSessionId: 'cs_1',
+    canceledByAdmin: false,
+    updatedAt: '2026-11-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+describe('buildBillingPaymentsCsv', () => {
+  const exhibitors = [
+    { id: 'shop-1', name: 'カレー堂', address: '埼玉県飯能市1-2-3' },
+    { id: 'shop-2', name: 'パン屋, "ほんわか"', address: null },
+  ];
+
+  it('BOM 付きでヘッダーと行を出す（店名・住所・種別・ID を結合）', () => {
+    const csv = buildBillingPaymentsCsv(
+      [paymentRecord()],
+      exhibitors,
+      [shopBilling()],
+    );
+    expect(csv.startsWith('\uFEFF')).toBe(true);
+    const lines = csv.replace(/^\uFEFF/, '').trimEnd().split('\r\n');
+    expect(lines[0]).toBe(BILLING_PAYMENTS_CSV_HEADER.join(','));
+    expect(lines[1]).toBe(
+      '2026-11-02T09:00:00+09:00,カレー堂,埼玉県飯能市1-2-3,月額,3000,支払い済み,in_123,cs_1,sub_1',
+    );
   });
 
-  it('同じ請求書では1回だけ送る', async () => {
-    const { db } = fakeNoticeDb();
-    const send = vi.fn(
-      async (_mail: { to: string; subject: string; html: string }) => ({
-        success: true as const,
-      }),
+  it('失敗記録は occurredAt を使い、状態は「失敗」', () => {
+    const csv = buildBillingPaymentsCsv(
+      [
+        paymentRecord({
+          status: 'failed',
+          paidAt: null,
+          occurredAt: '2026-11-03T12:00:00.000Z',
+          stripeInvoiceId: null,
+        }),
+      ],
+      exhibitors,
+      [],
     );
-    const input = {
-      eventId: 'event-1',
-      invoiceId: 'in_1',
-      exhibitorId: 'exh-1',
-      to: 'organizer@example.com',
-      shopName: '店A',
-      eventName: 'テストプロジェクト',
-      amount: 3000,
-    };
-    await expect(notifyBillingFailureOnce(db, input, send)).resolves.toBe(true);
-    await expect(notifyBillingFailureOnce(db, input, send)).resolves.toBe(false);
-    expect(send).toHaveBeenCalledTimes(1);
-    expect(send.mock.calls[0][0].to).toBe('organizer@example.com');
+    const lines = csv.replace(/^\uFEFF/, '').trimEnd().split('\r\n');
+    expect(lines[1]).toBe(
+      '2026-11-03T21:00:00+09:00,カレー堂,埼玉県飯能市1-2-3,月額,3000,失敗,,,',
+    );
   });
 
-  it('別の請求書なら再度送る', async () => {
-    const { db } = fakeNoticeDb();
-    const send = vi.fn(async () => ({ success: true }));
-    const base = {
-      eventId: 'event-1',
-      exhibitorId: 'exh-1',
-      to: 'organizer@example.com',
-      shopName: '店A',
-      eventName: null,
-      amount: 3000,
-    };
-    await notifyBillingFailureOnce(db, { ...base, invoiceId: 'in_1' }, send);
-    await expect(
-      notifyBillingFailureOnce(db, { ...base, invoiceId: 'in_2' }, send),
-    ).resolves.toBe(true);
-    expect(send).toHaveBeenCalledTimes(2);
+  it('カンマ・引用符を含む店名は CSV エスケープする', () => {
+    const csv = buildBillingPaymentsCsv(
+      [paymentRecord({ exhibitorId: 'shop-2', kind: 'coupon-issue' })],
+      exhibitors,
+      [],
+    );
+    const lines = csv.replace(/^\uFEFF/, '').trimEnd().split('\r\n');
+    expect(lines[1]).toContain('"パン屋, ""ほんわか"""');
+    expect(lines[1]).toContain(',クーポン発行,');
   });
 
-  it('送信に失敗したらマーカーを取り消し、次の機会に送り直せる', async () => {
-    const { db } = fakeNoticeDb();
-    const failing = vi.fn(async () => ({ success: false, error: 'smtp down' }));
-    const input = {
-      eventId: 'event-1',
-      invoiceId: 'in_1',
-      exhibitorId: 'exh-1',
-      to: 'organizer@example.com',
-      shopName: '店A',
-      eventName: null,
-      amount: 3000,
-    };
-    await expect(notifyBillingFailureOnce(db, input, failing)).resolves.toBe(
-      false,
+  it('行は発生日時の昇順に並ぶ', () => {
+    const csv = buildBillingPaymentsCsv(
+      [
+        paymentRecord({
+          id: 'evt_2',
+          occurredAt: '2026-11-05T00:00:00.000Z',
+          paidAt: '2026-11-05T00:00:00.000Z',
+        }),
+        paymentRecord({
+          id: 'evt_1',
+          occurredAt: '2026-11-01T00:00:00.000Z',
+          paidAt: '2026-11-01T00:00:00.000Z',
+        }),
+      ],
+      exhibitors,
+      [],
     );
-    const succeeding = vi.fn(async () => ({ success: true }));
-    await expect(notifyBillingFailureOnce(db, input, succeeding)).resolves.toBe(
-      true,
-    );
-    expect(succeeding).toHaveBeenCalledTimes(1);
+    const lines = csv.replace(/^\uFEFF/, '').trimEnd().split('\r\n');
+    expect(lines[1]).toContain('2026-11-01');
+    expect(lines[2]).toContain('2026-11-05');
+  });
+
+  it('記録が無ければヘッダーのみ', () => {
+    const csv = buildBillingPaymentsCsv([], exhibitors, []);
+    const lines = csv.replace(/^\uFEFF/, '').trimEnd().split('\r\n');
+    expect(lines).toEqual([BILLING_PAYMENTS_CSV_HEADER.join(',')]);
   });
 });

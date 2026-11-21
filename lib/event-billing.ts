@@ -23,15 +23,11 @@ import type { Firestore } from 'firebase-admin/firestore';
 import { jstDateString } from './event';
 import { getOrganizer, findOrganizerByOwnerUid, type Organizer } from './organizers';
 import { listEventsByOwner } from './event-store';
-import { setShopBillingSuspended, setShopDelistedAt } from './event-shop';
-import { EVENT_EXHIBITORS_COLLECTION } from './event-coupon';
-import { sendEmail } from './mailer';
+import { setShopBillingSuspended } from './event-shop';
 import { resolveAppOrigin } from './app-origin';
 
 export const SHOP_BILLINGS_COLLECTION = 'shopBillings';
 export const BILLING_PAYMENTS_COLLECTION = 'billingPayments';
-/** 支払い失敗の管理人通知の送信済みマーカー（請求書IDがドキュメントID）。 */
-export const BILLING_FAILURE_NOTICES_COLLECTION = 'billingFailureNotices';
 const BILLING_SETTINGS_SUBCOLLECTION = 'billing';
 const BILLING_SETTINGS_DOC_ID = 'stripe';
 
@@ -60,10 +56,28 @@ export interface ShopBilling {
   updatedAt: string;
 }
 
+/** 支払い記録の種別。月額サブスクリプションの請求が基本。 */
+export type BillingPaymentKind = 'subscription' | 'coupon-issue' | 'push-send';
+
+/** 種別の表示ラベル（CSV・管理画面で共通に使う）。 */
+export const BILLING_PAYMENT_KIND_LABELS: Record<BillingPaymentKind, string> = {
+  subscription: '月額',
+  'coupon-issue': 'クーポン発行',
+  'push-send': 'プッシュ送信',
+};
+
+export function parseBillingPaymentKind(value: unknown): BillingPaymentKind {
+  return value === 'coupon-issue' || value === 'push-send'
+    ? value
+    : 'subscription';
+}
+
 export interface BillingPaymentRecord {
   /** ドキュメントID = Stripe イベントID（冪等キー） */
   id: string;
   exhibitorId: string;
+  /** 種別。旧ドキュメント（項目なし）は月額として扱う */
+  kind: BillingPaymentKind;
   /** 金額（円） */
   amount: number;
   status: 'paid' | 'failed';
@@ -651,6 +665,7 @@ export async function listBillingPayments(
     return {
       id: doc.id,
       exhibitorId: String(data.exhibitorId ?? ''),
+      kind: parseBillingPaymentKind(data.kind),
       amount: typeof data.amount === 'number' ? data.amount : 0,
       status: data.status === 'failed' ? ('failed' as const) : ('paid' as const),
       paidAt: stringOrNull(data.paidAt),
@@ -661,105 +676,79 @@ export async function listBillingPayments(
   });
 }
 
-// ─── 支払い失敗の管理人通知 ───
-//
-// 運用（2026-11-17 Ishii の仕様）: 店の月額の支払いが期日に失敗したら、
-// 管理人にメールで知らせる。管理人はそれを見て店へ連絡し、期限までに
-// 払われなければ掲載が止まる（掲載停止自体は Stripe のリトライが尽きた
-// 時点で Webhook が自動で行う）。通知は請求書ごとに1回だけ:
-// billingFailureNotices/{invoiceId} を create できた場合だけ送る
-// （Stripe のリトライで同じ請求書の失敗イベントが複数届いても1回）。
+// ─── 純粋関数: 入金一覧 CSV ───
 
-function escapeNoticeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-/** 支払い失敗通知メールの文面（純粋関数）。 */
-export function buildBillingFailureNoticeEmail(input: {
-  shopName: string;
-  eventName?: string | null;
-  amount: number;
-}): { subject: string; html: string } {
-  const eventPart = input.eventName
-    ? `プロジェクト「${escapeNoticeHtml(input.eventName)}」`
-    : 'Push-taro 町おこし のプロジェクト';
-  return {
-    subject: '【Push-taro 町おこし】参加店のお支払い失敗のお知らせ',
-    html: `
-<p>${eventPart}の参加店「${escapeNoticeHtml(input.shopName)}」様の月額料金のお支払いが失敗しました。</p>
-<p>請求額: ${input.amount.toLocaleString()}円</p>
-<p>カードの有効期限切れや残高不足などが考えられます。お店へご連絡のうえ、お支払い方法のご確認をお願いいたします。</p>
-<p>このままお支払いが完了しない場合、そのお店の掲載は自動的に停止します（掲載が止まっても、お店の情報はそのまま保存されます）。</p>
-<p>お支払い状況は管理画面の「店舗課金」ページでご確認いただけます。</p>
-`,
-  };
-}
-
-export type BillingFailureMailSender = (args: {
-  to: string;
-  subject: string;
-  html: string;
-}) => Promise<{ success: boolean; error?: string }>;
+const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
 /**
- * 支払い失敗を管理人へ通知する（請求書ごとに1回だけ）。
- * 送信できたら true、既に通知済みなら false を返す。
- * メール送信に失敗した場合はマーカーを取り消し、次の失敗イベントで
- * 再度通知できるようにする（通知の取りこぼし防止）。
+ * ISO文字列を JST の ISO 表記（'YYYY-MM-DDTHH:mm:ss+09:00'）にする。
+ * 解釈できなければ空文字。
  */
-export async function notifyBillingFailureOnce(
-  db: Firestore,
-  input: {
-    eventId: string;
-    invoiceId: string;
-    exhibitorId: string;
-    to: string;
-    shopName: string;
-    eventName?: string | null;
-    amount: number;
-  },
-  send: BillingFailureMailSender = (args) => sendEmail(args),
-): Promise<boolean> {
-  const ref = db
-    .collection('events')
-    .doc(input.eventId)
-    .collection(BILLING_FAILURE_NOTICES_COLLECTION)
-    .doc(input.invoiceId);
-  try {
-    await ref.create({
-      exhibitorId: input.exhibitorId,
-      notifiedAt: new Date().toISOString(),
-    });
-  } catch (error) {
-    if (isAlreadyExistsError(error)) return false;
-    throw error;
+export function formatJstDateTime(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Date(date.getTime() + JST_OFFSET_MS).toISOString().slice(0, 19) + '+09:00';
+}
+
+function csvEscape(value: string): string {
+  return /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+}
+
+export interface BillingCsvExhibitor {
+  id: string;
+  name: string;
+  /** 登録住所（管理用）。無ければ null / undefined */
+  address?: string | null;
+}
+
+export const BILLING_PAYMENTS_CSV_HEADER = [
+  '日時',
+  '店名',
+  '住所',
+  '種別',
+  '金額',
+  '状態',
+  'Stripe請求書ID',
+  'チェックアウトセッションID',
+  'サブスクリプションID',
+] as const;
+
+/**
+ * 入金一覧の CSV を組み立てる（純粋関数）。
+ * - 店名・登録住所は参加店から、サブスクリプションIDとチェックアウト
+ *   セッションIDは店ごとの課金レコードから引く（支払い記録自体には
+ *   持っていないため。セッションIDはその店の直近の発行セッション）。
+ * - 行は発生日時の昇順（経理で読みやすい時系列）。
+ * - 先頭に BOM を付け、Excel でそのまま開けるようにする。
+ */
+export function buildBillingPaymentsCsv(
+  payments: BillingPaymentRecord[],
+  exhibitors: BillingCsvExhibitor[],
+  billings: ShopBilling[],
+): string {
+  const exhibitorById = new Map(exhibitors.map((e) => [e.id, e]));
+  const billingByExhibitor = new Map(billings.map((b) => [b.exhibitorId, b]));
+  const sorted = [...payments].sort((a, b) =>
+    a.occurredAt.localeCompare(b.occurredAt),
+  );
+  const lines: string[] = [BILLING_PAYMENTS_CSV_HEADER.join(',')];
+  for (const payment of sorted) {
+    const exhibitor = exhibitorById.get(payment.exhibitorId);
+    const billing = billingByExhibitor.get(payment.exhibitorId);
+    const row = [
+      formatJstDateTime(payment.paidAt ?? payment.occurredAt),
+      exhibitor?.name ?? payment.exhibitorId,
+      exhibitor?.address ?? '',
+      BILLING_PAYMENT_KIND_LABELS[payment.kind],
+      String(payment.amount),
+      payment.status === 'paid' ? '支払い済み' : '失敗',
+      payment.stripeInvoiceId ?? '',
+      billing?.checkoutSessionId ?? '',
+      billing?.stripeSubscriptionId ?? '',
+    ];
+    lines.push(row.map(csvEscape).join(','));
   }
-  const mail = buildBillingFailureNoticeEmail({
-    shopName: input.shopName,
-    eventName: input.eventName,
-    amount: input.amount,
-  });
-  try {
-    const result = await send({
-      to: input.to,
-      subject: mail.subject,
-      html: mail.html,
-    });
-    if (!result.success) {
-      console.error('[event-billing] failure notice email failed:', result.error);
-      await ref.delete().catch(() => undefined);
-      return false;
-    }
-  } catch (error) {
-    console.error('[event-billing] failure notice email error:', error);
-    await ref.delete().catch(() => undefined);
-    return false;
-  }
-  return true;
+  return '\uFEFF' + lines.join('\r\n') + '\r\n';
 }
 
 // ─── オプション有効な契約者の解決 ───
@@ -1050,50 +1039,6 @@ export async function applyStripeWebhookEffect(
   });
   if (suspend !== null) {
     await setShopBillingSuspended(db, eventId, exhibitorId, suspend);
-  }
-  // 掲載停止の日時を参加店レコードに残す（停止の起算点。3ヶ月ルールの
-  // 判定に使う）。復旧したら取り除く。内容（プロフィール等）は消さない。
-  if (suspend === true) {
-    await setShopDelistedAt(db, eventId, exhibitorId, occurredAt);
-  } else if (suspend === false) {
-    await setShopDelistedAt(db, eventId, exhibitorId, null);
-  }
-
-  // 支払い失敗は管理人へメールで知らせる（請求書ごとに1回だけ）。
-  // 通知の失敗で Webhook の処理自体は失敗にしない。
-  if (
-    event.type === 'invoice.payment_failed' &&
-    effect.payment?.status === 'failed' &&
-    effect.payment.invoiceId
-  ) {
-    try {
-      const organizer = await getOrganizer(contractId);
-      if (organizer?.email) {
-        const [eventSnap, exhibitorSnap] = await Promise.all([
-          db.collection('events').doc(eventId).get(),
-          db
-            .collection('events')
-            .doc(eventId)
-            .collection(EVENT_EXHIBITORS_COLLECTION)
-            .doc(exhibitorId)
-            .get(),
-        ]);
-        await notifyBillingFailureOnce(db, {
-          eventId,
-          invoiceId: effect.payment.invoiceId,
-          exhibitorId,
-          to: organizer.email,
-          shopName: String(exhibitorSnap.data()?.name ?? exhibitorId),
-          eventName:
-            typeof eventSnap.data()?.name === 'string'
-              ? eventSnap.data()!.name
-              : null,
-          amount: effect.payment.amount,
-        });
-      }
-    } catch (error) {
-      console.error('[event-billing] failure notice failed:', error);
-    }
   }
   return { applied: true, duplicate: false };
 }

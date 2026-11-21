@@ -38,19 +38,12 @@ export async function GET(
   const summary = summarizePaymentsByMonth(allPayments, new Date());
 
   return NextResponse.json({
-    // 店舗課金は参加店だけが対象（協賛は広告専用で、ここには出さない）
-    exhibitors: exhibitors
-      .filter((exhibitor) => exhibitor.kind !== 'advertiser')
-      .map((exhibitor) => ({
-        id: exhibitor.id,
-        name: exhibitor.name,
-        // 未払い確定で掲載停止になった日時（停止中でなければ null）。
-        // 停止から3ヶ月を過ぎると閉店扱いになり新規登録が通る。
-        delistedAt: exhibitor.delistedAt,
-        closedAt: exhibitor.closedAt,
-        // 登録の入口（管理人発行 'admin' / 自己申込 'self'）
-        source: exhibitor.source,
-      })),
+    exhibitors: exhibitors.map((exhibitor) => ({
+      id: exhibitor.id,
+      name: exhibitor.name,
+      // 登録住所（管理用）。課金画面の店舗カードにだけ出す。
+      address: exhibitor.address ?? null,
+    })),
     billings,
     payments: recentPayments,
     summary: {

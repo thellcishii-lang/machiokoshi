@@ -1,7 +1,7 @@
 'use client';
 
 // app/event-admin/[eventId]/coupons/page.tsx
-// Push-taro 町おこし 主催者向けのクーポン管理画面（管理画面③）。
+// Push-taro EVENT 主催者向けのクーポン管理画面（管理画面③）。
 // 出店者（会社）の登録と、クーポンの登録・一覧を行う。クーポンはプロジェクト全体で上限あり。
 // 案内PDFの管理は設定画面（④）に移した（2026-11-11）。
 // 画面の固定文は4言語辞書（lib/ui-text.ts の ADMIN_TEXT）。
@@ -45,8 +45,6 @@ interface Exhibitor {
   name: string;
   email: string | null;
   hasAccessCode: boolean;
-  /** アカウントの種類（'shop' = 参加店 / 'advertiser' = 協賛）。旧データは未設定 */
-  kind?: string;
 }
 
 interface Coupon {
@@ -59,14 +57,14 @@ interface Coupon {
   active: boolean;
 }
 
-const VIOLET = '#8B5E34';
+const VIOLET = '#6D28D9';
 
 /** クーポンオプションで増やせるプロジェクト単位の上限（LP 記載）。 */
 const COUPON_OPTION_MAX_CAP = 500;
 /** 出店者一覧で既定表示する件数（残りはアコーディオンに畳む）。 */
 const EXHIBITOR_PREVIEW_COUNT = 2;
-/** クーポンオプションの購入先（本家の町おこし用決済ページ）。 */
-const HONKE_COUPON_OPTION_URL = 'https://push-taro.com/machiokoshi-option';
+/** クーポンオプションの購入先（本家の決済ページ）。 */
+const HONKE_COUPON_OPTION_URL = 'https://push-taro.com/event-option';
 
 const containerStyle: React.CSSProperties = {
   padding: '20px 16px 48px',
@@ -91,7 +89,7 @@ const inputStyle: React.CSSProperties = {
   width: '100%',
   padding: '11px 12px',
   marginTop: 6,
-  border: '1px solid #E8DCC4',
+  border: '1px solid #D9D4EC',
   borderRadius: 12,
   fontSize: 14,
   backgroundColor: '#ffffff',
@@ -114,7 +112,7 @@ const primaryButtonStyle: React.CSSProperties = {
   border: 'none',
   borderRadius: 12,
   cursor: 'pointer',
-  boxShadow: '0 4px 12px rgba(139, 94, 52, 0.25)',
+  boxShadow: '0 4px 12px rgba(109, 40, 217, 0.25)',
 };
 
 const sectionTitleStyle: React.CSSProperties = {
@@ -151,7 +149,10 @@ export default function EventCouponAdminPage() {
   const [eventName, setEventName] = useState('');
   const [exhibitorName, setExhibitorName] = useState('');
   const [exhibitorEmail, setExhibitorEmail] = useState('');
-  const [exhibitorKind, setExhibitorKind] = useState<'shop' | 'advertiser'>('shop');
+  const [exhibitorAddress, setExhibitorAddress] = useState('');
+  // 店舗課金オプションが有効な契約では登録時に住所が必須になる
+  // （GET /exhibitors の billingAddressRequired で出し分ける）。
+  const [billingAddressRequired, setBillingAddressRequired] = useState(false);
   const [couponForm, setCouponForm] = useState({
     exhibitorId: '',
     title: '',
@@ -220,6 +221,7 @@ export default function EventCouponAdminPage() {
         callApi(`/api/events/${eventId}`),
       ]);
       setExhibitors(exData.exhibitors ?? []);
+      setBillingAddressRequired(exData.billingAddressRequired === true);
       setCoupons(cpData.coupons ?? []);
       if (typeof evData.event?.couponCap === 'number') setCouponCap(evData.event.couponCap);
       if (typeof evData.event?.name === 'string') setEventName(evData.event.name);
@@ -256,12 +258,14 @@ export default function EventCouponAdminPage() {
         body: JSON.stringify({
           name: exhibitorName,
           email: exhibitorEmail,
-          kind: exhibitorKind,
+          ...(billingAddressRequired
+            ? { address: exhibitorAddress.trim() }
+            : {}),
         }),
       });
       setExhibitorName('');
       setExhibitorEmail('');
-      setExhibitorKind('shop');
+      setExhibitorAddress('');
       if (result?.mailSent === false) {
         // 登録は成立しているがパスワードメールが送れていない。「送信しました」
         // という成功文は出さず、警告だけを出す（警告文自体が登録の成立も伝える）。
@@ -440,7 +444,7 @@ export default function EventCouponAdminPage() {
             padding: '10px 18px',
             fontWeight: 700,
             fontSize: 13.5,
-            border: '1px solid #E8DCC4',
+            border: '1px solid #D9D4EC',
             borderRadius: 12,
             backgroundColor: '#ffffff',
             color: VIOLET,
@@ -483,11 +487,11 @@ export default function EventCouponAdminPage() {
                     fontSize: 14,
                     padding: '11px 0',
                     cursor: 'pointer',
-                    borderBottom: i < visibleExhibitors.length - 1 ? '1px solid #EFE6D0' : 'none',
+                    borderBottom: i < visibleExhibitors.length - 1 ? '1px solid #F0EDF8' : 'none',
                     transition: 'background-color 0.5s ease',
                     ...(couponExhibitorFilter === exhibitor.id
                       ? {
-                          backgroundColor: '#FBF6EA',
+                          backgroundColor: '#F5F3FF',
                           borderRadius: 8,
                           padding: '11px 10px',
                           margin: '0 -10px',
@@ -495,7 +499,7 @@ export default function EventCouponAdminPage() {
                       : null),
                     ...(highlight?.kind === 'exhibitor' && highlight.id === exhibitor.id
                       ? {
-                          backgroundColor: '#FBF6EA',
+                          backgroundColor: '#F3EFFF',
                           borderRadius: 8,
                           padding: '11px 10px',
                           margin: '0 -10px',
@@ -504,26 +508,7 @@ export default function EventCouponAdminPage() {
                   }}
                 >
                   <span style={{ minWidth: 0 }}>
-                    <span style={{ fontWeight: 600, display: 'block' }}>
-                      {exhibitor.name}
-                      {exhibitor.kind === 'advertiser' && (
-                        <span
-                          style={{
-                            display: 'inline-block',
-                            marginLeft: 8,
-                            padding: '2px 10px',
-                            fontSize: 11.5,
-                            fontWeight: 700,
-                            borderRadius: 999,
-                            backgroundColor: '#EDE9FE',
-                            color: '#6d28d9',
-                            verticalAlign: 'middle',
-                          }}
-                        >
-                          {adminText(locale, 'adsKindSponsor')}
-                        </span>
-                      )}
-                    </span>
+                    <span style={{ fontWeight: 600, display: 'block' }}>{exhibitor.name}</span>
                     <span
                       style={{
                         display: 'block',
@@ -562,7 +547,7 @@ export default function EventCouponAdminPage() {
                         fontSize: 12.5,
                         fontWeight: 600,
                         borderRadius: 999,
-                        border: '1px solid #E8DCC4',
+                        border: '1px solid #D9D4EC',
                         backgroundColor: '#ffffff',
                         color: VIOLET,
                         cursor: 'pointer',
@@ -591,7 +576,7 @@ export default function EventCouponAdminPage() {
                     padding: '11px 0',
                     background: 'none',
                     border: 'none',
-                    borderTop: '1px solid #EFE6D0',
+                    borderTop: '1px solid #F0EDF8',
                     color: VIOLET,
                     fontSize: 13.5,
                     fontWeight: 700,
@@ -617,54 +602,21 @@ export default function EventCouponAdminPage() {
             {adminText(locale, 'exhibitorEmailLabel')}
             <input style={inputStyle} type="email" value={exhibitorEmail} onChange={(e) => setExhibitorEmail(e.target.value)} />
           </label>
-          <div style={{ marginBottom: 12 }}>
-            <p style={{ fontSize: 13, fontWeight: 600, margin: '0 0 8px' }}>
-              {adminText(locale, 'exhibitorKindLabel')}
-            </p>
-            <label
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                fontSize: 14,
-                fontWeight: 600,
-                cursor: 'pointer',
-                marginBottom: 8,
-              }}
-            >
-              <input
-                type="radio"
-                name="exhibitor-kind"
-                checked={exhibitorKind === 'shop'}
-                onChange={() => setExhibitorKind('shop')}
-                style={{ width: 17, height: 17 }}
-              />
-              {adminText(locale, 'exhibitorKindShop')}
-            </label>
-            <label
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                fontSize: 14,
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              <input
-                type="radio"
-                name="exhibitor-kind"
-                checked={exhibitorKind === 'advertiser'}
-                onChange={() => setExhibitorKind('advertiser')}
-                style={{ width: 17, height: 17 }}
-              />
-              {adminText(locale, 'exhibitorKindAdvertiser')}
-            </label>
-          </div>
+          {billingAddressRequired && (
+            <>
+              <label style={labelStyle}>
+                {adminText(locale, 'exhibitorAddressLabel')}
+                <input style={inputStyle} value={exhibitorAddress} onChange={(e) => setExhibitorAddress(e.target.value)} />
+              </label>
+              <p style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>
+                {adminText(locale, 'exhibitorAddressNote')}
+              </p>
+            </>
+          )}
           <p style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>
             {adminText(locale, 'exhibitorEmailNote')}
           </p>
-          <button onClick={handleAddExhibitor} disabled={busy || !exhibitorName.trim() || !exhibitorEmail.trim()} style={primaryButtonStyle}>
+          <button onClick={handleAddExhibitor} disabled={busy || !exhibitorName.trim() || !exhibitorEmail.trim() || (billingAddressRequired && !exhibitorAddress.trim())} style={primaryButtonStyle}>
             <span style={adminButtonContentStyle}>
               {pendingForm === 'exhibitor' && <ButtonSpinner />}
               {pendingForm === 'exhibitor'
@@ -689,11 +641,11 @@ export default function EventCouponAdminPage() {
             ...cardStyle,
             marginTop: 12,
             padding: 24,
-            backgroundColor: '#FBF6EA',
-            border: '1px solid #E7D3AC',
+            backgroundColor: '#F5F3FF',
+            border: '1px solid #DDD6FE',
           }}
         >
-          <div style={{ fontWeight: 800, fontSize: 15, color: '#74471F' }}>
+          <div style={{ fontWeight: 800, fontSize: 15, color: '#4C1D95' }}>
             {adminText(locale, 'couponOptionTitle')}
           </div>
           <p style={{ fontSize: 13, color: '#475569', marginTop: 6 }}>
@@ -734,11 +686,11 @@ export default function EventCouponAdminPage() {
               justifyContent: 'space-between',
               alignItems: 'center',
               gap: 8,
-              backgroundColor: '#FBF6EA',
-              border: '1px solid #E7D3AC',
+              backgroundColor: '#F5F3FF',
+              border: '1px solid #DDD6FE',
             }}
           >
-            <span style={{ fontSize: 13.5, fontWeight: 600, color: '#74471F' }}>
+            <span style={{ fontSize: 13.5, fontWeight: 600, color: '#4C1D95' }}>
               {adminText(locale, 'couponFilterLabel', {
                 name: filterExhibitor.name,
                 count: String(visibleCoupons.length),
@@ -752,7 +704,7 @@ export default function EventCouponAdminPage() {
                 fontSize: 12.5,
                 fontWeight: 600,
                 borderRadius: 999,
-                border: '1px solid #E8DCC4',
+                border: '1px solid #D9D4EC',
                 backgroundColor: '#ffffff',
                 color: VIOLET,
                 cursor: 'pointer',
@@ -779,7 +731,7 @@ export default function EventCouponAdminPage() {
               marginTop: 12,
               transition: 'background-color 0.5s ease, border-color 0.5s ease',
               ...(highlight?.kind === 'coupon' && highlight.id === coupon.id
-                ? { backgroundColor: '#FBF6EA', borderColor: VIOLET }
+                ? { backgroundColor: '#F3EFFF', borderColor: VIOLET }
                 : null),
             }}
           >
@@ -819,13 +771,11 @@ export default function EventCouponAdminPage() {
               onChange={(e) => setCouponForm({ ...couponForm, exhibitorId: e.target.value })}
             >
               <option value="">{adminText(locale, 'selectPlaceholder')}</option>
-              {exhibitors
-                .filter((exhibitor) => exhibitor.kind !== 'advertiser')
-                .map((exhibitor) => (
-                  <option key={exhibitor.id} value={exhibitor.id}>
-                    {exhibitor.name}
-                  </option>
-                ))}
+              {exhibitors.map((exhibitor) => (
+                <option key={exhibitor.id} value={exhibitor.id}>
+                  {exhibitor.name}
+                </option>
+              ))}
             </select>
           </label>
           <label style={labelStyle}>

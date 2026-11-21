@@ -3,15 +3,26 @@
 // 登録すると、そのイベント専用のログインパスワード（アクセスコード）が発行
 // され、出店者のメールアドレス宛てに送信される（lib/exhibitor-access.ts）。
 // 出店者は Firebase Auth のアカウントを持たない。
+// 店舗課金オプションが有効な契約では、登録時に住所（管理用・非公開）が
+// 必須になる。画面側は GET の billingAddressRequired で入力欄の出し分けを
+// 行い、サーバー側でも同じ条件で必須を強制する。
 import { NextResponse } from 'next/server';
 import { requireEventOwner } from '@/lib/event-auth';
-import { listExhibitors, parseExhibitorKind } from '@/lib/event-coupon';
+import { listExhibitors } from '@/lib/event-coupon';
 import {
   ExhibitorAccessError,
+  parseRegistrationAddress,
   registerExhibitor,
 } from '@/lib/exhibitor-access';
+import { findOrganizerByOwnerUid } from '@/lib/organizers';
 
 export const dynamic = 'force-dynamic';
+
+/** 店舗課金オプションが有効な契約かどうか（住所必須の判定）。 */
+async function isBillingOptionEnabled(ownerUid: string): Promise<boolean> {
+  const organizer = await findOrganizerByOwnerUid(ownerUid);
+  return organizer?.billingOptionEnabled === true;
+}
 
 export async function GET(
   request: Request,
@@ -20,8 +31,11 @@ export async function GET(
   const { eventId } = await params;
   const guard = await requireEventOwner(request, eventId);
   if ('error' in guard) return guard.error;
-  const exhibitors = await listExhibitors(eventId);
-  return NextResponse.json({ exhibitors });
+  const [exhibitors, billingAddressRequired] = await Promise.all([
+    listExhibitors(eventId),
+    isBillingOptionEnabled(guard.uid),
+  ]);
+  return NextResponse.json({ exhibitors, billingAddressRequired });
 }
 
 export async function POST(
@@ -43,9 +57,14 @@ export async function POST(
     return NextResponse.json({ error: '出店者名が必要です' }, { status: 400 });
   }
   const email = typeof body.email === 'string' ? body.email : '';
-  // アカウントの種類: 'advertiser'（協賛・広告専用）だけを特別扱いし、
-  // それ以外は参加店（'shop'）として発行する。
-  const kind = parseExhibitorKind(body.kind);
+
+  // 店舗課金オプションが有効な契約では住所が必須（画面の出し分けに
+  // 頼らず、サーバー側でも強制する）。
+  const addressRequired = await isBillingOptionEnabled(guard.uid);
+  const addressResult = parseRegistrationAddress(body.address, addressRequired);
+  if (!addressResult.ok) {
+    return NextResponse.json({ error: addressResult.error }, { status: 400 });
+  }
 
   try {
     const result = await registerExhibitor({
@@ -53,19 +72,16 @@ export async function POST(
       name,
       email,
       eventName: guard.event.name,
-      kind,
+      ...(addressResult.value ? { address: addressResult.value } : {}),
     });
     const exhibitors = await listExhibitors(eventId);
     const exhibitor = exhibitors.find((e) => e.id === result.exhibitorId) ?? {
       id: result.exhibitorId,
       name: name.trim(),
       email: result.email,
+      address: addressResult.value || null,
       hasAccessCode: true,
       lang: guard.event.defaultLocale,
-      kind,
-      source: 'admin' as const,
-      delistedAt: null,
-      closedAt: null,
     };
     // コード自体はレスポンスに含めない（メールでのみ出店者に渡る）。
     // メール送信の成否は mailSent で返す（失敗しても登録は成立しているので、

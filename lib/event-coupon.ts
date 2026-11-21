@@ -1,5 +1,5 @@
 // lib/event-coupon.ts
-// Push-taro 町おこし のクーポン基盤（events/{eventId} 配下）。
+// Push-taro EVENT のクーポン基盤（events/{eventId} 配下）。
 //
 // - exhibitors/{exhibitorId}: 出店者（会社）。ログインはイベント専用の
 //   アクセスコード方式（lib/exhibitor-access.ts）。ドキュメントにメール
@@ -27,61 +27,23 @@ import { uiText } from './ui-text';
 export const EVENT_EXHIBITORS_COLLECTION = 'exhibitors';
 export const EVENT_COUPONS_COLLECTION = 'coupons';
 
-/**
- * アカウントの種類。
- * - 'shop': 参加店（従来の出店者。プロフィール・スタンプ・レビュー・
- *   トップ掲載など、参加店としての全機能の対象）
- * - 'advertiser': 協賛（広告専用）。参加店としては一切現れず、
- *   広告の掲載だけを行う。
- * 旧ドキュメント（項目なし）は 'shop' として扱う。
- */
-export type ExhibitorKind = 'shop' | 'advertiser';
-
-/** 保存済みの種類を防御的に読む（読み取り用）。'advertiser' のみ協賛。 */
-export function parseExhibitorKind(value: unknown): ExhibitorKind {
-  return value === 'advertiser' ? 'advertiser' : 'shop';
-}
-
-/**
- * 登録の入口。
- * - 'admin': 管理人が管理画面から発行（従来の入口）
- * - 'self': 店・広告主が公開の申込ページから自分で登録（自己申込）
- * 旧ドキュメント（項目なし）は 'admin' として扱う。
- */
-export type ExhibitorSource = 'admin' | 'self';
-
-/** 保存済みの登録入口を防御的に読む（読み取り用）。'self' のみ自己申込。 */
-export function parseExhibitorSource(value: unknown): ExhibitorSource {
-  return value === 'self' ? 'self' : 'admin';
-}
-
 export interface EventExhibitor {
   id: string;
   name: string;
   /** 消込ログイン用メールアドレス。旧ドキュメント（Auth 方式時代）は null */
   email: string | null;
+  /**
+   * 登録時に集めた住所（トップレベル・管理用）。店舗課金オプションが
+   * 有効な契約での登録時に必須で集める。公開プロフィール
+   * （profile.address、店が自分で入れる公開用）とは別物で、
+   * 特設サイト等の公開側には出さない。未登録なら null。
+   */
+  address: string | null;
   /** アクセスコード（画面表記「パスワード」）が発行済みかどうか。
    * ハッシュ自体は API に出さない。 */
   hasAccessCode: boolean;
   /** 表示言語（個人の選択）。未設定ならイベントのデフォルト言語 */
   lang: Locale;
-  /** アカウントの種類（参加店／協賛）。旧ドキュメントは 'shop' */
-  kind: ExhibitorKind;
-  /** 登録の入口（管理人発行／自己申込）。旧ドキュメントは 'admin' */
-  source: ExhibitorSource;
-  /**
-   * 店舗課金の未払い確定で掲載停止になった日時（ISO）。停止中でない
-   * （未設定・復旧済み）場合は null。掲載停止から3ヶ月を過ぎると閉店
-   * 扱いになり、同じメールでの新規登録（自己申込）が通るようになる
-   * （実体は lib/event-apply.ts）。
-   */
-  delistedAt: string | null;
-  /**
-   * 閉店扱いになった日時（ISO）。掲載停止から3ヶ月経過後に同じメールで
-   * 新規登録された時点で、旧レコードに付けられる。以後の重複判定・
-   * ログイン照合では存在しないものとして扱う。未閉店は null。
-   */
-  closedAt: string | null;
 }
 
 function mapExhibitor(
@@ -93,28 +55,12 @@ function mapExhibitor(
     name: String(data.name ?? ''),
     email:
       typeof data.email === 'string' && data.email ? data.email : null,
+    address:
+      typeof data.address === 'string' && data.address ? data.address : null,
     hasAccessCode:
       typeof data.accessCode === 'string' && data.accessCode.length > 0,
     lang: normalizeLocale(data.lang),
-    kind: parseExhibitorKind(data.kind),
-    source: parseExhibitorSource(data.source),
-    delistedAt:
-      typeof data.delistedAt === 'string' && data.delistedAt
-        ? data.delistedAt
-        : null,
-    closedAt:
-      typeof data.closedAt === 'string' && data.closedAt
-        ? data.closedAt
-        : null,
   };
-}
-
-/** クーポンの発行元。'admin' = 管理人（従来どおり無料・即時）、'shop' = 参加店自身。 */
-export type CouponIssuedBy = 'admin' | 'shop';
-
-/** 保存済みの発行元を防御的に読む（読み取り用）。旧ドキュメントは 'admin'。 */
-export function parseCouponIssuedBy(value: unknown): CouponIssuedBy {
-  return value === 'shop' ? 'shop' : 'admin';
 }
 
 export interface EventCoupon {
@@ -129,21 +75,6 @@ export interface EventCoupon {
   descriptionI18n: Partial<Record<Locale, string>>;
   keywords: string[];
   active: boolean;
-  /** 発行元。旧ドキュメント（項目なし）は 'admin' として扱う */
-  issuedBy: CouponIssuedBy;
-  /**
-   * 店舗発行で発行手数料の支払い待ちかどうか。true の間は active=false で
-   * 保存され、来場者には見えず取得もできない。支払いが確認できたら
-   * activatePaidCoupon で active=true・false に切り替わる。
-   * 管理人発行と無料の店舗発行では常に false。
-   */
-  paymentPending: boolean;
-  /**
-   * 店舗発行で作成時点に固定された発行手数料（円）。支払いの検証で
-   * Checkout の金額と突き合わせるためのスナップショット。
-   * 管理人発行・無料発行は null。
-   */
-  feeAmount: number | null;
 }
 
 export interface EventClaim {
@@ -158,16 +89,6 @@ export interface EventClaim {
 // 両PRのマージ後に共通化する。
 export function memberIdForPhone(phoneE164: string): string {
   return createHash('sha256').update(phoneE164.trim()).digest('hex');
-}
-
-/**
- * 端末認証（SMSオフ時）の memberId。端末の識別子（匿名認証の uid）の
- * SHA-256 ハッシュ。電話番号の memberId と衝突しないよう 'device:'
- * プレフィックスを付けてからハッシュする。uid そのものはドキュメントIDに
- * 含めない（memberIdForPhone と同じ作法）。
- */
-export function memberIdForDevice(deviceUid: string): string {
-  return createHash('sha256').update(`device:${deviceUid.trim()}`).digest('hex');
 }
 
 export function claimIdFor(memberId: string, couponId: string): string {
@@ -249,44 +170,27 @@ export async function createExhibitor(
     name: string;
     email?: string | null;
     lang?: Locale;
-    kind?: ExhibitorKind;
-    /** 登録の入口。未指定は管理人発行（'admin'） */
-    source?: ExhibitorSource;
-    /**
-     * ドキュメントIDを呼び出し側で先に決める場合に指定する。
-     * 自己申込では、支払い確認前に課金レコードを同じ ID で作るため、
-     * 申込時点で ID を採番しておく（lib/event-apply.ts）。
-     */
-    id?: string;
+    /** 登録時の住所（管理用・トップレベル）。公開プロフィールとは別 */
+    address?: string | null;
   },
 ): Promise<EventExhibitor> {
   const name = input.name.trim();
   if (!name) throw new Error('出店者名が必要です');
   const event = await getEvent(eventId);
-  const ref = input.id
-    ? exhibitorsRef(eventId).doc(input.id)
-    : exhibitorsRef(eventId).doc();
+  const ref = exhibitorsRef(eventId).doc();
   const email = input.email?.trim().toLowerCase() || null;
+  const address = input.address?.trim() || null;
   const exhibitor: EventExhibitor = {
     id: ref.id,
     name,
     email,
+    address,
     hasAccessCode: false,
     lang: resolveLocale(input.lang, event?.defaultLocale),
-    kind: input.kind ?? 'shop',
-    source: input.source ?? 'admin',
-    delistedAt: null,
-    closedAt: null,
   };
-  // hasAccessCode / delistedAt / closedAt はドキュメントの実フィールドから
-  // 導く表示用の値で、作成時に保存するのは実フィールド（email / lang /
-  // kind / source）だけ（停止・閉店の印は課金側が後から付ける）。
-  const {
-    hasAccessCode: _displayOnly,
-    delistedAt: _delistedDisplayOnly,
-    closedAt: _closedDisplayOnly,
-    ...stored
-  } = exhibitor;
+  // hasAccessCode はドキュメントの accessCode フィールドから導く表示用の値で、
+  // 保存するのは実フィールド（email / lang）だけ。
+  const { hasAccessCode: _displayOnly, ...stored } = exhibitor;
   await ref.set({ ...stored, createdAt: FieldValue.serverTimestamp() });
   return exhibitor;
 }
@@ -319,23 +223,10 @@ export async function createCoupon(
     title: string;
     description?: string;
     keywords?: string[];
-    /**
-     * 発行元。未指定は 'admin'（管理人発行: 従来どおり無料・即時・有効）。
-     * 'shop'（参加店発行）で発行手数料が有料のときは paymentPending: true を
-     * 付けると、支払いが確認されるまで無効（非公開・取得不可）で作られる。
-     */
-    issuedBy?: CouponIssuedBy;
-    /** 支払い待ちとして作るかどうか（店舗発行・有料時のみ true） */
-    paymentPending?: boolean;
-    /** 作成時点の発行手数料スナップショット（円）。支払い待ちのときだけ付ける */
-    feeAmount?: number | null;
   },
 ): Promise<EventCoupon> {
   const exhibitor = await getExhibitor(eventId, input.exhibitorId);
   if (!exhibitor) throw new Error('出店者が見つかりません');
-  if (exhibitor.kind === 'advertiser') {
-    throw new Error('協賛アカウントにはクーポンを登録できません');
-  }
   const title = input.title.trim();
   if (!title) throw new Error('クーポンのタイトルが必要です');
 
@@ -353,7 +244,6 @@ export async function createCoupon(
     translateText(title),
     translateText(description),
   ]);
-  const paymentPending = input.paymentPending === true;
   const coupon: EventCoupon = {
     id: ref.id,
     exhibitorId: exhibitor.id,
@@ -363,37 +253,28 @@ export async function createCoupon(
     titleI18n,
     descriptionI18n,
     keywords: (input.keywords ?? []).map((k) => k.trim()).filter(Boolean),
-    // 支払い待ちの間は無効で作る（来場者に見せず、取得もさせない）
-    active: !paymentPending,
-    issuedBy: input.issuedBy ?? 'admin',
-    paymentPending,
-    feeAmount: paymentPending ? (input.feeAmount ?? null) : null,
+    active: true,
   };
   await ref.set({ ...coupon, createdAt: FieldValue.serverTimestamp() });
   return coupon;
 }
 
-/** 保存済みクーポンを防御的に読む（listCoupons / getCoupon 共用）。 */
-function mapCoupon(id: string, data: Record<string, unknown>): EventCoupon {
-  return {
-    id,
-    exhibitorId: String(data.exhibitorId ?? ''),
-    exhibitorName: String(data.exhibitorName ?? ''),
-    title: String(data.title ?? ''),
-    description: String(data.description ?? ''),
-    titleI18n: parseLocalizedTexts(data.titleI18n),
-    descriptionI18n: parseLocalizedTexts(data.descriptionI18n),
-    keywords: Array.isArray(data.keywords) ? (data.keywords as string[]) : [],
-    active: data.active !== false,
-    issuedBy: parseCouponIssuedBy(data.issuedBy),
-    paymentPending: data.paymentPending === true,
-    feeAmount: typeof data.feeAmount === 'number' ? data.feeAmount : null,
-  };
-}
-
 export async function listCoupons(eventId: string): Promise<EventCoupon[]> {
   const snap = await couponsRef(eventId).get();
-  return snap.docs.map((doc) => mapCoupon(doc.id, doc.data()));
+  return snap.docs.map((doc) => {
+    const data = doc.data();
+    return {
+      id: doc.id,
+      exhibitorId: String(data.exhibitorId ?? ''),
+      exhibitorName: String(data.exhibitorName ?? ''),
+      title: String(data.title ?? ''),
+      description: String(data.description ?? ''),
+      titleI18n: parseLocalizedTexts(data.titleI18n),
+      descriptionI18n: parseLocalizedTexts(data.descriptionI18n),
+      keywords: Array.isArray(data.keywords) ? (data.keywords as string[]) : [],
+      active: data.active !== false,
+    };
+  });
 }
 
 export async function getCoupon(
@@ -402,24 +283,18 @@ export async function getCoupon(
 ): Promise<EventCoupon | null> {
   const doc = await couponsRef(eventId).doc(couponId).get();
   if (!doc.exists) return null;
-  return mapCoupon(doc.id, doc.data()!);
-}
-
-/**
- * 支払い待ちクーポンを有効化する（発行手数料の支払い確認後に呼ぶ）。
- * 既に有効化済みなら何もしない（冪等）。戻り値は「今回有効化したか」。
- * クーポンが無い・支払い待ちでない場合は false。
- */
-export async function activatePaidCoupon(
-  eventId: string,
-  couponId: string,
-): Promise<boolean> {
-  const ref = couponsRef(eventId).doc(couponId);
-  const doc = await ref.get();
-  if (!doc.exists) return false;
-  if (doc.data()?.paymentPending !== true) return false;
-  await ref.update({ active: true, paymentPending: false });
-  return true;
+  const data = doc.data()!;
+  return {
+    id: doc.id,
+    exhibitorId: String(data.exhibitorId ?? ''),
+    exhibitorName: String(data.exhibitorName ?? ''),
+    title: String(data.title ?? ''),
+    description: String(data.description ?? ''),
+    titleI18n: parseLocalizedTexts(data.titleI18n),
+    descriptionI18n: parseLocalizedTexts(data.descriptionI18n),
+    keywords: Array.isArray(data.keywords) ? (data.keywords as string[]) : [],
+    active: data.active !== false,
+  };
 }
 
 // ─── 取得 ───

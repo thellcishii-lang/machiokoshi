@@ -27,9 +27,7 @@ import { db} from './firebase-admin';
 import {
 EVENT_EXHIBITORS_COLLECTION,
 createExhibitor,
-parseExhibitorKind,
 type EventExhibitor,
-type ExhibitorKind,
 } from './event-coupon';
 import { resolveLocale, type Locale} from './i18n';
 import { sendEmail} from './mailer';
@@ -163,6 +161,49 @@ export function isValidExhibitorEmail(email: string): boolean {
 return email.length > 0 && email.length <= 254 && EMAIL_PATTERN.test(email);
 }
 
+// ─── 登録時の住所（店舗課金オプション） ───
+
+/** 登録住所の上限文字数（公開プロフィールの住所と同じ上限）。 */
+export const REGISTRATION_ADDRESS_MAX_LENGTH = 120;
+
+export type ParseRegistrationAddressResult =
+| { ok: true; value: string}
+| { ok: false; error: string};
+
+/**
+* 登録住所の入力検証（純粋関数）。
+* 店舗課金オプションが有効な契約では必須（required=true）。無効な契約では
+* 任意で、未入力なら空文字を返す。値は trim して返す。
+* ここで検証した住所は参加店ドキュメントのトップレベル `address` に
+* 管理用として保存し、公開プロフィール（profile.address）とは混ぜない。
+*/
+export function parseRegistrationAddress(
+raw: unknown,
+required: boolean,
+): ParseRegistrationAddressResult {
+if (raw === undefined || raw === null) {
+return required
+? { ok: false, error: '住所が必要です'}
+: { ok: true, value: ''};
+}
+if (typeof raw!== 'string') {
+return { ok: false, error: '住所の形式が不正です'};
+}
+const value = raw.trim();
+if (!value) {
+return required
+? { ok: false, error: '住所が必要です'}
+: { ok: true, value: ''};
+}
+if (value.length > REGISTRATION_ADDRESS_MAX_LENGTH) {
+return {
+ok: false,
+error: `住所は${REGISTRATION_ADDRESS_MAX_LENGTH}文字以内で入力してください`,
+};
+}
+return { ok: true, value};
+}
+
 // ─── セッション ───
 
 /**
@@ -194,13 +235,6 @@ name: string;
 email: string | null;
 /** エンコード済みハッシュ。未発行なら null。 */
 accessCodeHash: string | null;
-/** アカウントの種類（参加店／協賛）。旧ドキュメントは 'shop' */
-kind: ExhibitorKind;
-/**
- * 閉店扱い（掲載停止から3ヶ月経過後の新規登録で付けられる印）かどうか。
- * 閉店レコードは重複判定・ログイン照合の対象から外れる。
- */
-closed: boolean;
 }
 
 /** このモジュールが使う保存層の最小インターフェース（テストで差し替え可能にする）。 */
@@ -215,16 +249,7 @@ exhibitorId: string,
 ): Promise<StoredExhibitorAccess | null>;
 createExhibitor(
 eventId: string,
-input: {
-name: string;
-email: string;
-lang: Locale;
-kind: ExhibitorKind;
-/** 登録の入口。未指定は管理人発行（'admin'） */
-source?: 'admin' | 'self';
-/** ドキュメントIDを先に決める場合（自己申込の事前採番） */
-id?: string;
-},
+input: { name: string; email: string; lang: Locale; address?: string},
 ): Promise<{ id: string}>;
 setAccessCodeHash(
 eventId: string,
@@ -256,25 +281,18 @@ accessCodeHash:
 typeof data.accessCode === 'string' && data.accessCode
 ? data.accessCode
 : null,
-kind: parseExhibitorKind(data.kind),
-closed: typeof data.closedAt === 'string' && data.closedAt.length > 0,
 };
 }
 
 export const firestoreExhibitorAccessStore: ExhibitorAccessStore = {
 async findByEmail(eventId, email) {
-// 同じメールは原則1件だけだが、閉店→新規登録の移行後は旧レコード
-// （閉店印つき）が残るため、閉店でないものを優先して返す。
-// 閉店レコードしか無ければ「登録なし」として扱う（重複判定で
-// 弾かず、ログインも通さない）。
 const snap = await exhibitorsRef(eventId)
 .where('email', '==', email)
+.limit(1)
 .get();
-for (const doc of snap.docs) {
-const stored = mapStored(doc.id, doc.data());
-if (!stored.closed) return stored;
-}
-return null;
+if (snap.empty) return null;
+const doc = snap.docs[0];
+return mapStored(doc.id, doc.data());
 },
 async getById(eventId, exhibitorId) {
 const doc = await exhibitorsRef(eventId).doc(exhibitorId).get();
@@ -283,12 +301,8 @@ return mapStored(doc.id, doc.data()!);
 },
 async createExhibitor(eventId, input) {
 const exhibitor: EventExhibitor = await createExhibitor(eventId, {
-name: input.name,
-email: input.email,
-lang: input.lang,
-kind: input.kind,
-source: input.source,
-id: input.id,
+...input,
+address: input.address || null,
 });
 return { id: exhibitor.id};
 },
@@ -346,16 +360,12 @@ eventName?: string | null;
 code: string;
 loginUrl: string;
 reissued: boolean;
-/** 自己申込（申込ページから自分で登録）かどうか。未指定は管理人発行 */
-selfServed?: boolean;
 }): string {
 const eventPart = input.eventName
 ? `プロジェクト「${escapeHtml(input.eventName)}」`
 : 'Push-taro 町おこし のプロジェクト';
 const lead = input.reissued
 ? `<p>${eventPart}の消込ログイン用パスワードを再発行しました。今までのパスワードは使えなくなります。</p>`
-: input.selfServed
-? `<p>${eventPart}へのお申し込み（ご登録）が完了しました。</p>`
 : `<p>Push-taro 町おこし の管理人により、${eventPart}の参加店として登録されました。</p>`;
 return `
 <p>${escapeHtml(input.exhibitorName)} 様</p>
@@ -370,25 +380,12 @@ ${lead}
 `;
 }
 
-/** ログイン先 URL。協賛（広告専用）は広告コンソール（店舗ページ）に着地させる。 */
-export function exhibitorLoginUrl(
-eventId: string,
-kind: ExhibitorKind = 'shop',
-): string {
-return kind === 'advertiser'
-? `${resolveAppOrigin()}/e/${encodeURIComponent(eventId)}/shop`
-: exhibitorRedeemUrl(eventId);
-}
-
 /** 登録時のパスワード通知メール。文面は日本語固定、表記は「パスワード」。 */
 export function buildExhibitorPasswordEmail(input: {
 exhibitorName: string;
 eventName?: string | null;
 eventId: string;
 code: string;
-kind?: ExhibitorKind;
-/** 登録の入口。自己申込（'self'）では冒頭の文面が申込完了の案内になる */
-source?: 'admin' | 'self';
 }): { subject: string; html: string} {
 return {
 subject: '参加店ログイン用パスワードのお知らせ',
@@ -396,9 +393,8 @@ html: buildPasswordEmailHtml({
 exhibitorName: input.exhibitorName,
 eventName: input.eventName,
 code: input.code,
-loginUrl: exhibitorLoginUrl(input.eventId, input.kind ?? 'shop'),
+loginUrl: exhibitorRedeemUrl(input.eventId),
 reissued: false,
-selfServed: input.source === 'self',
 }),
 };
 }
@@ -409,7 +405,6 @@ exhibitorName: string;
 eventName?: string | null;
 eventId: string;
 code: string;
-kind?: ExhibitorKind;
 }): { subject: string; html: string} {
 return {
 subject: '参加店ログイン用パスワード再発行のお知らせ',
@@ -417,7 +412,7 @@ html: buildPasswordEmailHtml({
 exhibitorName: input.exhibitorName,
 eventName: input.eventName,
 code: input.code,
-loginUrl: exhibitorLoginUrl(input.eventId, input.kind ?? 'shop'),
+loginUrl: exhibitorRedeemUrl(input.eventId),
 reissued: true,
 }),
 };
@@ -445,20 +440,18 @@ name: string;
 email: string;
 lang?: Locale;
 eventName?: string | null;
-/** アカウントの種類。未指定は参加店（'shop'）。協賛は 'advertiser' */
-kind?: ExhibitorKind;
-/** 登録の入口。未指定は管理人発行（'admin'）。自己申込は 'self' */
-source?: 'admin' | 'self';
-/**
- * ドキュメントIDを先に決める場合に指定する。自己申込では支払い確認前に
- * 課金レコードを同じ ID で作るため、申込時点で採番した ID を渡す。
- */
-exhibitorId?: string;
+/** 登録住所（管理用）。呼び出し側で必須判定済みの検証済み文字列 */
+address?: string;
 },
 deps: ExhibitorAccessDeps = defaultDeps,
 ): Promise<RegisterExhibitorResult> {
 const name = input.name.trim();
 if (!name) throw new ExhibitorAccessError('参加店名が必要です', 400);
+const addressResult = parseRegistrationAddress(input.address, false);
+if (!addressResult.ok) {
+throw new ExhibitorAccessError(addressResult.error, 400);
+}
+const address = addressResult.value;
 const rawEmail = input.email.trim();
 if (!rawEmail) throw new ExhibitorAccessError('メールアドレスが必要です', 400);
 const email = normalizeExhibitorEmail(rawEmail);
@@ -478,9 +471,7 @@ const created = await deps.store.createExhibitor(input.eventId, {
 name,
 email,
 lang: resolveLocale(input.lang),
-kind: input.kind ?? 'shop',
-source: input.source,
-id: input.exhibitorId,
+...(address ? { address} : {}),
 });
 const code = generateAccessCode();
 await deps.store.setAccessCodeHash(
@@ -494,8 +485,6 @@ exhibitorName: name,
 eventName: input.eventName,
 eventId: input.eventId,
 code,
-kind: input.kind ?? 'shop',
-source: input.source,
 });
 let mailSent = false;
 try {
@@ -604,7 +593,6 @@ exhibitorName: exhibitor.name,
 eventName: input.eventName,
 eventId: input.eventId,
 code,
-kind: exhibitor.kind,
 });
 let mailSent = false;
 try {
