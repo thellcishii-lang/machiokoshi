@@ -60,10 +60,28 @@ export interface ShopBilling {
   updatedAt: string;
 }
 
+/** 支払い記録の種別。月額サブスクリプションの請求が基本。 */
+export type BillingPaymentKind = 'subscription' | 'coupon-issue' | 'push-send';
+
+/** 種別の表示ラベル（CSV・管理画面で共通に使う）。 */
+export const BILLING_PAYMENT_KIND_LABELS: Record<BillingPaymentKind, string> = {
+  subscription: '月額',
+  'coupon-issue': 'クーポン発行',
+  'push-send': 'プッシュ送信',
+};
+
+export function parseBillingPaymentKind(value: unknown): BillingPaymentKind {
+  return value === 'coupon-issue' || value === 'push-send'
+    ? value
+    : 'subscription';
+}
+
 export interface BillingPaymentRecord {
   /** ドキュメントID = Stripe イベントID（冪等キー） */
   id: string;
   exhibitorId: string;
+  /** 種別。旧ドキュメント（項目なし）は月額として扱う */
+  kind: BillingPaymentKind;
   /** 金額（円） */
   amount: number;
   status: 'paid' | 'failed';
@@ -651,6 +669,7 @@ export async function listBillingPayments(
     return {
       id: doc.id,
       exhibitorId: String(data.exhibitorId ?? ''),
+      kind: parseBillingPaymentKind(data.kind),
       amount: typeof data.amount === 'number' ? data.amount : 0,
       status: data.status === 'failed' ? ('failed' as const) : ('paid' as const),
       paidAt: stringOrNull(data.paidAt),
@@ -659,6 +678,81 @@ export async function listBillingPayments(
       stripeInvoiceId: stringOrNull(data.stripeInvoiceId),
     };
   });
+}
+
+// ─── 純粋関数: 入金一覧 CSV ───
+
+const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+/**
+ * ISO文字列を JST の ISO 表記（'YYYY-MM-DDTHH:mm:ss+09:00'）にする。
+ * 解釈できなければ空文字。
+ */
+export function formatJstDateTime(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Date(date.getTime() + JST_OFFSET_MS).toISOString().slice(0, 19) + '+09:00';
+}
+
+function csvEscape(value: string): string {
+  return /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+}
+
+export interface BillingCsvExhibitor {
+  id: string;
+  name: string;
+  /** 登録住所（管理用）。無ければ null / undefined */
+  address?: string | null;
+}
+
+export const BILLING_PAYMENTS_CSV_HEADER = [
+  '日時',
+  '店名',
+  '住所',
+  '種別',
+  '金額',
+  '状態',
+  'Stripe請求書ID',
+  'チェックアウトセッションID',
+  'サブスクリプションID',
+] as const;
+
+/**
+ * 入金一覧の CSV を組み立てる（純粋関数）。
+ * - 店名・登録住所は参加店から、サブスクリプションIDとチェックアウト
+ *   セッションIDは店ごとの課金レコードから引く（支払い記録自体には
+ *   持っていないため。セッションIDはその店の直近の発行セッション）。
+ * - 行は発生日時の昇順（経理で読みやすい時系列）。
+ * - 先頭に BOM を付け、Excel でそのまま開けるようにする。
+ */
+export function buildBillingPaymentsCsv(
+  payments: BillingPaymentRecord[],
+  exhibitors: BillingCsvExhibitor[],
+  billings: ShopBilling[],
+): string {
+  const exhibitorById = new Map(exhibitors.map((e) => [e.id, e]));
+  const billingByExhibitor = new Map(billings.map((b) => [b.exhibitorId, b]));
+  const sorted = [...payments].sort((a, b) =>
+    a.occurredAt.localeCompare(b.occurredAt),
+  );
+  const lines: string[] = [BILLING_PAYMENTS_CSV_HEADER.join(',')];
+  for (const payment of sorted) {
+    const exhibitor = exhibitorById.get(payment.exhibitorId);
+    const billing = billingByExhibitor.get(payment.exhibitorId);
+    const row = [
+      formatJstDateTime(payment.paidAt ?? payment.occurredAt),
+      exhibitor?.name ?? payment.exhibitorId,
+      exhibitor?.address ?? '',
+      BILLING_PAYMENT_KIND_LABELS[payment.kind],
+      String(payment.amount),
+      payment.status === 'paid' ? '支払い済み' : '失敗',
+      payment.stripeInvoiceId ?? '',
+      billing?.checkoutSessionId ?? '',
+      billing?.stripeSubscriptionId ?? '',
+    ];
+    lines.push(row.map(csvEscape).join(','));
+  }
+  return '\uFEFF' + lines.join('\r\n') + '\r\n';
 }
 
 // ─── 支払い失敗の管理人通知 ───

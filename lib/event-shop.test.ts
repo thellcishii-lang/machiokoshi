@@ -8,6 +8,7 @@ import {
   effectiveShopLinks,
   emptyShopProfile,
   isShopPubliclyListed,
+  listBillingSuspendedExhibitorIds,
   listPublicShops,
   parseShopProfile,
   resolveShopLocation,
@@ -1017,5 +1018,43 @@ describe('setShopDelistedAt（掲載停止の日時の付け替え）', () => {
     await expect(
       setShopDelistedAt(db, 'ev1', 'missing', '2026-11-01T00:00:00.000Z'),
     ).resolves.toBe(false);
+  });
+});
+
+describe('listBillingSuspendedExhibitorIds', () => {
+  function fakeDb(
+    docs: Array<{ id: string; billingSuspended?: unknown }>,
+  ): Firestore {
+    return {
+      collection: () => ({
+        doc: () => ({
+          collection: () => ({
+            where: (field: string, _op: string, value: unknown) => ({
+              get: async () => ({
+                docs: docs
+                  .filter((d) => d[field as 'billingSuspended'] === value)
+                  .map((d) => ({ id: d.id, data: () => d })),
+              }),
+            }),
+          }),
+        }),
+      }),
+    } as unknown as Firestore;
+  }
+
+  it('billingSuspended=true の店だけを集める', async () => {
+    const db = fakeDb([
+      { id: 'shop-1', billingSuspended: true },
+      { id: 'shop-2', billingSuspended: false },
+      { id: 'shop-3' },
+    ]);
+    const ids = await listBillingSuspendedExhibitorIds(db, 'event-1');
+    expect([...ids]).toEqual(['shop-1']);
+  });
+
+  it('停止店が無ければ空集合', async () => {
+    const db = fakeDb([{ id: 'shop-1', billingSuspended: false }]);
+    const ids = await listBillingSuspendedExhibitorIds(db, 'event-1');
+    expect(ids.size).toBe(0);
   });
 });

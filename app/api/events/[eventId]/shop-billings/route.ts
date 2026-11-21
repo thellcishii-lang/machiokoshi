@@ -44,6 +44,8 @@ export async function GET(
       .map((exhibitor) => ({
         id: exhibitor.id,
         name: exhibitor.name,
+        // 登録住所（管理用）。課金画面の店舗カードにだけ出す。
+        address: exhibitor.address ?? null,
         // 未払い確定で掲載停止になった日時（停止中でなければ null）。
         // 停止から3ヶ月を過ぎると閉店扱いになり新規登録が通る。
         delistedAt: exhibitor.delistedAt,

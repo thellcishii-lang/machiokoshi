@@ -60,6 +60,13 @@ export interface EventExhibitor {
   name: string;
   /** 消込ログイン用メールアドレス。旧ドキュメント（Auth 方式時代）は null */
   email: string | null;
+  /**
+   * 登録時に集めた住所（トップレベル・管理用）。店舗課金オプションが
+   * 有効な契約での登録時に必須で集める。公開プロフィール
+   * （profile.address、店が自分で入れる公開用）とは別物で、
+   * 特設サイト等の公開側には出さない。未登録なら null。
+   */
+  address: string | null;
   /** アクセスコード（画面表記「パスワード」）が発行済みかどうか。
    * ハッシュ自体は API に出さない。 */
   hasAccessCode: boolean;
@@ -93,6 +100,8 @@ function mapExhibitor(
     name: String(data.name ?? ''),
     email:
       typeof data.email === 'string' && data.email ? data.email : null,
+    address:
+      typeof data.address === 'string' && data.address ? data.address : null,
     hasAccessCode:
       typeof data.accessCode === 'string' && data.accessCode.length > 0,
     lang: normalizeLocale(data.lang),
@@ -249,6 +258,8 @@ export async function createExhibitor(
     name: string;
     email?: string | null;
     lang?: Locale;
+    /** 登録時の住所（管理用・トップレベル）。公開プロフィールとは別 */
+    address?: string | null;
     kind?: ExhibitorKind;
     /** 登録の入口。未指定は管理人発行（'admin'） */
     source?: ExhibitorSource;
@@ -267,10 +278,12 @@ export async function createExhibitor(
     ? exhibitorsRef(eventId).doc(input.id)
     : exhibitorsRef(eventId).doc();
   const email = input.email?.trim().toLowerCase() || null;
+  const address = input.address?.trim() || null;
   const exhibitor: EventExhibitor = {
     id: ref.id,
     name,
     email,
+    address,
     hasAccessCode: false,
     lang: resolveLocale(input.lang, event?.defaultLocale),
     kind: input.kind ?? 'shop',
@@ -279,8 +292,8 @@ export async function createExhibitor(
     closedAt: null,
   };
   // hasAccessCode / delistedAt / closedAt はドキュメントの実フィールドから
-  // 導く表示用の値で、作成時に保存するのは実フィールド（email / lang /
-  // kind / source）だけ（停止・閉店の印は課金側が後から付ける）。
+  // 導く表示用の値で、作成時に保存するのは実フィールド（email / address /
+  // lang / kind / source）だけ（停止・閉店の印は課金側が後から付ける）。
   const {
     hasAccessCode: _displayOnly,
     delistedAt: _delistedDisplayOnly,

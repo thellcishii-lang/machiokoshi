@@ -58,15 +58,24 @@ interface ShopBillingItem {
   updatedAt: string;
 }
 
+type BillingPaymentKind = 'subscription' | 'coupon-issue' | 'push-send';
+
 interface BillingPaymentItem {
   id: string;
   exhibitorId: string;
+  kind: BillingPaymentKind;
   amount: number;
   status: 'paid' | 'failed';
   paidAt: string | null;
   occurredAt: string;
   stripeInvoiceId: string | null;
 }
+
+const KIND_LABEL_KEY: Record<BillingPaymentKind, AdminTextKey> = {
+  subscription: 'billingKindSubscription',
+  'coupon-issue': 'billingKindCouponIssue',
+  'push-send': 'billingKindPushSend',
+};
 
 interface BillingSummary {
   currentMonthKey: string;
@@ -212,6 +221,7 @@ export default function EventBillingAdminPage() {
     Array<{
       id: string;
       name: string;
+      address?: string | null;
       delistedAt?: string | null;
       closedAt?: string | null;
       source?: string;
@@ -226,6 +236,8 @@ export default function EventBillingAdminPage() {
   const [cancelingId, setCancelingId] = useState<string | null>(null);
   const [rowMessages, setRowMessages] = useState<Record<string, string>>({});
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
+  const [csvBusy, setCsvBusy] = useState(false);
+  const [csvMessage, setCsvMessage] = useState('');
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -283,6 +295,7 @@ export default function EventBillingAdminPage() {
         (data.exhibitors as Array<{
           id: string;
           name: string;
+          address?: string | null;
           delistedAt?: string | null;
           closedAt?: string | null;
           source?: string;
@@ -464,6 +477,36 @@ export default function EventBillingAdminPage() {
       </main>
     );
   }
+
+  // 入金一覧 CSV のダウンロード。認証ヘッダが要るので fetch で取得して
+  // Blob から保存する（全件・店名/住所/種別つき）。
+  const handleDownloadCsv = async () => {
+    if (!user) return;
+    setCsvBusy(true);
+    setCsvMessage('');
+    try {
+      const idToken = await user.getIdToken();
+      const res = await fetch(`/api/events/${eventId}/shop-billings/export`, {
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      if (!res.ok) throw new Error(adminText(locale, 'billingCsvFailed'));
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `billing-payments-${eventId}.csv`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setCsvMessage(
+        e instanceof Error ? e.message : adminText(locale, 'billingCsvFailed'),
+      );
+    } finally {
+      setCsvBusy(false);
+    }
+  };
 
   const billingByExhibitor = new Map(billings.map((b) => [b.exhibitorId, b]));
   const exhibitorName = (id: string) =>
@@ -744,6 +787,11 @@ export default function EventBillingAdminPage() {
                       </span>
                     )}
                   </div>
+                  {exhibitor.address && (
+                    <div style={{ fontSize: 12.5, color: '#64748b', marginTop: 6 }}>
+                      {exhibitor.address}
+                    </div>
+                  )}
 
                   {!hasSubscription && (
                     <div
@@ -849,7 +897,28 @@ export default function EventBillingAdminPage() {
           </section>
 
           <section style={{ marginTop: 32 }}>
-            <h2 style={sectionTitleStyle}>{adminText(locale, 'billingPaymentsTitle')}</h2>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+                flexWrap: 'wrap',
+              }}
+            >
+              <h2 style={sectionTitleStyle}>{adminText(locale, 'billingPaymentsTitle')}</h2>
+              <button
+                onClick={() => void handleDownloadCsv()}
+                disabled={csvBusy}
+                style={secondaryButtonStyle}
+              >
+                <span style={adminButtonContentStyle}>
+                  {csvBusy && <ButtonSpinner />}
+                  {adminText(locale, 'billingCsvDownload')}
+                </span>
+              </button>
+            </div>
+            {csvMessage && <p style={adminErrorTextStyle}>{csvMessage}</p>}
             {payments.length === 0 ? (
               <p style={{ fontSize: 14, color: '#64748b', marginTop: 12 }}>
                 {adminText(locale, 'billingPaymentsEmpty')}
@@ -872,6 +941,19 @@ export default function EventBillingAdminPage() {
                     <div>
                       <div style={{ fontSize: 14, fontWeight: 700 }}>
                         {exhibitorName(payment.exhibitorId)}
+                        <span
+                          style={{
+                            marginLeft: 8,
+                            fontSize: 11.5,
+                            fontWeight: 700,
+                            padding: '2px 8px',
+                            borderRadius: 999,
+                            color: '#5b21b6',
+                            backgroundColor: '#ede9fe',
+                          }}
+                        >
+                          {adminText(locale, KIND_LABEL_KEY[payment.kind ?? 'subscription'])}
+                        </span>
                       </div>
                       <div style={{ fontSize: 12, color: '#64748b' }}>
                         {formatDateTime(payment.paidAt ?? payment.occurredAt, locale)}

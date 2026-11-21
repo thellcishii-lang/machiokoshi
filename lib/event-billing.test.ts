@@ -4,17 +4,23 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Firestore } from 'firebase-admin/firestore';
 import {
+  BILLING_PAYMENTS_CSV_HEADER,
   buildBillingFailureNoticeEmail,
+  buildBillingPaymentsCsv,
   currentAndPreviousMonthKeys,
   effectFromStripeEvent,
+  formatJstDateTime,
   isValidStripeSecretKey,
   isValidStripeWebhookSecret,
   monthKeyJst,
   notifyBillingFailureOnce,
+  parseBillingPaymentKind,
   parseBillingSettingsInput,
   parseMonthlyAmount,
   shopBillingTransitionForSubscriptionStatus,
   summarizePaymentsByMonth,
+  type BillingPaymentRecord,
+  type ShopBilling,
   type StripeWebhookEventLike,
 } from './event-billing';
 
@@ -423,5 +429,143 @@ describe('支払い失敗の管理人通知', () => {
       true,
     );
     expect(succeeding).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('parseBillingPaymentKind', () => {
+  it('既知の種別だけ通し、それ以外は subscription に倒す', () => {
+    expect(parseBillingPaymentKind('coupon-issue')).toBe('coupon-issue');
+    expect(parseBillingPaymentKind('push-send')).toBe('push-send');
+    expect(parseBillingPaymentKind('subscription')).toBe('subscription');
+    expect(parseBillingPaymentKind(undefined)).toBe('subscription');
+    expect(parseBillingPaymentKind('unknown')).toBe('subscription');
+  });
+});
+
+describe('formatJstDateTime', () => {
+  it('UTC の ISO を JST 表記（+09:00）にする', () => {
+    expect(formatJstDateTime('2026-11-02T00:00:00.000Z')).toBe(
+      '2026-11-02T09:00:00+09:00',
+    );
+    expect(formatJstDateTime('2026-01-01T15:30:05.000Z')).toBe(
+      '2026-01-02T00:30:05+09:00',
+    );
+  });
+
+  it('解釈できない値は空文字', () => {
+    expect(formatJstDateTime('')).toBe('');
+    expect(formatJstDateTime('not-a-date')).toBe('');
+  });
+});
+
+function paymentRecord(
+  overrides: Partial<BillingPaymentRecord> = {},
+): BillingPaymentRecord {
+  return {
+    id: 'evt_1',
+    exhibitorId: 'shop-1',
+    kind: 'subscription',
+    amount: 3000,
+    status: 'paid',
+    paidAt: '2026-11-02T00:00:00.000Z',
+    occurredAt: '2026-11-02T00:00:00.000Z',
+    stripeEventId: 'evt_1',
+    stripeInvoiceId: 'in_123',
+    ...overrides,
+  };
+}
+
+function shopBilling(overrides: Partial<ShopBilling> = {}): ShopBilling {
+  return {
+    exhibitorId: 'shop-1',
+    stripeCustomerId: 'cus_1',
+    stripeSubscriptionId: 'sub_1',
+    monthlyAmount: 3000,
+    status: 'active',
+    currentPeriodEnd: null,
+    checkoutUrl: null,
+    checkoutSessionId: 'cs_1',
+    canceledByAdmin: false,
+    updatedAt: '2026-11-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+describe('buildBillingPaymentsCsv', () => {
+  const exhibitors = [
+    { id: 'shop-1', name: 'カレー堂', address: '埼玉県飯能市1-2-3' },
+    { id: 'shop-2', name: 'パン屋, "ほんわか"', address: null },
+  ];
+
+  it('BOM 付きでヘッダーと行を出す（店名・住所・種別・ID を結合）', () => {
+    const csv = buildBillingPaymentsCsv(
+      [paymentRecord()],
+      exhibitors,
+      [shopBilling()],
+    );
+    expect(csv.startsWith('\uFEFF')).toBe(true);
+    const lines = csv.replace(/^\uFEFF/, '').trimEnd().split('\r\n');
+    expect(lines[0]).toBe(BILLING_PAYMENTS_CSV_HEADER.join(','));
+    expect(lines[1]).toBe(
+      '2026-11-02T09:00:00+09:00,カレー堂,埼玉県飯能市1-2-3,月額,3000,支払い済み,in_123,cs_1,sub_1',
+    );
+  });
+
+  it('失敗記録は occurredAt を使い、状態は「失敗」', () => {
+    const csv = buildBillingPaymentsCsv(
+      [
+        paymentRecord({
+          status: 'failed',
+          paidAt: null,
+          occurredAt: '2026-11-03T12:00:00.000Z',
+          stripeInvoiceId: null,
+        }),
+      ],
+      exhibitors,
+      [],
+    );
+    const lines = csv.replace(/^\uFEFF/, '').trimEnd().split('\r\n');
+    expect(lines[1]).toBe(
+      '2026-11-03T21:00:00+09:00,カレー堂,埼玉県飯能市1-2-3,月額,3000,失敗,,,',
+    );
+  });
+
+  it('カンマ・引用符を含む店名は CSV エスケープする', () => {
+    const csv = buildBillingPaymentsCsv(
+      [paymentRecord({ exhibitorId: 'shop-2', kind: 'coupon-issue' })],
+      exhibitors,
+      [],
+    );
+    const lines = csv.replace(/^\uFEFF/, '').trimEnd().split('\r\n');
+    expect(lines[1]).toContain('"パン屋, ""ほんわか"""');
+    expect(lines[1]).toContain(',クーポン発行,');
+  });
+
+  it('行は発生日時の昇順に並ぶ', () => {
+    const csv = buildBillingPaymentsCsv(
+      [
+        paymentRecord({
+          id: 'evt_2',
+          occurredAt: '2026-11-05T00:00:00.000Z',
+          paidAt: '2026-11-05T00:00:00.000Z',
+        }),
+        paymentRecord({
+          id: 'evt_1',
+          occurredAt: '2026-11-01T00:00:00.000Z',
+          paidAt: '2026-11-01T00:00:00.000Z',
+        }),
+      ],
+      exhibitors,
+      [],
+    );
+    const lines = csv.replace(/^\uFEFF/, '').trimEnd().split('\r\n');
+    expect(lines[1]).toContain('2026-11-01');
+    expect(lines[2]).toContain('2026-11-05');
+  });
+
+  it('記録が無ければヘッダーのみ', () => {
+    const csv = buildBillingPaymentsCsv([], exhibitors, []);
+    const lines = csv.replace(/^\uFEFF/, '').trimEnd().split('\r\n');
+    expect(lines).toEqual([BILLING_PAYMENTS_CSV_HEADER.join(',')]);
   });
 });

@@ -163,6 +163,49 @@ export function isValidExhibitorEmail(email: string): boolean {
 return email.length > 0 && email.length <= 254 && EMAIL_PATTERN.test(email);
 }
 
+// ─── 登録時の住所（店舗課金オプション） ───
+
+/** 登録住所の上限文字数（公開プロフィールの住所と同じ上限）。 */
+export const REGISTRATION_ADDRESS_MAX_LENGTH = 120;
+
+export type ParseRegistrationAddressResult =
+| { ok: true; value: string }
+| { ok: false; error: string };
+
+/**
+* 登録住所の入力検証（純粋関数）。
+* 店舗課金オプションが有効な契約では必須（required=true）。無効な契約では
+* 任意で、未入力なら空文字を返す。値は trim して返す。
+* ここで検証した住所は参加店ドキュメントのトップレベル `address` に
+* 管理用として保存し、公開プロフィール（profile.address）とは混ぜない。
+*/
+export function parseRegistrationAddress(
+raw: unknown,
+required: boolean,
+): ParseRegistrationAddressResult {
+if (raw === undefined || raw === null) {
+return required
+? { ok: false, error: '住所が必要です' }
+: { ok: true, value: '' };
+}
+if (typeof raw !== 'string') {
+return { ok: false, error: '住所の形式が不正です' };
+}
+const value = raw.trim();
+if (!value) {
+return required
+? { ok: false, error: '住所が必要です' }
+: { ok: true, value: '' };
+}
+if (value.length > REGISTRATION_ADDRESS_MAX_LENGTH) {
+return {
+ok: false,
+error: `住所は${REGISTRATION_ADDRESS_MAX_LENGTH}文字以内で入力してください`,
+};
+}
+return { ok: true, value };
+}
+
 // ─── セッション ───
 
 /**
@@ -219,6 +262,8 @@ input: {
 name: string;
 email: string;
 lang: Locale;
+/** 登録住所（管理用）。検証済みの文字列。未収集なら未指定 */
+address?: string;
 kind: ExhibitorKind;
 /** 登録の入口。未指定は管理人発行（'admin'） */
 source?: 'admin' | 'self';
@@ -286,6 +331,7 @@ const exhibitor: EventExhibitor = await createExhibitor(eventId, {
 name: input.name,
 email: input.email,
 lang: input.lang,
+address: input.address || null,
 kind: input.kind,
 source: input.source,
 id: input.id,
@@ -445,6 +491,8 @@ name: string;
 email: string;
 lang?: Locale;
 eventName?: string | null;
+/** 登録住所（管理用）。呼び出し側で必須判定済みの検証済み文字列 */
+address?: string;
 /** アカウントの種類。未指定は参加店（'shop'）。協賛は 'advertiser' */
 kind?: ExhibitorKind;
 /** 登録の入口。未指定は管理人発行（'admin'）。自己申込は 'self' */
@@ -459,6 +507,11 @@ deps: ExhibitorAccessDeps = defaultDeps,
 ): Promise<RegisterExhibitorResult> {
 const name = input.name.trim();
 if (!name) throw new ExhibitorAccessError('参加店名が必要です', 400);
+const addressResult = parseRegistrationAddress(input.address, false);
+if (!addressResult.ok) {
+throw new ExhibitorAccessError(addressResult.error, 400);
+}
+const address = addressResult.value;
 const rawEmail = input.email.trim();
 if (!rawEmail) throw new ExhibitorAccessError('メールアドレスが必要です', 400);
 const email = normalizeExhibitorEmail(rawEmail);
@@ -478,6 +531,7 @@ const created = await deps.store.createExhibitor(input.eventId, {
 name,
 email,
 lang: resolveLocale(input.lang),
+...(address ? { address } : {}),
 kind: input.kind ?? 'shop',
 source: input.source,
 id: input.exhibitorId,
