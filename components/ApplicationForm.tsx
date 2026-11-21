@@ -68,7 +68,12 @@ const primaryButtonStyle: React.CSSProperties = {
 interface ApplyInfo {
   eventName: string;
   defaultLocale: string;
-  shop: { available: boolean; fee: number | null };
+  shop: {
+    available: boolean;
+    fee: number | null;
+    /** 店舗課金オプション ON のとき住所が必須（サーバー側でも検証する） */
+    billingAddressRequired: boolean;
+  };
   ad: { available: boolean; fee: number | null };
 }
 
@@ -92,6 +97,7 @@ export default function ApplicationForm({
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [address, setAddress] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -176,7 +182,9 @@ export default function ApplicationForm({
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, email }),
+          body: JSON.stringify(
+            flow === 'shop' ? { name, email, address } : { name, email },
+          ),
         },
       );
       const data = await res.json().catch(() => ({}));
@@ -199,6 +207,11 @@ export default function ApplicationForm({
       setBusy(false);
     }
   };
+
+  // 住所欄は参加店登録で、店舗課金オプションが有効なプロジェクトの
+  // ときだけ出す（必須）。広告申込では出さない。
+  const addressRequired =
+    flow === 'shop' && info?.shop.billingAddressRequired === true;
 
   const title = uiText(locale, flow === 'shop' ? 'applyShopTitle' : 'applyAdTitle');
   const lead = uiText(locale, flow === 'shop' ? 'applyShopLead' : 'applyAdLead', {
@@ -272,6 +285,30 @@ export default function ApplicationForm({
                 autoComplete="email"
               />
             </label>
+            {addressRequired && (
+              <label style={labelStyle}>
+                {uiText(locale, 'exhibitorAddressLabel')}
+                <input
+                  style={inputStyle}
+                  type="text"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  autoComplete="street-address"
+                />
+                <span
+                  style={{
+                    display: 'block',
+                    fontSize: 12.5,
+                    fontWeight: 400,
+                    color: '#64748b',
+                    marginTop: 6,
+                    lineHeight: 1.6,
+                  }}
+                >
+                  {uiText(locale, 'exhibitorAddressNote')}
+                </span>
+              </label>
+            )}
             <button
               onClick={() => void handleSubmit()}
               disabled={busy}

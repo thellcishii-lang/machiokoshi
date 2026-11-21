@@ -373,6 +373,7 @@ function setup(options?: {
   adsPrice?: number | null;
   adsEnabled?: boolean;
   billingAvailable?: boolean;
+  billingOptionEnabled?: boolean;
   adsOptionEnabled?: boolean;
 }) {
   const { db, store } = createFakeDb();
@@ -399,7 +400,10 @@ function setup(options?: {
         available: options?.billingAvailable ?? true,
         organizer:
           (options?.billingAvailable ?? true)
-            ? ({ contractId: CONTRACT_ID } as unknown as Organizer)
+            ? ({
+                contractId: CONTRACT_ID,
+                billingOptionEnabled: options?.billingOptionEnabled ?? false,
+              } as unknown as Organizer)
             : null,
         stripeConfigured: options?.billingAvailable ?? true,
       }) as AdAvailability,
@@ -681,6 +685,95 @@ describe('参加店の自己登録（無料・前提条件・重複）', () => {
   });
 });
 
+describe('参加店の自己登録（住所・店舗課金オプション）', () => {
+  it('オプション ON で住所が無いと 400（申込レコードも作らない）', async () => {
+    const { db, deps, applicationDocs } = setup({ billingOptionEnabled: true });
+    const result = await startShopApplication(
+      db,
+      EVENT_ID,
+      { name: '店A', email: 'shop@example.com' },
+      deps,
+    );
+    expect(result).toMatchObject({ ok: false, status: 400 });
+    if (!result.ok) expect(result.error).toContain('住所');
+    expect(applicationDocs()).toHaveLength(0);
+  });
+
+  it('オプション ON で住所が上限（120文字）を超えると 400', async () => {
+    const { db, deps } = setup({ billingOptionEnabled: true });
+    const result = await startShopApplication(
+      db,
+      EVENT_ID,
+      { name: '店A', email: 'shop@example.com', address: 'あ'.repeat(121) },
+      deps,
+    );
+    expect(result).toMatchObject({ ok: false, status: 400 });
+    if (!result.ok) expect(result.error).toContain('120');
+  });
+
+  it('オプション ON＋住所あり（無料）: 申込レコードに保持され、実体化で登録へ渡る', async () => {
+    const { db, deps, registerCalls } = setup({
+      billingOptionEnabled: true,
+      shopMonthlyPrice: 0,
+    });
+    const started = await startShopApplication(
+      db,
+      EVENT_ID,
+      { name: '店A', email: 'shop@example.com', address: '埼玉県飯能市テスト1-2-3' },
+      deps,
+    );
+    expect(started).toMatchObject({ ok: true, status: 'completed' });
+    if (!started.ok) throw new Error('開始できるはず');
+    const application = await getApplication(db, EVENT_ID, started.applicationId);
+    expect(application?.address).toBe('埼玉県飯能市テスト1-2-3');
+    expect(registerCalls).toHaveLength(1);
+    expect(registerCalls[0].address).toBe('埼玉県飯能市テスト1-2-3');
+  });
+
+  it('オプション ON＋住所あり（有料）: 支払い待ちの申込に住所が残り、Webhook 実体化で渡る', async () => {
+    const { db, stripe, deps, registerCalls } = setup({
+      billingOptionEnabled: true,
+    });
+    const started = await startShopApplication(
+      db,
+      EVENT_ID,
+      { name: '店A', email: 'shop@example.com', address: '東京都テスト区テスト4-5-6' },
+      deps,
+    );
+    if (!started.ok || started.status !== 'pending') throw new Error('pendingのはず');
+    const application = await getApplication(db, EVENT_ID, started.applicationId);
+    expect(application?.address).toBe('東京都テスト区テスト4-5-6');
+    expect(registerCalls).toHaveLength(0);
+
+    const session = stripe.sessions.get(stripe.lastSessionId())!;
+    stripe.markPaid(session.id);
+    const applied = await applyApplicationWebhookEffect(
+      db,
+      completedEventFor(session),
+      deps,
+    );
+    expect(applied.applied).toBe(true);
+    expect(registerCalls).toHaveLength(1);
+    expect(registerCalls[0].address).toBe('東京都テスト区テスト4-5-6');
+  });
+
+  it('オプション OFF では住所なしで登録でき、登録へ住所は渡らない', async () => {
+    const { db, deps, registerCalls } = setup({ shopMonthlyPrice: 0 });
+    const started = await startShopApplication(
+      db,
+      EVENT_ID,
+      { name: '店A', email: 'shop@example.com' },
+      deps,
+    );
+    expect(started).toMatchObject({ ok: true, status: 'completed' });
+    if (!started.ok) throw new Error('開始できるはず');
+    const application = await getApplication(db, EVENT_ID, started.applicationId);
+    expect(application?.address).toBeNull();
+    expect(registerCalls).toHaveLength(1);
+    expect(registerCalls[0].address).toBeUndefined();
+  });
+});
+
 describe('広告の自己申込', () => {
   it('申込 → 支払い → Webhook で協賛レコードが作られる', async () => {
     const { db, store, stripe, deps, exhibitorDocs } = setup();
@@ -805,6 +898,16 @@ describe('getApplyPageInfo', () => {
       shop: { available: true, fee: 3000 },
       ad: { available: true, fee: 5000 },
     });
+  });
+
+  it('店舗課金オプション ON のときだけ billingAddressRequired が立つ', async () => {
+    const on = setup({ billingOptionEnabled: true });
+    const onInfo = await getApplyPageInfo(on.db, EVENT_ID, on.deps);
+    expect(onInfo?.shop.billingAddressRequired).toBe(true);
+
+    const off = setup();
+    const offInfo = await getApplyPageInfo(off.db, EVENT_ID, off.deps);
+    expect(offInfo?.shop.billingAddressRequired).toBe(false);
   });
 
   it('広告オプションが無効なら広告は受付不可、料金未設定なら店舗登録は受付不可', async () => {

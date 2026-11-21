@@ -895,6 +895,20 @@ export const UI_TEXT = {
     zh: '已注册？点此登录（店铺页面）',
     ko: '이미 등록하셨나요? 여기서 로그인 (점포 페이지)',
   },
+  // 自己申込フォームの住所欄（店舗課金オプション ON のとき必須）。
+  // 文言は管理画面側（ADMIN_TEXT の同名キー）と揃えている。
+  exhibitorAddressLabel: {
+    ja: '住所',
+    en: 'Address',
+    zh: '地址',
+    ko: '주소',
+  },
+  exhibitorAddressNote: {
+    ja: '店舗課金オプションが有効なため、登録時に住所が必要です。ここで登録した住所は管理用で、特設サイトには公開されません。',
+    en: 'The shop billing option is enabled, so an address is required at registration. This address is for management use only and is not published on the special site.',
+    zh: '由于已启用店铺收费选项，登记时需要填写地址。此地址仅供管理使用，不会在特设网站上公开。',
+    ko: '매장 과금 옵션이 활성화되어 있어 등록 시 주소가 필요합니다. 여기에 등록한 주소는 관리용이며 특설 사이트에 공개되지 않습니다.',
+  },
 } as const satisfies Record<string, Record<Locale, string>>;
 
 export type UiTextKey = keyof typeof UI_TEXT;
