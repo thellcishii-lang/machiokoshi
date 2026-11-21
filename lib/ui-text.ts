@@ -895,6 +895,20 @@ export const UI_TEXT = {
     zh: '已注册？点此登录（店铺页面）',
     ko: '이미 등록하셨나요? 여기서 로그인 (점포 페이지)',
   },
+  // 自己申込フォームの住所欄（店舗課金オプション ON のとき必須）。
+  // 文言は管理画面側（ADMIN_TEXT の同名キー）と揃えている。
+  exhibitorAddressLabel: {
+    ja: '住所',
+    en: 'Address',
+    zh: '地址',
+    ko: '주소',
+  },
+  exhibitorAddressNote: {
+    ja: '店舗課金オプションが有効なため、登録時に住所が必要です。ここで登録した住所は管理用で、特設サイトには公開されません。',
+    en: 'The shop billing option is enabled, so an address is required at registration. This address is for management use only and is not published on the special site.',
+    zh: '由于已启用店铺收费选项，登记时需要填写地址。此地址仅供管理使用，不会在特设网站上公开。',
+    ko: '매장 과금 옵션이 활성화되어 있어 등록 시 주소가 필요합니다. 여기에 등록한 주소는 관리용이며 특설 사이트에 공개되지 않습니다.',
+  },
 } as const satisfies Record<string, Record<Locale, string>>;
 
 export type UiTextKey = keyof typeof UI_TEXT;
@@ -2865,6 +2879,18 @@ export const ADMIN_TEXT = {
     zh: '将发送本活动专用的登录密码至该邮箱。密码按活动分别发送。',
     ko: '이 이벤트 전용 로그인 비밀번호를 발급해 이 이메일 주소로 보냅니다. 비밀번호는 이벤트마다 별도로 발급됩니다.',
   },
+  exhibitorAddressLabel: {
+    ja: '住所',
+    en: 'Address',
+    zh: '地址',
+    ko: '주소',
+  },
+  exhibitorAddressNote: {
+    ja: '店舗課金オプションが有効なため、登録時に住所が必要です。ここで登録した住所は管理用で、特設サイトには公開されません。',
+    en: 'The shop billing option is enabled, so an address is required at registration. This address is for management use only and is not published on the special site.',
+    zh: '由于已启用店铺收费选项，登记时需要填写地址。此地址仅供管理使用，不会在特设网站上公开。',
+    ko: '매장 과금 옵션이 활성화되어 있어 등록 시 주소가 필요합니다. 여기에 등록한 주소는 관리용이며 특설 사이트에 공개되지 않습니다.',
+  },
   exhibitorKindLabel: {
     ja: 'アカウントの種類',
     en: 'Account type',
@@ -4358,6 +4384,36 @@ export const ADMIN_TEXT = {
     en: 'Failed',
     zh: '失败',
     ko: '실패',
+  },
+  billingKindSubscription: {
+    ja: '月額',
+    en: 'Monthly',
+    zh: '月费',
+    ko: '월액',
+  },
+  billingKindCouponIssue: {
+    ja: 'クーポン発行',
+    en: 'Coupon issue',
+    zh: '优惠券发行',
+    ko: '쿠폰 발행',
+  },
+  billingKindPushSend: {
+    ja: 'プッシュ送信',
+    en: 'Push send',
+    zh: '推送发送',
+    ko: '푸시 전송',
+  },
+  billingCsvDownload: {
+    ja: 'CSVダウンロード',
+    en: 'Download CSV',
+    zh: '下载CSV',
+    ko: 'CSV 다운로드',
+  },
+  billingCsvFailed: {
+    ja: 'CSVのダウンロードに失敗しました',
+    en: 'Failed to download the CSV',
+    zh: 'CSV下载失败',
+    ko: 'CSV 다운로드에 실패했습니다',
   },
   billingPeriodEndLabel: {
     ja: '次回請求: {date}',
