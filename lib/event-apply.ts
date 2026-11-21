@@ -3,7 +3,8 @@
 //
 // 2026-11-17 Ishii の仕様: 申込の形は Push-taro 自身の申込と同じ
 // （申し込む → 払う → ログイン情報がメールで届く）。入口は2つ:
-// - 参加店登録ページ: 店が店名＋メールで申し込み、プロジェクトの月額
+// - 参加店登録ページ: 店が店名＋メール（店舗課金オプションが有効な
+//   契約では住所も必須）で申し込み、プロジェクトの月額
 //   （shopMonthlyPrice）を管理人自身の Stripe で払う。支払いの確認が
 //   取れてから参加店レコードが作られ、アクセスコードの招待メールが
 //   届く。店はログインしてプロフィールを整えると掲載される。
@@ -57,6 +58,7 @@ import {
   ExhibitorAccessError,
   isValidExhibitorEmail,
   normalizeExhibitorEmail,
+  parseRegistrationAddress,
   registerExhibitor,
   type RegisterExhibitorResult,
 } from './exhibitor-access';
@@ -92,6 +94,8 @@ export interface PendingApplication {
   type: ApplicationType;
   name: string;
   email: string;
+  /** 登録時の住所（参加店のみ。店舗課金オプション ON のとき必須で収集し、実体化時に参加店ドキュメントのトップレベル address へ渡す） */
+  address: string | null;
   lang: Locale;
   status: ApplicationStatus;
   /** 申込時点で固定した月額（円）。料金変更後もこの金額で契約する */
@@ -323,6 +327,7 @@ export interface ApplyDeps {
     kind?: ExhibitorKind;
     source?: 'admin' | 'self';
     exhibitorId?: string;
+    address?: string;
   }) => Promise<RegisterExhibitorResult>;
 }
 
@@ -390,6 +395,7 @@ function toApplication(
     type: data.type === 'advertiser' ? 'advertiser' : 'shop',
     name: String(data.name ?? ''),
     email: String(data.email ?? ''),
+    address: stringOrNull(data.address),
     lang: normalizeLocale(data.lang),
     status: data.status === 'completed' ? 'completed' : 'pending',
     amount: typeof data.amount === 'number' ? data.amount : 0,
@@ -438,6 +444,7 @@ async function createApplicationRecord(
     type: ApplicationType;
     name: string;
     email: string;
+    address: string | null;
     lang: Locale;
     amount: number;
     plannedExhibitorId: string;
@@ -449,6 +456,7 @@ async function createApplicationRecord(
     type: input.type,
     name: input.name,
     email: input.email,
+    address: input.address,
     lang: input.lang,
     status: 'pending',
     amount: input.amount,
@@ -615,6 +623,11 @@ export async function materializeApplication(
         kind: app.type === 'advertiser' ? 'advertiser' : 'shop',
         source: 'self',
         exhibitorId: app.plannedExhibitorId,
+        // 参加店の住所は申込レコードから引き継ぎ、参加店ドキュメントの
+        // トップレベル address（管理用）に保存する。広告申込は対象外。
+        ...(app.type === 'shop' && app.address
+          ? { address: app.address }
+          : {}),
       });
       mailSent = result.mailSent;
     } catch (error) {
@@ -788,6 +801,18 @@ export async function startShopApplication(
   }
   const organizer = availability.organizer;
 
+  // 住所: 店舗課金オプションが有効な契約では必須（管理人発行と共通の
+  // parseRegistrationAddress で検証する）。検証した住所は申込レコードに
+  // 保持し、実体化時に参加店ドキュメントのトップレベル address へ渡す。
+  const addressResult = parseRegistrationAddress(
+    (rawInput as Record<string, unknown>).address,
+    organizer.billingOptionEnabled === true,
+  );
+  if (!addressResult.ok) {
+    return { ok: false, status: 400, error: addressResult.error };
+  }
+  const address = addressResult.value || null;
+
   const existing = await findExhibitorStateByEmail(db, eventId, email);
   const decision = decideExistingExhibitor(existing, new Date());
   if (decision.action === 'reject') {
@@ -807,6 +832,11 @@ export async function startShopApplication(
   // 支払い待ちの申込があれば再開する（金額は申込時点のまま）。
   const pending = await findPendingApplication(db, eventId, 'shop', email);
   if (pending) {
+    // 住所の必須化より前に作られた申込など、今回の入力と異なる場合は
+    // 実体化で使われるよう、申込レコード側を今回の住所に合わせる。
+    if (pending.address !== address) {
+      await patchApplication(db, eventId, pending.id, { address });
+    }
     const resumed = await resumeIfAlreadyPaid(db, event, pending, organizer, deps);
     if (resumed === 'paid') {
       return {
@@ -839,6 +869,7 @@ export async function startShopApplication(
     type: 'shop',
     name,
     email,
+    address,
     lang: event.defaultLocale,
     amount: event.shopMonthlyPrice,
     plannedExhibitorId,
@@ -1063,6 +1094,7 @@ export async function startAdApplication(
     type: 'advertiser',
     name,
     email,
+    address: null,
     lang: event.defaultLocale,
     amount: event.adsPrice,
     plannedExhibitorId,
@@ -1312,7 +1344,12 @@ export async function applyApplicationWebhookEffect(
 export interface ApplyPageInfo {
   eventName: string;
   defaultLocale: Locale;
-  shop: { available: boolean; fee: number | null };
+  shop: {
+    available: boolean;
+    fee: number | null;
+    /** 店舗課金オプション ON のとき、登録フォームで住所が必須になる */
+    billingAddressRequired: boolean;
+  };
   ad: { available: boolean; fee: number | null };
 }
 
@@ -1342,7 +1379,12 @@ export async function getApplyPageInfo(
   return {
     eventName: event.name,
     defaultLocale: event.defaultLocale,
-    shop: { available: shopAvailable, fee: event.shopMonthlyPrice },
+    shop: {
+      available: shopAvailable,
+      fee: event.shopMonthlyPrice,
+      billingAddressRequired:
+        availability.organizer?.billingOptionEnabled === true,
+    },
     ad: { available: adAvailable, fee: event.adsPrice },
   };
 }
