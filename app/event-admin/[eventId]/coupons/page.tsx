@@ -151,6 +151,10 @@ export default function EventCouponAdminPage() {
   const [eventName, setEventName] = useState('');
   const [exhibitorName, setExhibitorName] = useState('');
   const [exhibitorEmail, setExhibitorEmail] = useState('');
+  const [exhibitorAddress, setExhibitorAddress] = useState('');
+  // 店舗課金オプションが有効な契約では登録時に住所が必須になる
+  // （GET /exhibitors の billingAddressRequired で出し分ける）。
+  const [billingAddressRequired, setBillingAddressRequired] = useState(false);
   const [exhibitorKind, setExhibitorKind] = useState<'shop' | 'advertiser'>('shop');
   const [couponForm, setCouponForm] = useState({
     exhibitorId: '',
@@ -220,6 +224,7 @@ export default function EventCouponAdminPage() {
         callApi(`/api/events/${eventId}`),
       ]);
       setExhibitors(exData.exhibitors ?? []);
+      setBillingAddressRequired(exData.billingAddressRequired === true);
       setCoupons(cpData.coupons ?? []);
       if (typeof evData.event?.couponCap === 'number') setCouponCap(evData.event.couponCap);
       if (typeof evData.event?.name === 'string') setEventName(evData.event.name);
@@ -256,11 +261,15 @@ export default function EventCouponAdminPage() {
         body: JSON.stringify({
           name: exhibitorName,
           email: exhibitorEmail,
+          ...(billingAddressRequired
+            ? { address: exhibitorAddress.trim() }
+            : {}),
           kind: exhibitorKind,
         }),
       });
       setExhibitorName('');
       setExhibitorEmail('');
+      setExhibitorAddress('');
       setExhibitorKind('shop');
       if (result?.mailSent === false) {
         // 登録は成立しているがパスワードメールが送れていない。「送信しました」
@@ -617,6 +626,17 @@ export default function EventCouponAdminPage() {
             {adminText(locale, 'exhibitorEmailLabel')}
             <input style={inputStyle} type="email" value={exhibitorEmail} onChange={(e) => setExhibitorEmail(e.target.value)} />
           </label>
+          {billingAddressRequired && (
+            <>
+              <label style={labelStyle}>
+                {adminText(locale, 'exhibitorAddressLabel')}
+                <input style={inputStyle} value={exhibitorAddress} onChange={(e) => setExhibitorAddress(e.target.value)} />
+              </label>
+              <p style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>
+                {adminText(locale, 'exhibitorAddressNote')}
+              </p>
+            </>
+          )}
           <div style={{ marginBottom: 12 }}>
             <p style={{ fontSize: 13, fontWeight: 600, margin: '0 0 8px' }}>
               {adminText(locale, 'exhibitorKindLabel')}
@@ -664,7 +684,7 @@ export default function EventCouponAdminPage() {
           <p style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>
             {adminText(locale, 'exhibitorEmailNote')}
           </p>
-          <button onClick={handleAddExhibitor} disabled={busy || !exhibitorName.trim() || !exhibitorEmail.trim()} style={primaryButtonStyle}>
+          <button onClick={handleAddExhibitor} disabled={busy || !exhibitorName.trim() || !exhibitorEmail.trim() || (billingAddressRequired && !exhibitorAddress.trim())} style={primaryButtonStyle}>
             <span style={adminButtonContentStyle}>
               {pendingForm === 'exhibitor' && <ButtonSpinner />}
               {pendingForm === 'exhibitor'

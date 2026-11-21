@@ -97,7 +97,7 @@ describe('GET /api/events/[eventId]/shop-billings', () => {
     const response = await callGet();
     expect(response.status).toBe(200);
     const body = await response.json();
-    expect(body.exhibitors).toEqual([{ id: 'shop-1', name: '店A' }]);
+    expect(body.exhibitors).toEqual([{ id: 'shop-1', name: '店A', address: null }]);
     expect(body.billings).toHaveLength(1);
     expect(body.billings[0].status).toBe('active');
     expect(body.summary).toEqual({

@@ -136,6 +136,7 @@ describe('協賛（広告専用）アカウントのガード', () => {
     id: 'sponsor-1',
     name: '協賛企業',
     email: 'sponsor@example.com',
+    address: null,
     hasAccessCode: true,
     lang: 'ja',
     kind: 'advertiser',

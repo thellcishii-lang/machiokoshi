@@ -790,6 +790,25 @@ export async function listPublicShops(
 }
 
 /**
+ * 課金で掲載停止中の参加店 ID の集合。
+ * 公開クーポン一覧など、店舗一覧以外の公開側でも「掲載停止の店を
+ * 出さない」判定を揃えるために使う（店舗一覧は listPublicShops 側で
+ * 同じフラグを見ている）。
+ */
+export async function listBillingSuspendedExhibitorIds(
+  db: Firestore,
+  eventId: string,
+): Promise<Set<string>> {
+  const snap = await db
+    .collection('events')
+    .doc(eventId)
+    .collection(EVENT_EXHIBITORS_COLLECTION)
+    .where('billingSuspended', '==', true)
+    .get();
+  return new Set(snap.docs.map((doc) => doc.id));
+}
+
+/**
  * 課金による掲載停止フラグの付け替え（店舗課金オプションの Webhook
  * 処理から使う）。プロフィールには触れない。店が無ければ false。
  */

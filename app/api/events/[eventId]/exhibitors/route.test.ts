@@ -2,16 +2,22 @@
 // 登録 POST が lib の mailSent（パスワードメールの送信成否）を捨てずに
 // レスポンスへ返すことを検証する。画面側は mailSent=false のとき成功文と
 // 別に警告を出すため、この受け渡しが要る。
+// あわせて、店舗課金オプション ON の契約では登録住所が必須になる
+// （サーバー側の強制）こと、OFF では従来どおり不要なことを検証する。
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   requireEventOwner: vi.fn(),
   listExhibitors: vi.fn(),
   registerExhibitor: vi.fn(),
+  findOrganizerByOwnerUid: vi.fn(),
 }));
 
 vi.mock('@/lib/event-auth', () => ({
   requireEventOwner: mocks.requireEventOwner,
+}));
+vi.mock('@/lib/organizers', () => ({
+  findOrganizerByOwnerUid: mocks.findOrganizerByOwnerUid,
 }));
 vi.mock('@/lib/event-coupon', () => ({
   listExhibitors: mocks.listExhibitors,
@@ -28,18 +34,43 @@ vi.mock('@/lib/exhibitor-access', () => ({
     }
   },
   registerExhibitor: mocks.registerExhibitor,
+  // 実物と同じ意味の最小実装（検証の本体は lib 側の単体テストで担保）。
+  parseRegistrationAddress: (raw: unknown, required: boolean) => {
+    if (typeof raw !== 'string' || !raw.trim()) {
+      return required
+        ? { ok: false as const, error: '住所が必要です' }
+        : { ok: true as const, value: '' };
+    }
+    const value = raw.trim();
+    if (value.length > 120) {
+      return { ok: false as const, error: '住所は120文字以内で入力してください' };
+    }
+    return { ok: true as const, value };
+  },
 }));
 
-import { POST } from './route';
+import { GET, POST } from './route';
 
 const EVENT_ID = 'event-1';
 const EMAIL = 'exhibitor@example.com';
+const ADDRESS = '埼玉県飯能市1-2-3';
 
-function postRequest() {
+function postRequest(body: Record<string, unknown>) {
   return new Request(`http://localhost/api/events/${EVENT_ID}/exhibitors`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: 'テスト出店者', email: EMAIL }),
+    body: JSON.stringify(body),
+  });
+}
+
+function getRequest() {
+  return new Request(`http://localhost/api/events/${EVENT_ID}/exhibitors`);
+}
+
+function billingOn() {
+  mocks.findOrganizerByOwnerUid.mockResolvedValue({
+    contractId: 'contract-1',
+    billingOptionEnabled: true,
   });
 }
 
@@ -49,9 +80,16 @@ beforeEach(() => {
     uid: 'owner-1',
     event: { name: 'テストイベント', defaultLocale: 'ja' },
   });
+  // 既定はオプション OFF（契約者レコード無し）。
+  mocks.findOrganizerByOwnerUid.mockResolvedValue(null);
   mocks.listExhibitors.mockResolvedValue([
-    { id: 'exh-1', name: 'テスト出店者', email: EMAIL, hasAccessCode: true, lang: 'ja' },
+    { id: 'exh-1', name: 'テスト出店者', email: EMAIL, address: null, hasAccessCode: true, lang: 'ja' },
   ]);
+  mocks.registerExhibitor.mockResolvedValue({
+    exhibitorId: 'exh-1',
+    email: EMAIL,
+    mailSent: true,
+  });
 });
 
 describe('POST /api/events/[eventId]/exhibitors', () => {
@@ -61,7 +99,7 @@ describe('POST /api/events/[eventId]/exhibitors', () => {
       email: EMAIL,
       mailSent: true,
     });
-    const response = await POST(postRequest(), {
+    const response = await POST(postRequest({ name: 'テスト出店者', email: EMAIL }), {
       params: Promise.resolve({ eventId: EVENT_ID }),
     });
     expect(response.status).toBe(201);
@@ -79,12 +117,76 @@ describe('POST /api/events/[eventId]/exhibitors', () => {
       email: EMAIL,
       mailSent: false,
     });
-    const response = await POST(postRequest(), {
+    const response = await POST(postRequest({ name: 'テスト出店者', email: EMAIL }), {
       params: Promise.resolve({ eventId: EVENT_ID }),
     });
     expect(response.status).toBe(201);
     const body = await response.json();
     expect(body.mailSent).toBe(false);
     expect(body.exhibitor.id).toBe('exh-1');
+  });
+
+  it('オプション OFF では住所が無くても登録できる（住所は渡さない）', async () => {
+    const response = await POST(postRequest({ name: 'テスト出店者', email: EMAIL }), {
+      params: Promise.resolve({ eventId: EVENT_ID }),
+    });
+    expect(response.status).toBe(201);
+    const arg = mocks.registerExhibitor.mock.calls[0][0] as Record<string, unknown>;
+    expect(arg).not.toHaveProperty('address');
+  });
+
+  it('オプション ON では住所が無いと 400 で、登録しない', async () => {
+    billingOn();
+    const response = await POST(postRequest({ name: 'テスト出店者', email: EMAIL }), {
+      params: Promise.resolve({ eventId: EVENT_ID }),
+    });
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body.error).toContain('住所');
+    expect(mocks.registerExhibitor).not.toHaveBeenCalled();
+  });
+
+  it('オプション ON では空文字の住所も 400', async () => {
+    billingOn();
+    const response = await POST(
+      postRequest({ name: 'テスト出店者', email: EMAIL, address: '  ' }),
+      { params: Promise.resolve({ eventId: EVENT_ID }) },
+    );
+    expect(response.status).toBe(400);
+    expect(mocks.registerExhibitor).not.toHaveBeenCalled();
+  });
+
+  it('オプション ON で住所があれば登録し、住所を lib へ渡す', async () => {
+    billingOn();
+    const response = await POST(
+      postRequest({ name: 'テスト出店者', email: EMAIL, address: ADDRESS }),
+      { params: Promise.resolve({ eventId: EVENT_ID }) },
+    );
+    expect(response.status).toBe(201);
+    expect(mocks.registerExhibitor).toHaveBeenCalledWith(
+      expect.objectContaining({ address: ADDRESS }),
+    );
+  });
+});
+
+describe('GET /api/events/[eventId]/exhibitors', () => {
+  it('オプション OFF では billingAddressRequired=false', async () => {
+    const response = await GET(getRequest(), {
+      params: Promise.resolve({ eventId: EVENT_ID }),
+    });
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.billingAddressRequired).toBe(false);
+    expect(body.exhibitors).toHaveLength(1);
+  });
+
+  it('オプション ON では billingAddressRequired=true', async () => {
+    billingOn();
+    const response = await GET(getRequest(), {
+      params: Promise.resolve({ eventId: EVENT_ID }),
+    });
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.billingAddressRequired).toBe(true);
   });
 });
