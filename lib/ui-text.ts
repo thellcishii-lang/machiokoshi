@@ -3413,6 +3413,18 @@ export const ADMIN_TEXT = {
     zh: '店铺从公开注册页面自行注册时的月费。留空则不接受自助注册（仍可从管理页面注册）。设为0日元可免费注册。',
     ko: '점포가 공개 등록 페이지에서 직접 등록할 때의 월 요금입니다. 비워 두면 셀프 등록을 받지 않습니다(관리 화면에서의 등록은 기존대로 가능합니다). 0엔으로 하면 무료로 등록할 수 있습니다.',
   },
+  siteShopApplyUrlLabel: {
+    ja: '参加店の登録ページ',
+    en: 'Shop registration page',
+    zh: '参展店铺注册页面',
+    ko: '참가 점포 등록 페이지',
+  },
+  siteShopApplyUrlNote: {
+    ja: '参加店が自分で申し込むためのページです。このURLをお店に渡して案内してください。上の月額が空欄の間は、このページから申し込みはできません。',
+    en: 'This is the page where shops register themselves. Share this URL with shops. While the monthly fee above is blank, shops cannot register from this page.',
+    zh: '这是店铺自行注册的页面。请将此链接发给店铺。上面的月费留空期间，无法从此页面注册。',
+    ko: '점포가 직접 등록하는 페이지입니다. 이 URL을 점포에 전달해 주세요. 위의 월 요금이 비어 있는 동안은 이 페이지에서 등록할 수 없습니다.',
+  },
   loginBonusSettingsTitle: {
     ja: 'ログインボーナス設定',
     en: 'Login bonus settings',
