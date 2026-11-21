@@ -2865,6 +2865,18 @@ export const ADMIN_TEXT = {
     zh: '将发送本活动专用的登录密码至该邮箱。密码按活动分别发送。',
     ko: '이 이벤트 전용 로그인 비밀번호를 발급해 이 이메일 주소로 보냅니다. 비밀번호는 이벤트마다 별도로 발급됩니다.',
   },
+  exhibitorAddressLabel: {
+    ja: '住所',
+    en: 'Address',
+    zh: '地址',
+    ko: '주소',
+  },
+  exhibitorAddressNote: {
+    ja: '店舗課金オプションが有効なため、登録時に住所が必要です。ここで登録した住所は管理用で、特設サイトには公開されません。',
+    en: 'The shop billing option is enabled, so an address is required at registration. This address is for management use only and is not published on the special site.',
+    zh: '由于已启用店铺收费选项，登记时需要填写地址。此地址仅供管理使用，不会在特设网站上公开。',
+    ko: '매장 과금 옵션이 활성화되어 있어 등록 시 주소가 필요합니다. 여기에 등록한 주소는 관리용이며 특설 사이트에 공개되지 않습니다.',
+  },
   exhibitorKindLabel: {
     ja: 'アカウントの種類',
     en: 'Account type',
@@ -3386,6 +3398,18 @@ export const ADMIN_TEXT = {
     en: 'Monthly fee when a shop registers itself from the public registration page. Leave blank to close self-registration (you can still register shops from the admin console). Set 0 to make registration free.',
     zh: '店铺从公开注册页面自行注册时的月费。留空则不接受自助注册（仍可从管理页面注册）。设为0日元可免费注册。',
     ko: '점포가 공개 등록 페이지에서 직접 등록할 때의 월 요금입니다. 비워 두면 셀프 등록을 받지 않습니다(관리 화면에서의 등록은 기존대로 가능합니다). 0엔으로 하면 무료로 등록할 수 있습니다.',
+  },
+  siteShopApplyUrlLabel: {
+    ja: '参加店の登録ページ',
+    en: 'Shop registration page',
+    zh: '参展店铺注册页面',
+    ko: '참가 점포 등록 페이지',
+  },
+  siteShopApplyUrlNote: {
+    ja: '参加店が自分で申し込むためのページです。このURLをお店に渡して案内してください。上の月額が空欄の間は、このページから申し込みはできません。',
+    en: 'This is the page where shops register themselves. Share this URL with shops. While the monthly fee above is blank, shops cannot register from this page.',
+    zh: '这是店铺自行注册的页面。请将此链接发给店铺。上面的月费留空期间，无法从此页面注册。',
+    ko: '점포가 직접 등록하는 페이지입니다. 이 URL을 점포에 전달해 주세요. 위의 월 요금이 비어 있는 동안은 이 페이지에서 등록할 수 없습니다.',
   },
   loginBonusSettingsTitle: {
     ja: 'ログインボーナス設定',
@@ -4358,6 +4382,36 @@ export const ADMIN_TEXT = {
     en: 'Failed',
     zh: '失败',
     ko: '실패',
+  },
+  billingKindSubscription: {
+    ja: '月額',
+    en: 'Monthly',
+    zh: '月费',
+    ko: '월액',
+  },
+  billingKindCouponIssue: {
+    ja: 'クーポン発行',
+    en: 'Coupon issue',
+    zh: '优惠券发行',
+    ko: '쿠폰 발행',
+  },
+  billingKindPushSend: {
+    ja: 'プッシュ送信',
+    en: 'Push send',
+    zh: '推送发送',
+    ko: '푸시 전송',
+  },
+  billingCsvDownload: {
+    ja: 'CSVダウンロード',
+    en: 'Download CSV',
+    zh: '下载CSV',
+    ko: 'CSV 다운로드',
+  },
+  billingCsvFailed: {
+    ja: 'CSVのダウンロードに失敗しました',
+    en: 'Failed to download the CSV',
+    zh: 'CSV下载失败',
+    ko: 'CSV 다운로드에 실패했습니다',
   },
   billingPeriodEndLabel: {
     ja: '次回請求: {date}',

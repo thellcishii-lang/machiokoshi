@@ -37,6 +37,7 @@ import { AdminShell } from '@/components/AdminShell';
 import { CapWarningBanner } from '@/components/CapWarningBanner';
 import { AdminNav } from '../AdminNav';
 import { specialSiteUrl } from '@/lib/special-site';
+import { eventShopApplyUrl } from '@/lib/app-origin';
 import {
   MAX_GOURMET_DEFINITION_LENGTH,
   MAX_SITE_DESCRIPTION_LENGTH,
@@ -178,6 +179,7 @@ export default function SiteEditAdminPage() {
   const [couponIssuePrice, setCouponIssuePrice] = useState('');
   const [pushPrice, setPushPrice] = useState('');
   const [shopMonthlyPrice, setShopMonthlyPrice] = useState('');
+  const [applyUrlCopied, setApplyUrlCopied] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [imageMessage, setImageMessage] = useState('');
   const [iconUploading, setIconUploading] = useState(false);
@@ -373,6 +375,19 @@ export default function SiteEditAdminPage() {
     setNotes((current) =>
       current.map((note, i) => (i === index ? { ...note, [field]: value } : note)),
     );
+  };
+
+  // 参加店の自己登録ページはどこからもリンクされていないため、
+  // 管理人がこの URL を店へ渡して案内する。
+  const shopApplyUrl = eventShopApplyUrl(eventId);
+  const handleCopyShopApplyUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(shopApplyUrl);
+      setApplyUrlCopied(true);
+      window.setTimeout(() => setApplyUrlCopied(false), 2000);
+    } catch {
+      // コピーできない環境では入力欄の URL を手動でコピーしてもらう。
+    }
   };
 
   const handleSave = async () => {
@@ -956,6 +971,37 @@ export default function SiteEditAdminPage() {
             />
           </label>
           <p style={noteTextStyle}>{adminText(locale, 'siteShopMonthlyPriceNote')}</p>
+          <div style={{ marginTop: 16 }}>
+            <p style={{ fontSize: 13, fontWeight: 600, margin: '0 0 8px' }}>
+              {adminText(locale, 'siteShopApplyUrlLabel')}
+            </p>
+            <div
+              style={{
+                display: 'flex',
+                gap: 10,
+                alignItems: 'center',
+                flexWrap: 'wrap',
+              }}
+            >
+              <input
+                style={{ ...inputStyle, flex: '1 1 320px' }}
+                type="text"
+                readOnly
+                value={shopApplyUrl}
+                onFocus={(e) => e.target.select()}
+              />
+              <button
+                type="button"
+                onClick={() => void handleCopyShopApplyUrl()}
+                style={secondaryButtonStyle}
+              >
+                {applyUrlCopied
+                  ? adminText(locale, 'specialSiteUrlCopied')
+                  : adminText(locale, 'specialSiteUrlCopy')}
+              </button>
+            </div>
+            <p style={noteTextStyle}>{adminText(locale, 'siteShopApplyUrlNote')}</p>
+          </div>
         </div>
       </section>
 
